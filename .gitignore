@@ -5,3 +5,4 @@ target/
 .vscode/
 dbt/logs/
 dbt/target/
+sql/adhoc/*.json

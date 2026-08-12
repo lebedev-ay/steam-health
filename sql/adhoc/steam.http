@@ -1,0 +1,14 @@
+### Детали игры
+GET https://store.steampowered.com/api/appdetails?appids=1245620
+
+### Отзывы, свежие
+GET https://store.steampowered.com/appreviews/1245620?json=1&filter=recent&num_per_page=5
+
+### Новости и патчноуты
+GET https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=1245620&count=10
+
+### Только базовое
+GET https://store.steampowered.com/api/appdetails?appids=1245620&filters=basic
+
+### Точечно нужные поля
+GET https://store.steampowered.com/api/appdetails?appids=1245620&filters=genres,categories,release_date,developers,publishers,price_overview,metacritic
