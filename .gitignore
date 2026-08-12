@@ -1,0 +1,7 @@
+.env
+target/
+*.log
+.idea/
+.vscode/
+dbt/logs/
+dbt/target/
