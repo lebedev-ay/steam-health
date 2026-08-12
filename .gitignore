@@ -6,3 +6,6 @@ target/
 dbt/logs/
 dbt/target/
 sql/adhoc/*.json
+.venv/
+__pycache__/
+*.pyc
