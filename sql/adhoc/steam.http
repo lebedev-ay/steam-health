@@ -2,7 +2,7 @@
 GET https://store.steampowered.com/api/appdetails?appids=1245620
 
 ### Отзывы, свежие
-GET https://store.steampowered.com/appreviews/1245620?json=1&filter=old&num_per_page=100
+GET https://store.steampowered.com/appreviews/1245620?json=1&filter=recent&num_per_page=10
 
 ### Новости и патчноуты
 GET https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=1245620&count=10
