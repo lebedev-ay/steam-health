@@ -12,3 +12,6 @@ GET https://store.steampowered.com/api/appdetails?appids=1245620&filters=basic
 
 ### Точечно нужные поля
 GET https://store.steampowered.com/api/appdetails?appids=1245620&filters=genres,categories,release_date,developers,publishers,price_overview,metacritic
+
+###
+GET https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=553850&count=20
