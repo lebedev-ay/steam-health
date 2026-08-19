@@ -107,27 +107,45 @@ def load(conn, fields):
     return f"new version ({', '.join(changed)})"
 
 
+from pathlib import Path
+
+GAMES = Path(__file__).parent / "games.txt"
+
+
+def read_games():
+    games = []
+    for line in GAMES.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        app_id, name = line.split(maxsplit=1)
+        games.append((int(app_id), name))
+    return games
+
+
 def main():
-    app_id = int(sys.argv[1]) if len(sys.argv) > 1 else 1245620
-
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
-        row = conn.execute(
-            """
-            select payload from raw.appdetails
-            where app_id = %s and payload is not null
-            order by fetched_at desc limit 1
-            """,
-            (app_id,),
-        ).fetchone()
+        for app_id, name in read_games():
+            row = conn.execute(
+                """
+                select payload from raw.appdetails
+                where app_id = %s and payload is not null
+                order by fetched_at desc limit 1
+                """,
+                (app_id,),
+            ).fetchone()
 
-        if row is None:
-            raise SystemExit(f"нет сырых данных по app_id={app_id}")
+            if row is None:
+                print(f"{name}: нет сырых данных")
+                continue
 
-        fields = extract(row["payload"], app_id)
-        result = load(conn, fields)
-        conn.commit()
+            payload = row["payload"]
+            data = payload[str(app_id)]["data"]
+            fields = extract(payload, app_id)
+            result = load(conn, fields)
+            conn.commit()
 
-    print(f"app_id={app_id}: {result}")
+            print(f"{name}: {result}")
 
 
 if __name__ == "__main__":

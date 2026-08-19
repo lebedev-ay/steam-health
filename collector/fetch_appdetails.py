@@ -36,15 +36,28 @@ def save(app_id: int, status: int, payload):
         conn.commit()
 
 
+from pathlib import Path
+
+GAMES = Path(__file__).parent / "games.txt"
+
+def read_games():
+    games = []
+    for line in GAMES.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        app_id, name = line.split(maxsplit=1)
+        games.append((int(app_id), name))
+    return games
+
+
 def main():
-    app_id = int(sys.argv[1]) if len(sys.argv) > 1 else 1245620
-
-    status, payload = fetch(app_id)
-    print(f"app_id={app_id} status={status}")
-
-    save(app_id, status, payload)
-    print("saved")
-
+    import time
+    for app_id, name in read_games():
+        status, payload = fetch(app_id)
+        save(app_id, status, payload)
+        print(f"{name}: {status}")
+        time.sleep(1.5)
 
 if __name__ == "__main__":
     main()
