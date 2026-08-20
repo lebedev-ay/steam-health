@@ -28,6 +28,7 @@ def fetch_page(app_id, cursor):
             "json": 1,
             "filter": "recent",
             "language": "all",
+            "purchase_type": "all",
             "num_per_page": 100,
             "cursor": cursor,
         },
