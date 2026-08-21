@@ -24,9 +24,9 @@ def fetch_page(app_id):
     response = requests.get(
         URL.format(app_id=app_id),
         params={
-            "appid" : app_id,
-            "count" : 100,
-            "maxlength" : 0,
+            "appid": app_id,
+            "count": 500,
+            "maxlength": 0,
         },
         headers={"User-Agent": "steam-health/0.1"},
         timeout=30,

@@ -9,3 +9,5 @@ sql/adhoc/*.json
 .venv/
 __pycache__/
 *.pyc
+chart_*.html
+*.pbix

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Steam Health</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 24px; background: #fafafa; }
+  .controls { display: flex; gap: 16px; align-items: center; margin-bottom: 20px; }
+  select, input { padding: 6px 10px; font-size: 14px; }
+  .chart { background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <label>Игра:
+    <select id="game">
+      {% for g in games %}
+      <option value="{{ g.app_id }}">{{ g.game_name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Сглаживание:
+    <select id="smoothing">
+      <option value="auto" selected>Авто</option>
+      <option value="off">Без сглаживания</option>
+      <option value="7">7 дней</option>
+      <option value="15">15 дней</option>
+      <option value="29">29 дней</option>
+    </select>
+  </label>
+  <span id="info" style="color:#777;font-size:13px"></span>
+</div>
+
+<div id="sentiment" class="chart"></div>
+
+<script>
+const COLORS = {
+  patch: '#e74c3c', season_start: '#9b59b6', expansion: '#f39c12',
+  marketing: '#95a5a6', beta: '#3498db'
+};
+
+async function load() {
+  const appId = document.getElementById('game').value;
+  const smoothing = document.getElementById('smoothing').value;
+
+  const res = await fetch(`/api/data?app_id=${appId}&smoothing=${smoothing}`);
+  const data = await res.json();
+
+  document.getElementById('info').textContent =
+    `окно ${data.window} дн., медиана ${data.median_volume} отзывов/день`;
+
+  const days = data.daily.map(d => d.day);
+  const pct = data.daily.map(d => d.pct);
+  const totals = data.daily.map(d => d.total);
+
+  const byDay = {};
+  data.events.forEach(e => {
+    (byDay[e.day] = byDay[e.day] || []).push(e);
+  });
+
+  const shapes = Object.entries(byDay).map(([day, items]) => ({
+    type: 'line', x0: day, x1: day, yref: 'paper', y0: 0, y1: 1,
+    line: { color: COLORS[items[0].type] || '#888', width: 1, dash: 'dot' }
+  }));
+
+  const maxPct = pct.length ? Math.max(...pct.filter(v => v !== null)) : 100;
+
+  const markers = {
+    x: Object.keys(byDay),
+    y: Object.keys(byDay).map(() => maxPct),
+    mode: 'markers',
+    name: 'События',
+    marker: {
+      size: 10, symbol: 'triangle-down',
+      color: Object.values(byDay).map(items => COLORS[items[0].type] || '#888')
+    },
+    text: Object.values(byDay).map(items =>
+      items.map(i => `[${i.type}] ${i.title}`).join('<br>')),
+    hovertemplate: '%{x}<br>%{text}<extra></extra>',
+    showlegend: false
+  };
+
+  Plotly.newPlot('sentiment', [
+    {
+      x: days, y: totals, type: 'bar', name: 'Отзывов',
+      yaxis: 'y2',
+      marker: { color: 'rgba(127,179,213,0.45)' },
+      hovertemplate: '%{x}<br>Отзывов: %{y}<extra></extra>'
+    },
+    {
+      x: days, y: pct, mode: 'lines', name: 'Позитивных, %',
+      line: { color: '#2c3e50', width: 2 },
+      customdata: totals,
+      hovertemplate: '%{x}<br>Позитив: %{y}%<br>Отзывов: %{customdata}<extra></extra>'
+    },
+    markers
+  ], {
+    title: 'Настроение и объём отзывов',
+    shapes: shapes,
+    height: 600,
+    margin: { t: 50, r: 60, b: 60, l: 60 },
+    yaxis:  { title: 'Позитивных, %', side: 'left' },
+    yaxis2: { title: 'Отзывов в день', side: 'right', overlaying: 'y', showgrid: false },
+    xaxis: { rangeslider: { visible: true } },
+    hovermode: 'x unified',
+    legend: { orientation: 'h', y: 1.08 }
+  }, { responsive: true });
+}
+
+document.getElementById('game').addEventListener('change', load);
+document.getElementById('smoothing').addEventListener('change', load);
+load();
+</script>
+
+</body>
+</html>
