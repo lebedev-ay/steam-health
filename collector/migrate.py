@@ -1,20 +1,11 @@
-import os
 import hashlib
 from pathlib import Path
 
 import psycopg
-from dotenv import load_dotenv
 
-load_dotenv()
+from db import DSN
 
 MIGRATIONS_DIR = Path(__file__).parent.parent / "db" / "migration"
-
-DSN = (
-    f"host=localhost port=5433 "
-    f"dbname={os.getenv('POSTGRES_DB')} "
-    f"user={os.getenv('POSTGRES_USER')} "
-    f"password={os.getenv('POSTGRES_PASSWORD')}"
-)
 
 HISTORY_DDL = """
 create table if not exists public.schema_history (

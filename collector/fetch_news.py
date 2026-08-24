@@ -1,23 +1,12 @@
-import os
 import json
 import time
-from pathlib import Path
 
 import requests
 import psycopg
-from dotenv import load_dotenv
 
-load_dotenv()
-
-DSN = (
-    f"host=localhost port=5433 "
-    f"dbname={os.getenv('POSTGRES_DB')} "
-    f"user={os.getenv('POSTGRES_USER')} "
-    f"password={os.getenv('POSTGRES_PASSWORD')}"
-)
+from db import DSN, read_games
 
 URL = "https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/"
-GAMES = Path(__file__).parent / "games.txt"
 
 
 def fetch_page(app_id):
@@ -33,17 +22,6 @@ def fetch_page(app_id):
     )
     response.raise_for_status()
     return response.json()
-
-
-def read_games():
-    games = []
-    for line in GAMES.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        app_id, name = line.split(maxsplit=1)
-        games.append((int(app_id), name))
-    return games
 
 
 def collect(conn, app_id, name):

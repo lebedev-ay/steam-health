@@ -1,20 +1,10 @@
-import os
 from datetime import datetime, timezone
 
 import psycopg
 from psycopg.rows import dict_row
-from dotenv import load_dotenv
 
 from classify_news import classify
-
-load_dotenv()
-
-DSN = (
-    f"host=localhost port=5433 "
-    f"dbname={os.getenv('POSTGRES_DB')} "
-    f"user={os.getenv('POSTGRES_USER')} "
-    f"password={os.getenv('POSTGRES_PASSWORD')}"
-)
+from db import DSN
 
 
 def find_game_sk(conn, app_id, moment):

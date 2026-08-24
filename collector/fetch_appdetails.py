@@ -1,19 +1,10 @@
-import os
 import sys
 import json
 
 import requests
 import psycopg
-from dotenv import load_dotenv
 
-load_dotenv()
-
-DSN = (
-    f"host=localhost port=5433 "
-    f"dbname={os.getenv('POSTGRES_DB')} "
-    f"user={os.getenv('POSTGRES_USER')} "
-    f"password={os.getenv('POSTGRES_PASSWORD')}"
-)
+from db import DSN, read_games
 
 URL = "https://store.steampowered.com/api/appdetails"
 
@@ -34,21 +25,6 @@ def save(app_id: int, status: int, payload):
             (app_id, status, json.dumps(payload) if payload else None),
         )
         conn.commit()
-
-
-from pathlib import Path
-
-GAMES = Path(__file__).parent / "games.txt"
-
-def read_games():
-    games = []
-    for line in GAMES.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        app_id, name = line.split(maxsplit=1)
-        games.append((int(app_id), name))
-    return games
 
 
 def main():

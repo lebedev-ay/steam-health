@@ -16,11 +16,20 @@ services:
       interval: 5s
       retries: 5
 
-  metabase:
-    image: metabase/metabase:latest
-    container_name: steam-metabase
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
     ports:
-      - "3001:3000"
+      - "5000:5000"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: 5432
+    volumes:
+      - ./web:/app
     depends_on:
       postgres:
         condition: service_healthy

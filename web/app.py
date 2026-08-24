@@ -8,8 +8,11 @@ from flask import Flask, render_template, jsonify, request
 
 load_dotenv()
 
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5433")
+
 DSN = (
-    f"host=localhost port=5433 "
+    f"host={DB_HOST} port={DB_PORT} "
     f"dbname={os.getenv('POSTGRES_DB')} "
     f"user={os.getenv('POSTGRES_USER')} "
     f"password={os.getenv('POSTGRES_PASSWORD')}"
@@ -223,4 +226,4 @@ def data():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5000)
