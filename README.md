@@ -21,6 +21,9 @@
 игры и факты по патчам/отзывам. `marts` — витрины поверх core,
 из них дашборд читает данные.
 
+Подробная схема со всеми таблицами, диаграммами и тем, что
+реально заполняется — в [docs/model.md](docs/model.md).
+
 ## Стек
 
 Python, PostgreSQL 16, Docker, Flask + Plotly.
@@ -39,11 +42,23 @@ python collector/migrate.py
 python web/app.py       # http://localhost:5000
 ```
 
+## Сбор онлайна по расписанию
+
+Steam API отдаёт только текущее число игроков, истории нет —
+её накапливает `collector/fetch_player_count.py`, снимая по одной
+точке за запуск. Чем раньше поставить на расписание, тем длиннее
+история. Пример cron на каждые 30 минут:
+
+```
+*/30 * * * * cd /path/to/steam-health && .venv/bin/python collector/fetch_player_count.py >> /tmp/player_count.log 2>&1
+```
+
 ## Структура
 
 - `collector/` — сбор данных и загрузка в хранилище
 - `db/migration/` — миграции схемы
 - `web/` — дашборд на Flask + Plotly
+- `docs/model.md` — модель данных: слои, схема core, витрины
 - `docs/decisions.md` — журнал решений
 
 ## Решения и открытые вопросы

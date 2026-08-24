@@ -6,6 +6,11 @@ from psycopg.rows import dict_row
 
 from db import DSN, read_games
 
+# Первая версия игры получает открытую нижнюю границу:
+# игра существовала до начала сбора, и события за прошлые годы
+# должны находить свою версию. См. docs/decisions.md, запись 006
+FIRST_VERSION_FROM = datetime(2000, 1, 1, tzinfo=timezone.utc)
+
 TRACKED = (
     "app_type", "is_free", "required_age",
     "metacritic_score", "is_coming_soon",
@@ -67,7 +72,7 @@ def load(conn, fields):
     ).fetchone()
 
     if current is None:
-        insert_version(conn, fields, datetime.now(timezone.utc))
+        insert_version(conn, fields, FIRST_VERSION_FROM)
         return "created"
 
     changed = [f for f in TRACKED if current[f] != fields[f]]
