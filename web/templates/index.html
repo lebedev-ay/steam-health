@@ -5,10 +5,28 @@
 <title>Steam Health</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
-  body { font-family: system-ui, sans-serif; margin: 24px; background: #fafafa; }
-  .controls { display: flex; gap: 16px; align-items: center; margin-bottom: 20px; }
-  select, input { padding: 6px 10px; font-size: 14px; }
-  .chart { background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 16px; }
+  body {
+    font-family: system-ui, sans-serif;
+    margin: 24px;
+    background: #14161a;
+    color: #c7d0d9;
+  }
+  .controls { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  select, input {
+    padding: 6px 10px;
+    font-size: 14px;
+    background: #262b33;
+    color: #c7d0d9;
+    border: 1px solid #3a4048;
+    border-radius: 4px;
+  }
+  .chart {
+    background: #262b33;
+    border: 1px solid #333a44;
+    border-radius: 6px;
+  }
+  #info { color: #8a95a3; font-size: 13px; }
+  .hint { color: #6b7684; font-size: 12px; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -21,6 +39,7 @@
       {% endfor %}
     </select>
   </label>
+
   <label>Сглаживание:
     <select id="smoothing">
       <option value="auto" selected>Авто</option>
@@ -30,87 +49,236 @@
       <option value="29">29 дней</option>
     </select>
   </label>
-  <span id="info" style="color:#777;font-size:13px"></span>
+
+  <label>Чувствительность:
+    <select id="sensitivity">
+      <option value="2.5">низкая</option>
+      <option value="1.5" selected>средняя</option>
+      <option value="1.0">высокая</option>
+      <option value="0.5">максимальная</option>
+    </select>
+  </label>
+
+  <label>Значимость от:
+    <input type="number" id="minWeight" value="0" min="0" max="20" step="0.5"
+           style="width:70px">
+  </label>
+
+  <label>Показывать:
+    <select id="mode">
+      <option value="pct" selected>долю позитива</option>
+      <option value="delta">отклонение от базы</option>
+    </select>
+  </label>
+
+  <span id="info"></span>
 </div>
 
 <div id="sentiment" class="chart"></div>
+<div class="hint">Клик по элементу легенды скрывает или показывает тип событий</div>
 
 <script>
-const COLORS = {
-  patch: '#e74c3c', season_start: '#9b59b6', expansion: '#f39c12',
-  marketing: '#95a5a6', beta: '#3498db'
+const TYPES = {
+  patch:        { color: '#ff6b5b', label: 'патчи' },
+  season_start: { color: '#b07de8', label: 'сезоны' },
+  expansion:    { color: '#ffb03a', label: 'дополнения' },
+  beta:         { color: '#4aa3e0', label: 'бета' },
+  marketing:    { color: '#8a95a3', label: 'маркетинг' },
+  press:        { color: '#2dbd9e', label: 'пресса' },
+  blog:         { color: '#7d8a99', label: 'блоги' },
+  service:      { color: '#5a6472', label: 'служебное' },
+  announce:     { color: '#c9a227', label: 'анонсы' },
+  unknown:      { color: '#6b7684', label: 'прочее' }
 };
+
+function shiftDay(day, n) {
+  const d = new Date(day);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function shiftHours(day, h) {
+  const d = new Date(day + 'T00:00:00');
+  d.setHours(d.getHours() + h);
+  return d.toISOString().slice(0, 19);
+}
 
 async function load() {
   const appId = document.getElementById('game').value;
   const smoothing = document.getElementById('smoothing').value;
+  const sensitivity = document.getElementById('sensitivity').value;
+  const minWeight = document.getElementById('minWeight').value;
+  const mode = document.getElementById('mode').value;
+  const isDelta = mode === 'delta';
 
-  const res = await fetch(`/api/data?app_id=${appId}&smoothing=${smoothing}`);
+  const res = await fetch(
+    `/api/data?app_id=${appId}&smoothing=${smoothing}` +
+    `&min_weight=${minWeight}&sensitivity=${sensitivity}`);
   const data = await res.json();
 
+  const cps = data.change_points || [];
+
   document.getElementById('info').textContent =
-    `окно ${data.window} дн., медиана ${data.median_volume} отзывов/день`;
+    `окно ${data.window} дн., медиана ${data.median_volume} отзывов/день, ` +
+    `переломов: ${cps.length}`;
 
   const days = data.daily.map(d => d.day);
-  const pct = data.daily.map(d => d.pct);
+  const values = data.daily.map(d => isDelta ? d.delta : d.pct);
   const totals = data.daily.map(d => d.total);
 
+  const clean = values.filter(v => v !== null && v !== undefined);
+  const topY = clean.length ? Math.max(...clean) : 100;
+
+  // события по дням
   const byDay = {};
   data.events.forEach(e => {
     (byDay[e.day] = byDay[e.day] || []).push(e);
   });
 
+  // фоновые полосы
   const shapes = Object.entries(byDay).map(([day, items]) => ({
-    type: 'line', x0: day, x1: day, yref: 'paper', y0: 0, y1: 1,
-    line: { color: COLORS[items[0].type] || '#888', width: 1, dash: 'dot' }
+    type: 'rect',
+    x0: day, x1: shiftDay(day, 1),
+    yref: 'paper', y0: 0, y1: 1,
+    fillcolor: TYPES[items[0].type]?.color || '#6b7684',
+    opacity: 0.14,
+    line: { width: 0 },
+    layer: 'below'
   }));
 
-  const maxPct = pct.length ? Math.max(...pct.filter(v => v !== null)) : 100;
+  // отдельная серия на каждый тип — даёт кликабельную легенду
+  const byType = {};
+  data.events.forEach(e => {
+    (byType[e.type] = byType[e.type] || []).push(e);
+  });
 
-  const markers = {
-    x: Object.keys(byDay),
-    y: Object.keys(byDay).map(() => maxPct),
+  const eventTraces = Object.entries(byType).map(([type, items]) => ({
+    x: items.map(e => e.day),
+    y: items.map(() => topY),
     mode: 'markers',
-    name: 'События',
+    name: TYPES[type]?.label || type,
+    legendgroup: type,
     marker: {
-      size: 10, symbol: 'triangle-down',
-      color: Object.values(byDay).map(items => COLORS[items[0].type] || '#888')
+      size: 11, symbol: 'triangle-down',
+      color: TYPES[type]?.color || '#6b7684',
+      line: { color: '#14161a', width: 1 }
     },
-    text: Object.values(byDay).map(items =>
-      items.map(i => `[${i.type}] ${i.title}`).join('<br>')),
-    hovertemplate: '%{x}<br>%{text}<extra></extra>',
-    showlegend: false
+    text: items.map(e => e.weight
+      ? `${TYPES[type]?.label || type} ×${e.weight}<br>${e.title}`
+      : `${TYPES[type]?.label || type}<br>${e.title}`),
+    hovertemplate: '%{x}<br>%{text}<extra></extra>'
+  }));
+
+  // точки перелома: по ромбу на каждый тип события рядом
+  const cpIndex = {};
+  days.forEach((d, i) => cpIndex[d] = i);
+
+  const cpX = [], cpY = [], cpColor = [], cpSize = [],
+        cpLine = [], cpText = [];
+
+  cps.forEach(c => {
+    const baseY = values[cpIndex[c.day]];
+    if (baseY === undefined || baseY === null) return;
+
+    const dir = c.score < 0 ? 'спад' : 'рост';
+    const edge = c.score < 0 ? '#ff4d3d' : '#3ddc84';
+    const size = Math.min(12 + Math.abs(c.score) * 0.4, 24);
+
+    const kinds = [...new Set(c.events.map(e => e.type))];
+
+    if (kinds.length === 0) {
+      cpX.push(c.day); cpY.push(baseY);
+      cpColor.push('#3a4048'); cpSize.push(size);
+      cpLine.push(edge);
+      cpText.push(`<b>${dir} ${c.score} п.п.</b><br>событий рядом нет`);
+      return;
+    }
+
+    // несколько ромбов, разнесённых по времени внутри суток
+    const step = 24 / (kinds.length + 1);
+    kinds.forEach((k, i) => {
+      cpX.push(shiftHours(c.day, Math.round(step * (i + 1))));
+      cpY.push(baseY);
+      cpColor.push(TYPES[k]?.color || '#6b7684');
+      cpSize.push(size);
+      cpLine.push(edge);
+      const titles = c.events.filter(e => e.type === k)
+        .map(e => e.title).join('<br>');
+      cpText.push(
+        `<b>${dir} ${c.score} п.п.</b><br>` +
+        `${TYPES[k]?.label || k}:<br>${titles}`);
+    });
+  });
+
+  const changePoints = {
+    x: cpX, y: cpY,
+    mode: 'markers',
+    name: 'Переломы',
+    marker: {
+      size: cpSize,
+      symbol: 'diamond',
+      color: cpColor,
+      line: { color: cpLine, width: 2.5 }
+    },
+    text: cpText,
+    hovertemplate: '%{x|%d.%m.%Y}<br>%{text}<extra></extra>'
   };
 
   Plotly.newPlot('sentiment', [
     {
       x: days, y: totals, type: 'bar', name: 'Отзывов',
       yaxis: 'y2',
-      marker: { color: 'rgba(127,179,213,0.45)' },
+      marker: { color: 'rgba(110,150,190,0.28)' },
       hovertemplate: '%{x}<br>Отзывов: %{y}<extra></extra>'
     },
     {
-      x: days, y: pct, mode: 'lines', name: 'Позитивных, %',
-      line: { color: '#2c3e50', width: 2 },
+      x: days, y: values, mode: 'lines',
+      name: isDelta ? 'Отклонение, п.п.' : 'Позитивных, %',
+      line: { color: '#f0f4f8', width: 2.5, shape: 'spline', smoothing: 0.4 },
       customdata: totals,
-      hovertemplate: '%{x}<br>Позитив: %{y}%<br>Отзывов: %{customdata}<extra></extra>'
+      hovertemplate: isDelta
+        ? '%{x}<br>Отклонение: %{y} п.п.<br>Отзывов: %{customdata}<extra></extra>'
+        : '%{x}<br>Позитив: %{y}%<br>Отзывов: %{customdata}<extra></extra>'
     },
-    markers
+    ...eventTraces,
+    changePoints
   ], {
-    title: 'Настроение и объём отзывов',
+    title: {
+      text: isDelta
+        ? 'Отклонение настроения от обычного уровня'
+        : 'Настроение и объём отзывов',
+      font: { size: 17 }
+    },
     shapes: shapes,
-    height: 600,
-    margin: { t: 50, r: 60, b: 60, l: 60 },
-    yaxis:  { title: 'Позитивных, %', side: 'left' },
-    yaxis2: { title: 'Отзывов в день', side: 'right', overlaying: 'y', showgrid: false },
-    xaxis: { rangeslider: { visible: true } },
-    hovermode: 'x unified',
-    legend: { orientation: 'h', y: 1.08 }
+    height: 640,
+    paper_bgcolor: '#262b33',
+    plot_bgcolor: '#1e232a',
+    font: { color: '#c7d0d9' },
+    margin: { t: 80, r: 60, b: 60, l: 60 },
+    yaxis: {
+      title: isDelta ? 'Отклонение, п.п.' : 'Позитивных, %',
+      gridcolor: '#333a44',
+      zeroline: isDelta,
+      zerolinecolor: '#6b7684',
+      zerolinewidth: 1.5
+    },
+    yaxis2: {
+      title: 'Отзывов в день', side: 'right',
+      overlaying: 'y', showgrid: false
+    },
+    xaxis: {
+      gridcolor: '#333a44',
+      rangeslider: { visible: true, bgcolor: '#1e232a', bordercolor: '#333a44' },
+      autorange: false,
+      range: days.length ? [days[0], days[days.length - 1]] : undefined
+    },
+    hovermode: 'closest',
+    legend: { orientation: 'h', y: 1.10, bgcolor: 'rgba(0,0,0,0)' }
   }, { responsive: true });
 }
 
-document.getElementById('game').addEventListener('change', load);
-document.getElementById('smoothing').addEventListener('change', load);
+['game', 'smoothing', 'sensitivity', 'minWeight', 'mode'].forEach(
+  id => document.getElementById(id).addEventListener('change', load));
 load();
 </script>
 

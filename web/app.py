@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 import psycopg
 from psycopg.rows import dict_row
@@ -22,6 +23,47 @@ def query(sql, params=()):
         return conn.execute(sql, params).fetchall()
 
 
+def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
+    """
+    Ищет точки перелома: где среднее ПОСЛЕ заметно отличается
+    от среднего ДО. sensitivity — сколько сигм считать переломом.
+    """
+    n = len(smoothed)
+    scores = [None] * n
+
+    for i in range(n):
+        before = [s["pct"] for s in smoothed[max(0, i - half_window):i]
+                  if s["pct"] is not None]
+        after = [s["pct"] for s in smoothed[i:i + half_window]
+                 if s["pct"] is not None]
+
+        if len(before) < half_window // 2 or len(after) < half_window // 2:
+            continue
+
+        scores[i] = sum(after) / len(after) - sum(before) / len(before)
+
+    clean = [abs(s) for s in scores if s is not None]
+    if len(clean) < 30:
+        return []
+
+    mean = sum(clean) / len(clean)
+    var = sum((x - mean) ** 2 for x in clean) / len(clean)
+    threshold = mean + sensitivity * (var ** 0.5)
+
+    candidates = [
+        (i, scores[i]) for i in range(n)
+        if scores[i] is not None and abs(scores[i]) >= threshold
+    ]
+    candidates.sort(key=lambda x: -abs(x[1]))
+
+    chosen = []
+    for i, score in candidates:
+        if all(abs(i - j) >= min_gap for j, _ in chosen):
+            chosen.append((i, score))
+
+    return sorted(chosen)
+
+
 @app.route("/")
 def index():
     games = query("""
@@ -36,19 +78,44 @@ def index():
 def data():
     app_id = int(request.args.get("app_id"))
     smoothing = request.args.get("smoothing", "auto")
+    min_weight = float(request.args.get("min_weight", 0))
+    sensitivity = float(request.args.get("sensitivity", 1.5))
+
+    # types не задан — отдаём все типы событий
+    types = request.args.get("types", "")
+    type_list = [t for t in types.split(",") if t]
 
     raw_daily = query("""
-        select created_date as day,
-               count(*) as total,
-               count(*) filter (where voted_up) as positive
-        from marts.review_flat
-        where app_id = %s
-        group by 1
-        order by 1
-    """, (app_id,))
+        with bounds as (
+            select min(created_date) as d_from, max(created_date) as d_to
+            from marts.review_flat
+            where app_id = %s
+        ),
+        calendar as (
+            select generate_series(d_from, d_to, interval '1 day')::date as day
+            from bounds
+        ),
+        actual as (
+            select created_date as day,
+                   count(*) as total,
+                   count(*) filter (where voted_up) as positive
+            from marts.review_flat
+            where app_id = %s
+            group by 1
+        )
+        select c.day,
+               coalesce(a.total, 0) as total,
+               coalesce(a.positive, 0) as positive
+        from calendar c
+        left join actual a on a.day = c.day
+        order by c.day
+    """, (app_id, app_id))
 
     if not raw_daily:
-        return jsonify({"daily": [], "events": [], "window": 0})
+        return jsonify({
+            "daily": [], "events": [], "change_points": [],
+            "window": 0, "median_volume": 0
+        })
 
     # ширина окна: обратно пропорциональна медианному объёму
     volumes = sorted(r["total"] for r in raw_daily)
@@ -84,22 +151,74 @@ def data():
             "window_n": tot,
         })
 
-    events = query("""
-        select distinct published_date as day, event_type, title
-        from marts.patch_impact
-        where app_id = %s and window_code = 'after_7'
-          and event_type in ('patch','season_start','expansion','marketing','beta')
-        order by 1
-    """, (app_id,))
+    # база: медиана сглаженной доли за предыдущие 90 дней
+    BASE_DAYS = 90
+    for i, row in enumerate(smoothed):
+        if row["pct"] is None:
+            row["delta"] = None
+            row["base"] = None
+            continue
+
+        lo = max(0, i - BASE_DAYS)
+        history = [s["pct"] for s in smoothed[lo:i] if s["pct"] is not None]
+
+        if len(history) < 14:
+            row["delta"] = None
+            row["base"] = None
+        else:
+            base = sorted(history)[len(history) // 2]
+            row["base"] = base
+            row["delta"] = round(row["pct"] - base, 1)
+
+    if type_list:
+        events = query("""
+            select distinct published_date as day, event_type, title, weight
+            from marts.patch_impact
+            where app_id = %s and window_code = 'after_7'
+              and event_type = any(%s)
+              and (weight is null or weight >= %s)
+            order by 1
+        """, (app_id, type_list, min_weight))
+    else:
+        events = query("""
+            select distinct published_date as day, event_type, title, weight
+            from marts.patch_impact
+            where app_id = %s and window_code = 'after_7'
+              and (weight is null or weight >= %s)
+            order by 1
+        """, (app_id, min_weight))
+
+    change_points = find_change_points(smoothed, sensitivity=sensitivity)
+
+    cp_out = []
+    for idx, score in change_points:
+        day = smoothed[idx]["day"]
+        day_date = datetime.fromisoformat(day).date()
+
+        nearby = [
+            e for e in events
+            if abs((e["day"] - day_date).days) <= 3
+        ]
+        cp_out.append({
+            "day": day,
+            "score": round(score, 1),
+            "events": [
+                {"type": e["event_type"], "title": e["title"]}
+                for e in nearby
+            ],
+        })
 
     return jsonify({
         "daily": smoothed,
         "window": half * 2 + 1,
         "median_volume": median,
         "events": [
-            {"day": r["day"].isoformat(), "type": r["event_type"], "title": r["title"]}
+            {"day": r["day"].isoformat(), "type": r["event_type"],
+             "title": r["title"],
+             "weight": float(r["weight"]) if r["weight"] is not None else None}
             for r in events
         ],
+        "change_points": cp_out,
     })
 
 

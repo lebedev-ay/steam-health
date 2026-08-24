@@ -1,0 +1,1 @@
+alter table core.fct_patch alter column weight type numeric(8,2);

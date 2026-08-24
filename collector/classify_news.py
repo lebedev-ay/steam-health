@@ -70,6 +70,21 @@ def extract_version(title):
         return None
     return version
 
+def version_weight(version):
+    """Крупность релиза по номеру: 3 мажорный, 2 минорный, 1 мелкий."""
+    if not version:
+        return None
+    parts = version.split('.')
+    # ищем последний ненулевой уровень
+    last = 0
+    for i, p in enumerate(parts):
+        if p.strip('0'):
+            last = i
+    if last == 0:
+        return 3
+    if last == 1:
+        return 2
+    return 1
 
 def classify(title):
     version = extract_version(title)
