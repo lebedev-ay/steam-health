@@ -6,5 +6,6 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY web/ .
+COPY collector/ collector/
 
 CMD ["python", "app.py"]

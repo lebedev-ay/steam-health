@@ -1,24 +1,13 @@
-import os
-import sys
 import json
 import time
-from pathlib import Path
+import argparse
 
 import requests
 import psycopg
-from dotenv import load_dotenv
 
-load_dotenv()
-
-DSN = (
-    f"host=localhost port=5433 "
-    f"dbname={os.getenv('POSTGRES_DB')} "
-    f"user={os.getenv('POSTGRES_USER')} "
-    f"password={os.getenv('POSTGRES_PASSWORD')}"
-)
+from db import DSN, read_games
 
 URL = "https://store.steampowered.com/appreviews/{app_id}"
-GAMES = Path(__file__).parent / "games.txt"
 
 
 def fetch_page(app_id, cursor):
@@ -39,18 +28,17 @@ def fetch_page(app_id, cursor):
     return response.json()
 
 
-def read_games():
-    games = []
-    for line in GAMES.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        app_id, name = line.split(maxsplit=1)
-        games.append((int(app_id), name))
-    return games
+def known_recommendation_ids(conn, ids):
+    if not ids:
+        return set()
+    rows = conn.execute(
+        "select recommendation_id from core.fct_review where recommendation_id = any(%s)",
+        (list(ids),),
+    ).fetchall()
+    return {r[0] for r in rows}
 
 
-def collect(conn, app_id, name, max_pages):
+def collect(conn, app_id, name, max_pages, mode, on_page=None):
     cursor = "*"
     total = 0
 
@@ -65,6 +53,20 @@ def collect(conn, app_id, name, max_pages):
         if not reviews:
             break
 
+        if mode == "incremental":
+            # filter=recent сортирует по дате СОЗДАНИЯ отзыва. Если
+            # вся страница уже есть в core.fct_review — дальше пойдут
+            # только более старые уже известные отзывы, можно
+            # останавливаться. Но так инкремент не увидит отзывы,
+            # отредактированные после создания (например, автор
+            # перевернул оценку через год) — они остаются на старой
+            # позиции выдачи и не попадут в свежую страницу. Для
+            # полной пересборки с нуля нужен режим full.
+            batch_ids = [int(r["recommendationid"]) for r in reviews]
+            known = known_recommendation_ids(conn, batch_ids)
+            if len(known) == len(batch_ids):
+                break
+
         conn.execute(
             "insert into raw.reviews (app_id, cursor_in, payload) values (%s, %s, %s)",
             (app_id, cursor, json.dumps(data)),
@@ -72,6 +74,9 @@ def collect(conn, app_id, name, max_pages):
         conn.commit()
 
         total += len(reviews)
+
+        if on_page:
+            on_page(page + 1, total)
 
         next_cursor = data.get("cursor")
         if not next_cursor or next_cursor == cursor:
@@ -84,15 +89,23 @@ def collect(conn, app_id, name, max_pages):
     return total
 
 
-def main():
-    max_pages = int(sys.argv[1]) if len(sys.argv) > 1 else 30
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("max_pages", type=int, nargs="?", default=30)
+    parser.add_argument("--app-id", type=int)
+    parser.add_argument("--mode", choices=["incremental", "full"], default="incremental")
+    return parser.parse_args()
 
-    games = read_games()
+
+def main():
+    args = parse_args()
+
+    games = read_games(args.app_id)
     grand_total = 0
 
     with psycopg.connect(DSN) as conn:
         for app_id, name in games:
-            grand_total += collect(conn, app_id, name, max_pages)
+            grand_total += collect(conn, app_id, name, args.max_pages, args.mode)
 
     print(f"\nвсего: {grand_total}")
 

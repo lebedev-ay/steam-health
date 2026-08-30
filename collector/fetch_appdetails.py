@@ -1,5 +1,6 @@
 import sys
 import json
+import argparse
 
 import requests
 import psycopg
@@ -27,9 +28,16 @@ def save(app_id: int, status: int, payload):
         conn.commit()
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--app-id", type=int)
+    return parser.parse_args()
+
+
 def main():
     import time
-    for app_id, name in read_games():
+    args = parse_args()
+    for app_id, name in read_games(args.app_id):
         status, payload = fetch(app_id)
         save(app_id, status, payload)
         print(f"{name}: {status}")

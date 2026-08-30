@@ -1,10 +1,14 @@
 import os
+import re
 from datetime import datetime
 
 import psycopg
 from psycopg.rows import dict_row
 from dotenv import load_dotenv
 from flask import Flask, render_template, jsonify, request
+from celery.result import AsyncResult
+
+from tasks import celery_app, collect_game
 
 load_dotenv()
 
@@ -67,14 +71,65 @@ def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
     return sorted(chosen)
 
 
-@app.route("/")
-def index():
-    games = query("""
-        select app_id, game_name
+def list_games():
+    return query("""
+        select app_id, game_name, collection_status
         from marts.dim_game_current
         order by game_name
     """)
-    return render_template("index.html", games=games)
+
+
+APP_ID_RE = re.compile(r"store\.steampowered\.com/app/(\d+)")
+
+
+def parse_app_id(raw):
+    raw = str(raw or "").strip()
+    m = APP_ID_RE.search(raw)
+    if m:
+        return int(m.group(1))
+    if raw.isdigit() and int(raw) > 0:
+        return int(raw)
+    return None
+
+
+@app.route("/")
+def index():
+    return render_template("index.html", games=list_games())
+
+
+@app.route("/api/games")
+def games():
+    return jsonify(list_games())
+
+
+@app.route("/api/collect", methods=["POST"])
+def start_collect():
+    body = request.get_json(silent=True) or {}
+    app_id = parse_app_id(body.get("app_id"))
+    mode = body.get("mode", "incremental")
+
+    if app_id is None:
+        return jsonify({"error": "некорректный ID игры или ссылка"}), 400
+    if mode not in ("incremental", "full"):
+        return jsonify({"error": "некорректный режим сбора"}), 400
+
+    task = collect_game.delay(app_id, mode)
+    return jsonify({"task_id": task.id})
+
+
+@app.route("/api/task/<task_id>")
+def task_status(task_id):
+    result = AsyncResult(task_id, app=celery_app)
+    response = {"state": result.state}
+
+    if result.state == "PROGRESS":
+        response["meta"] = result.info
+    elif result.state == "SUCCESS":
+        response["result"] = result.result
+    elif result.state == "FAILURE":
+        response["error"] = str(result.info)
+
+    return jsonify(response)
 
 
 @app.route("/api/data")

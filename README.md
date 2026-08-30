@@ -42,6 +42,17 @@ python collector/migrate.py
 python web/app.py       # http://localhost:5000
 ```
 
+По умолчанию коллекторы `fetch_reviews.py`/`fetch_news.py` качают
+только то, чего ещё нет (`--mode incremental`); `--mode full`
+пересобирает всё заново. `--app-id <id>` ограничивает сбор одной
+игрой — не обязательно из `games.txt`:
+
+```bash
+python collector/fetch_news.py --app-id 1245620
+python collector/fetch_reviews.py 5 --app-id 1245620
+python collector/fetch_reviews.py 5 --app-id 1245620 --mode full
+```
+
 ## Сбор онлайна по расписанию
 
 Steam API отдаёт только текущее число игроков, истории нет —
@@ -52,6 +63,25 @@ Steam API отдаёт только текущее число игроков, и
 ```
 */30 * * * * cd /path/to/steam-health && .venv/bin/python collector/fetch_player_count.py >> /tmp/player_count.log 2>&1
 ```
+
+## Фоновый сбор из дашборда
+
+В шапке дашборда есть форма «ID игры или ссылка → Собрать»: она
+ставит задачу в очередь (Celery + Redis) и опрашивает её статус,
+не блокируя графики. Задача по шагам проверяет игру в Steam,
+качает appdetails/новости/отзывы (`--mode` из формы) и грузит их
+в core, в конце — `refresh materialized view concurrently` для
+patch_impact (не блокирует чтение, но и не мгновенный).
+
+Поднимается вместе со всем остальным:
+
+```bash
+docker compose up -d --build
+```
+
+Сервис `worker` — тот же образ, что `web`, командой
+`celery -A tasks worker`. Без него `/api/collect` поставит задачу
+в очередь, но она не выполнится, пока воркер не запущен.
 
 ## Структура
 

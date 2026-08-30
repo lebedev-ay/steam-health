@@ -1,3 +1,4 @@
+import argparse
 from datetime import datetime, timezone
 
 import psycopg
@@ -105,49 +106,66 @@ def load_review(conn, app_id, item, language_cache):
     )
 
 
-def main():
-    with psycopg.connect(DSN, row_factory=dict_row) as conn:
-        conn.execute("""
-            create temporary table tmp_review as
-            select row_number() over () as rn, app_id, item
-            from (
-                select distinct on (item ->> 'recommendationid')
-                    r.app_id, item
-                from raw.reviews r,
-                     jsonb_array_elements(r.payload -> 'reviews') as item
-                order by item ->> 'recommendationid', r.fetched_at desc
-            ) d
-        """)
+def load_all(conn, app_id=None):
+    app_filter = "where r.app_id = %s" if app_id is not None else ""
+    params = (app_id,) if app_id is not None else ()
+
+    conn.execute(f"""
+        create temporary table tmp_review as
+        select row_number() over () as rn, app_id, item
+        from (
+            select distinct on (item ->> 'recommendationid')
+                r.app_id, item
+            from raw.reviews r,
+                 jsonb_array_elements(r.payload -> 'reviews') as item
+            {app_filter}
+            order by item ->> 'recommendationid', r.fetched_at desc
+        ) d
+    """, params)
+    conn.commit()
+
+    total = conn.execute("select count(*) as n from tmp_review").fetchone()["n"]
+    print(f"всего отзывов: {total}")
+
+    language_cache = {}
+    loaded = 0
+    last_rn = 0
+
+    while True:
+        rows = conn.execute(
+            """
+            select rn, app_id, item from tmp_review
+            where rn > %s
+            order by rn
+            limit %s
+            """,
+            (last_rn, BATCH_SIZE),
+        ).fetchall()
+
+        if not rows:
+            break
+
+        for r in rows:
+            load_review(conn, r["app_id"], r["item"], language_cache)
+            last_rn = r["rn"]
+
         conn.commit()
+        loaded += len(rows)
+        print(f"{loaded}/{total}")
 
-        total = conn.execute("select count(*) as n from tmp_review").fetchone()["n"]
-        print(f"всего отзывов: {total}")
+    return loaded
 
-        language_cache = {}
-        loaded = 0
-        last_rn = 0
 
-        while True:
-            rows = conn.execute(
-                """
-                select rn, app_id, item from tmp_review
-                where rn > %s
-                order by rn
-                limit %s
-                """,
-                (last_rn, BATCH_SIZE),
-            ).fetchall()
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--app-id", type=int)
+    return parser.parse_args()
 
-            if not rows:
-                break
 
-            for r in rows:
-                load_review(conn, r["app_id"], r["item"], language_cache)
-                last_rn = r["rn"]
-
-            conn.commit()
-            loaded += len(rows)
-            print(f"{loaded}/{total}")
+def main():
+    args = parse_args()
+    with psycopg.connect(DSN, row_factory=dict_row) as conn:
+        loaded = load_all(conn, args.app_id)
 
     print(f"загружено: {loaded}")
 

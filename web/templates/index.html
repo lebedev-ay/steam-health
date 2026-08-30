@@ -66,15 +66,65 @@
     border-radius: 6px;
     padding: 40px 20px;
   }
+
+  button {
+    padding: 6px 14px;
+    font-size: 14px;
+    background: #262b33;
+    color: #c7d0d9;
+    border: 1px solid #3a4048;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: #2d333d; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .collect-bar {
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #262b33;
+  }
+  .collect-controls { display: flex; gap: 10px; align-items: center; }
+  #collectAppId { width: 300px; }
+  .collect-progress {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #8a95a3;
+    min-height: 18px;
+  }
+  .spinner-sm {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    border: 2px solid #3a4048;
+    border-top-color: #4aa3e0;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
 </style>
 </head>
 <body>
+
+<div class="collect-bar">
+  <div class="collect-controls">
+    <input type="text" id="collectAppId"
+           placeholder="ID игры или ссылка на store.steampowered.com">
+    <select id="collectMode">
+      <option value="incremental" selected>инкрементально</option>
+      <option value="full">полный сбор</option>
+    </select>
+    <button id="collectBtn" type="button">Собрать</button>
+  </div>
+  <div id="collectProgress" class="collect-progress"></div>
+</div>
 
 <div class="controls">
   <label>Игра:
     <select id="game">
       {% for g in games %}
-      <option value="{{ g.app_id }}">{{ g.game_name }}</option>
+      <option value="{{ g.app_id }}">{{ g.game_name }}{% if g.collection_status == 'partial' %} (данные неполные){% endif %}</option>
       {% endfor %}
     </select>
   </label>
@@ -353,6 +403,128 @@ async function loadSafe() {
 
 CONTROL_IDS.forEach(id => document.getElementById(id).addEventListener('change', loadSafe));
 loadSafe();
+
+// --- фоновый сбор данных по игре ---
+
+const COLLECT_STORAGE_KEY = 'steamHealthCollectTask';
+
+function setCollectRunning(running) {
+  document.getElementById('collectBtn').disabled = running;
+  document.getElementById('collectAppId').disabled = running;
+  document.getElementById('collectMode').disabled = running;
+}
+
+function showCollectProgress(text, kind) {
+  const el = document.getElementById('collectProgress');
+  el.innerHTML = (kind === 'busy' ? '<span class="spinner-sm"></span>' : '') + text;
+  el.style.color = kind === 'error' ? '#ff6b5b' : (kind === 'ok' ? '#3ddc84' : '#8a95a3');
+}
+
+async function refreshGamesList() {
+  const res = await fetch('/api/games');
+  const list = await res.json();
+  const select = document.getElementById('game');
+  const current = select.value;
+
+  select.innerHTML = list
+    .map(g => `<option value="${g.app_id}">${g.game_name}${g.collection_status === 'partial' ? ' (данные неполные)' : ''}</option>`)
+    .join('');
+
+  if ([...select.options].some(o => o.value === current)) {
+    select.value = current;
+  } else if (select.options.length) {
+    loadSafe();
+  }
+}
+
+function pollTask(taskId) {
+  setCollectRunning(true);
+
+  const tick = async () => {
+    let body;
+    try {
+      const res = await fetch(`/api/task/${taskId}`);
+      body = await res.json();
+    } catch (e) {
+      showCollectProgress('нет связи с сервером, пробую ещё раз…', 'busy');
+      setTimeout(tick, 2000);
+      return;
+    }
+
+    if (body.state === 'PROGRESS' && body.meta) {
+      const m = body.meta;
+      const extra = m.progress ? ` (${m.progress})` : '';
+      showCollectProgress(`шаг ${m.step}/${m.total}: ${m.message}${extra}`, 'busy');
+      setTimeout(tick, 2000);
+      return;
+    }
+
+    if (body.state === 'SUCCESS') {
+      showCollectProgress(`готово: ${body.result?.name || 'игра собрана'}`, 'ok');
+      setCollectRunning(false);
+      localStorage.removeItem(COLLECT_STORAGE_KEY);
+      refreshGamesList();
+      return;
+    }
+
+    if (body.state === 'FAILURE') {
+      showCollectProgress(`ошибка: ${body.error || 'сбор не удался'}`, 'error');
+      setCollectRunning(false);
+      localStorage.removeItem(COLLECT_STORAGE_KEY);
+      return;
+    }
+
+    // PENDING / STARTED — задача в очереди, прогресса ещё нет
+    showCollectProgress('задача поставлена в очередь…', 'busy');
+    setTimeout(tick, 2000);
+  };
+
+  tick();
+}
+
+document.getElementById('collectBtn').addEventListener('click', async () => {
+  const rawId = document.getElementById('collectAppId').value.trim();
+  const mode = document.getElementById('collectMode').value;
+  if (!rawId) return;
+
+  setCollectRunning(true);
+  showCollectProgress('запускаю…', 'busy');
+
+  try {
+    const res = await fetch('/api/collect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app_id: rawId, mode })
+    });
+    const body = await res.json();
+
+    if (!res.ok) {
+      showCollectProgress(`ошибка: ${body.error || res.status}`, 'error');
+      setCollectRunning(false);
+      return;
+    }
+
+    localStorage.setItem(COLLECT_STORAGE_KEY, JSON.stringify({ taskId: body.task_id }));
+    pollTask(body.task_id);
+  } catch (e) {
+    showCollectProgress('не удалось запустить сбор: ' + e.message, 'error');
+    setCollectRunning(false);
+  }
+});
+
+document.getElementById('collectAppId').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('collectBtn').click();
+});
+
+// переживает случайную перезагрузку страницы во время сбора
+(() => {
+  const saved = localStorage.getItem(COLLECT_STORAGE_KEY);
+  if (!saved) return;
+  try {
+    const { taskId } = JSON.parse(saved);
+    if (taskId) pollTask(taskId);
+  } catch (e) {}
+})();
 </script>
 
 </body>

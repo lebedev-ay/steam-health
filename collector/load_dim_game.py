@@ -1,4 +1,5 @@
 import sys
+import argparse
 from datetime import datetime, timezone
 
 import psycopg
@@ -103,29 +104,41 @@ def load(conn, fields):
     return f"new version ({', '.join(changed)})"
 
 
+def load_one(conn, app_id, name):
+    row = conn.execute(
+        """
+        select payload from raw.appdetails
+        where app_id = %s and payload is not null
+        order by fetched_at desc limit 1
+        """,
+        (app_id,),
+    ).fetchone()
+
+    if row is None:
+        print(f"{name}: нет сырых данных")
+        return None
+
+    payload = row["payload"]
+    data = payload[str(app_id)]["data"]
+    fields = extract(payload, app_id)
+    result = load(conn, fields)
+    conn.commit()
+
+    print(f"{name}: {result}")
+    return result
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--app-id", type=int)
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
-        for app_id, name in read_games():
-            row = conn.execute(
-                """
-                select payload from raw.appdetails
-                where app_id = %s and payload is not null
-                order by fetched_at desc limit 1
-                """,
-                (app_id,),
-            ).fetchone()
-
-            if row is None:
-                print(f"{name}: нет сырых данных")
-                continue
-
-            payload = row["payload"]
-            data = payload[str(app_id)]["data"]
-            fields = extract(payload, app_id)
-            result = load(conn, fields)
-            conn.commit()
-
-            print(f"{name}: {result}")
+        for app_id, name in read_games(args.app_id):
+            load_one(conn, app_id, name)
 
 
 if __name__ == "__main__":
