@@ -7,7 +7,10 @@ from pathlib import Path
 # на уровень выше (../collector, web/ и collector/ соседи).
 for _candidate in (Path(__file__).parent / "collector",
                     Path(__file__).parent.parent / "collector"):
-    if _candidate.is_dir():
+    # существование каталога не гарантирует, что это тот collector/ —
+    # пустой каталог (например, случайно созданный Docker-ом) тоже
+    # проходит is_dir(). Ищем конкретный файл, который там точно есть
+    if (_candidate / "db.py").is_file():
         sys.path.insert(0, str(_candidate))
         break
 
