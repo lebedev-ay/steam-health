@@ -161,7 +161,12 @@ Draw.io Integration) или на [diagrams.net](https://app.diagrams.net/).
   вокруг `published_at`, флаг `window_complete` (окно не обрезано
   границей собранных данных). Строится из `core.fct_patch` +
   `core.dim_game` + `core.dim_window`, агрегируя `marts.review_flat`.
-  Это основной источник данных для отметок событий на графике.
+  Меры окон (`review_count`, `positive_count`, `window_complete`)
+  читает таблица влияния событий (`/api/event_impact`) — окна
+  `before_7`/`after_7` одного патча, сравнение доли позитива до
+  и после. Маркеры и полосы на самом графике берут из этой же
+  витрины только дату, тип, заголовок и вес, без окон — см.
+  decisions.md, записи 015 и 026.
 - **dim_game_current** — по одной строке на игру: текущая версия
   из `core.dim_game` (`is_current` и `app_id > 0`, реальные игры
   без заглушки). Нужна, потому что `core.dim_game` — SCD2

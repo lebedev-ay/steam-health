@@ -113,6 +113,7 @@
   .cp-list .cp-up { color: #3ddc84; }
   .cp-list .cp-down { color: #ff4d3d; }
   .cp-list .cp-empty { color: #6b7684; padding: 6px 0; }
+  .section-title { margin-top: 20px; font-size: 14px; color: #c7d0d9; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -185,6 +186,9 @@
 </div>
 
 <div id="cpList" class="cp-list"></div>
+
+<div class="section-title">Влияние событий на настроение</div>
+<div id="eventImpact" class="cp-list"></div>
 
 <div class="hint">Клик по элементу легенды скрывает или показывает тип событий.
   Едва заметные широкие полосы — события платформы Steam
@@ -387,6 +391,53 @@ function renderChangePointList(cps, range) {
     });
     row.addEventListener('mouseenter', () => highlightChangePoint(idx));
     row.addEventListener('mouseleave', unhighlightChangePoint);
+  });
+}
+
+// таблица влияния событий — про весь собранный период, не про
+// видимый диапазон (в отличие от таблицы переломов), поэтому
+// строится один раз в load(), не в renderChart. Клик — тот же
+// зум ±30 дней, что и у строки перелома
+function renderEventImpact(events) {
+  const el = document.getElementById('eventImpact');
+
+  if (!events.length) {
+    el.innerHTML = '<div class="cp-empty">заметных сдвигов не нашлось — ' +
+      'либо у игры не было резких скачков настроения (это нормально), ' +
+      'либо не набралось событий с двумя полными окнами и достаточным ' +
+      'объёмом отзывов (мало патчей или история собрана недавно)</div>';
+    return;
+  }
+
+  const rows = events.map(e => {
+    const dirClass = e.shift < 0 ? 'cp-down' : 'cp-up';
+    const dateStr = new Date(e.day + 'T00:00:00').toLocaleDateString('ru-RU');
+    const sign = e.shift > 0 ? '+' : '';
+    return `<tr class="cp-row" data-day="${e.day}">
+      <td>${dateStr}</td>
+      <td>${TYPES[e.type]?.label || e.type}</td>
+      <td>${truncate(e.title, 60)}</td>
+      <td>${e.before_pct}%</td>
+      <td>${e.after_pct}%</td>
+      <td class="${dirClass}">${sign}${e.shift} п.п.</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>Дата</th><th>Тип</th><th>Заголовок</th>
+      <th>Позитив до</th><th>Позитив после</th><th>Сдвиг</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+
+  el.querySelectorAll('.cp-row').forEach(row => {
+    const day = row.dataset.day;
+    row.addEventListener('click', () => {
+      Plotly.relayout('sentiment', {
+        'xaxis.range': [shiftDay(day, -30), shiftDay(day, 30)]
+      });
+    });
   });
 }
 
@@ -699,13 +750,17 @@ async function load() {
   const sensitivity = document.getElementById('sensitivity').value;
   const minWeight = document.getElementById('minWeight').value;
 
-  const res = await fetch(
-    `/api/data?app_id=${appId}&smoothing=${smoothing}` +
-    `&min_weight=${minWeight}&sensitivity=${sensitivity}`);
-  const data = await res.json();
+  const [dataRes, impactRes] = await Promise.all([
+    fetch(`/api/data?app_id=${appId}&smoothing=${smoothing}` +
+      `&min_weight=${minWeight}&sensitivity=${sensitivity}`),
+    fetch(`/api/event_impact?app_id=${appId}`)
+  ]);
+  const data = await dataRes.json();
+  const impact = await impactRes.json();
 
   lastData = data;
   renderChart(null);
+  renderEventImpact(impact.events || []);
 }
 
 const CONTROL_IDS = ['game', 'smoothing', 'sensitivity', 'minWeight', 'mode', 'showPlatform'];

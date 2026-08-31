@@ -65,6 +65,21 @@ def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
 SIGNIFICANT_WEIGHT = 2
 SIGNIFICANT_TYPES = {"patch", "season_start", "expansion"}
 
+# для таблицы влияния событий (см. decisions.md): меньше — доля
+# позитива скачет от случайности объёма, а не от самого события
+EVENT_IMPACT_MIN_REVIEWS = 30
+# 10 п.п. был по распределению верным, но завышенным по смыслу:
+# таблица усредняет неделю до/после, детект переломов смотрит
+# на конкретный день — резкий скачок за 2-3 дня в недельном окне
+# растворяется. На Cyberpunk 2077 (1091500) события с полными
+# окнами и объёмом есть, максимальный недельный сдвиг — 4.8 п.п.
+# при базовом уровне ~94%; порог 10 отсекал их все. Устойчивый
+# недельный сдвиг такого масштаба (Marathon, 78% → 31%) — редкость,
+# а не норма. На 1565 событиях порог >= 3 п.п. оставляет 801,
+# >= 5 — 520, >= 10 — 185 (~10 на игру из 19, слишком строго)
+EVENT_IMPACT_MIN_SHIFT = 3
+EVENT_IMPACT_LIMIT = 20
+
 
 def is_significant_event(e):
     return (e["weight"] is not None and e["weight"] >= SIGNIFICANT_WEIGHT) \
@@ -339,6 +354,60 @@ def data():
         ],
         "change_points": cp_out,
     })
+
+
+@app.route("/api/event_impact")
+def event_impact():
+    try:
+        app_id = int(request.args.get("app_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "app_id должен быть числом"}), 400
+
+    # before_7 и after_7 одного patch_sk — окна должны быть полными
+    # (иначе сравниваем целое с обрезанным, запись 009) и не мельче
+    # EVENT_IMPACT_MIN_REVIEWS отзывов в каждом
+    rows = query("""
+        select
+            b.patch_sk, b.published_date, b.event_type, b.title,
+            b.review_count as before_count,
+            b.positive_count as before_positive,
+            a.review_count as after_count,
+            a.positive_count as after_positive
+        from marts.patch_impact b
+        join marts.patch_impact a on a.patch_sk = b.patch_sk
+        where b.app_id = %s
+          and b.window_code = 'before_7' and b.window_complete
+          and a.window_code = 'after_7' and a.window_complete
+          and b.review_count >= %s and a.review_count >= %s
+    """, (app_id, EVENT_IMPACT_MIN_REVIEWS, EVENT_IMPACT_MIN_REVIEWS))
+
+    events = []
+    for r in rows:
+        # доли — деление сумм в конце, а не усреднение готовых
+        # процентов (принцип из decisions.md, запись 008)
+        before_pct = 100 * r["before_positive"] / r["before_count"]
+        after_pct = 100 * r["after_positive"] / r["after_count"]
+        shift = after_pct - before_pct
+
+        if abs(shift) < EVENT_IMPACT_MIN_SHIFT:
+            continue
+
+        events.append({
+            "day": r["published_date"].isoformat(),
+            "type": r["event_type"],
+            "title": r["title"],
+            "before_pct": round(before_pct, 1),
+            "after_pct": round(after_pct, 1),
+            "shift": round(shift, 1),
+            "before_count": r["before_count"],
+            "before_positive": r["before_positive"],
+            "after_count": r["after_count"],
+            "after_positive": r["after_positive"],
+        })
+
+    events.sort(key=lambda e: abs(e["shift"]), reverse=True)
+
+    return jsonify({"events": events[:EVENT_IMPACT_LIMIT]})
 
 
 if __name__ == "__main__":
