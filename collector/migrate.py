@@ -18,7 +18,13 @@ create table if not exists public.schema_history (
 
 
 def main():
-    files = sorted(MIGRATIONS_DIR.glob("V*.sql"))
+    # sorted() по умолчанию сравнивает имена файлов как строки:
+    # V10 < V1 < V2 лексикографически, реальный порядок миграций
+    # ломается на чистой базе. Сортируем по числу версии
+    files = sorted(
+        MIGRATIONS_DIR.glob("V*.sql"),
+        key=lambda p: int(p.name.split("__")[0][1:]),
+    )
 
     with psycopg.connect(DSN) as conn:
         conn.execute(HISTORY_DDL)
