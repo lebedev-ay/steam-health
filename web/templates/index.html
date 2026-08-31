@@ -324,9 +324,25 @@ function mainEventLabel(c) {
   return '—';
 }
 
+// границы оси Plotly отдаёт то "2025-05-01", то "2025-05-01
+// 12:00:00.5" — берём только календарную дату (первые 10 символов,
+// ISO YYYY-MM-DD сравнивается как строка корректно) и сравниваем
+// с ней c.day, у которого времени не бывает. Включительно с обеих
+// сторон: день считается видимым, если хоть частично попал в диапазон
+function dayInRange(day, range) {
+  if (!range) return true;
+  const lo = String(range[0]).slice(0, 10);
+  const hi = String(range[1]).slice(0, 10);
+  return day >= lo && day <= hi;
+}
+
 // список переломов под графиком: клик — зум ±30 дней, наведение —
-// подсветка маркера (см. highlightChangePoint)
-function renderChangePointList(cps) {
+// подсветка маркера (см. highlightChangePoint). cps — ПОЛНЫЙ список
+// (не только видимые) — data-idx у строки обязан остаться индексом
+// в нём же, потому что по этому индексу cpMarkerIndices в renderChart
+// находит нужный ромб на графике. Отфильтровать cps перед вызовом
+// и передать сюда урезанный массив — значит разъехаться с индексами
+function renderChangePointList(cps, range) {
   const el = document.getElementById('cpList');
 
   if (!cps.length) {
@@ -334,7 +350,17 @@ function renderChangePointList(cps) {
     return;
   }
 
-  const rows = cps.map((c, i) => {
+  const visible = cps
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => dayInRange(c.day, range));
+
+  if (!visible.length) {
+    el.innerHTML = '<div class="cp-empty">в видимом диапазоне переломов ' +
+      'нет — расширьте диапазон или сбросьте зум двойным кликом</div>';
+    return;
+  }
+
+  const rows = visible.map(({ c, i }) => {
     const dir = c.score < 0 ? 'спад' : 'рост';
     const dirClass = c.score < 0 ? 'cp-down' : 'cp-up';
     const dateStr = new Date(c.day + 'T00:00:00').toLocaleDateString('ru-RU');
@@ -389,9 +415,16 @@ function renderChart(range) {
     : Infinity;
   const keepEvent = densityFilter(windowDays);
 
+  const visibleCpCount = cps.filter(c => dayInRange(c.day, effectiveRange)).length;
+  const cpCountText = visibleCpCount === cps.length
+    ? `переломов: ${cps.length}`
+    : `переломов: ${visibleCpCount} из ${cps.length}`;
+
   document.getElementById('info').textContent =
     `окно ${data.window} дн., медиана ${data.median_volume} отзывов/день, ` +
-    `переломов: ${cps.length}; ${densityLabel(windowDays)}`;
+    `${cpCountText}; ${densityLabel(windowDays)}`;
+
+  renderChangePointList(cps, effectiveRange);
 
   const cpIndex = {};
   days.forEach((d, i) => cpIndex[d] = i);
@@ -673,7 +706,6 @@ async function load() {
 
   lastData = data;
   renderChart(null);
-  renderChangePointList(data.change_points || []);
 }
 
 const CONTROL_IDS = ['game', 'smoothing', 'sensitivity', 'minWeight', 'mode', 'showPlatform'];
