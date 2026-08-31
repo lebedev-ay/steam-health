@@ -8,18 +8,45 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     container_name: steam-redis
     mem_limit: 128m
+    restart: unless-stopped
+
+  # разовый прогон миграций перед стартом web/worker. Использует
+  # тот же образ, что web/Dockerfile собирает для web/worker, но
+  # тому не хватает db/migration/ — Dockerfile копирует только
+  # web/ и collector/. Домонтированный ./web:/app у web/worker
+  # ещё и перекрывает собой всё, что COPY положил в /app при сборке
+  # (кроме /app/collector — он смонтирован отдельно поверх). Здесь
+  # то же самое: докидываем db/ отдельным mount поверх образа
+  migrate:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    command: python collector/migrate.py
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: 5432
+    volumes:
+      - ./collector:/app/collector
+      - ./db:/app/db
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   web:
     build:
@@ -42,6 +69,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
   worker:
     build:
@@ -63,6 +93,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
 volumes:
   pgdata:

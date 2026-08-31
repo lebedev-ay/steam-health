@@ -36,14 +36,34 @@ Python, PostgreSQL 16, Docker, Flask + Plotly.
 
 ## Запуск
 
+Два сценария: полностью в docker (как на сервере) или дашборд
+локально для разработки — тогда в docker остаются только база
+и очередь, а `web/app.py` перезапускается сам при правке кода.
+
+### Полностью в docker
+
 ```bash
 cp .env.example .env   # заполнить пароль
-docker compose up -d
+docker compose up -d --build
+```
+
+Поднимутся postgres и redis, применятся миграции (разовый сервис
+`migrate` — стартует после postgres и до web/worker) и запустится
+дашборд на gunicorn — http://localhost:5000.
+
+### Локальная разработка
+
+```bash
+cp .env.example .env   # заполнить пароль
+docker compose up -d postgres redis
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python collector/migrate.py
-python web/app.py       # http://localhost:5000
+python web/app.py       # http://localhost:5000, с автоперезагрузкой
 ```
+
+Сервис `web` из compose здесь не поднимаем — иначе он и локальный
+`app.py` одновременно займут порт 5000.
 
 По умолчанию коллекторы `fetch_reviews.py`/`fetch_news.py` качают
 только то, чего ещё нет (`--mode incremental`); `--mode full`
@@ -65,11 +85,8 @@ python collector/fetch_reviews.py 5 --app-id 1245620 --mode full
 в core, в конце — `refresh materialized view concurrently` для
 patch_impact (не блокирует чтение, но и не мгновенный).
 
-Поднимается вместе со всем остальным:
-
-```bash
-docker compose up -d --build
-```
+Поднимается вместе со всем остальным при полном запуске в docker
+(см. «Запуск» выше).
 
 Сервис `worker` — тот же образ, что `web`, командой
 `celery -A tasks worker`. Без него `/api/collect` поставит задачу
