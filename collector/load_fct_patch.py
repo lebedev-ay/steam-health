@@ -70,18 +70,27 @@ def load_all(conn, app_id=None):
         inserted += 1
 
     conn.execute("""
+        -- медиана по app_id, не по game_sk: game_sk — суррогат
+        -- SCD2, у игры с несколькими версиями атрибутов (например,
+        -- сменился metacritic-score) патчи разложены по разным
+        -- game_sk, и медиана считалась бы отдельно для каждой
+        -- версии — веса внутри одной игры переставали быть
+        -- сравнимыми друг с другом
         with medians as (
-            select game_sk,
+            select g.app_id,
                    (percentile_cont(0.5)
-                      within group (order by body_length))::numeric as med
-            from core.fct_patch
-            where body_length > 0 and event_type = 'patch'
-            group by game_sk
+                      within group (order by p.body_length))::numeric as med
+            from core.fct_patch p
+            join core.dim_game g on g.game_sk = p.game_sk
+            where p.body_length > 0 and p.event_type = 'patch'
+            group by g.app_id
         )
         update core.fct_patch p
         set weight = round(p.body_length::numeric / greatest(m.med, 1), 2)
-        from medians m
-        where m.game_sk = p.game_sk and p.body_length > 0
+        from core.dim_game g, medians m
+        where g.game_sk = p.game_sk
+          and g.app_id = m.app_id
+          and p.body_length > 0
     """)
 
     return inserted
