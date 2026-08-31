@@ -15,3 +15,6 @@ GET https://store.steampowered.com/api/appdetails?appids=1245620&filters=genres,
 
 ###
 GET https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=553850&count=20
+
+###
+GET https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=223300&count=50&maxlength=0

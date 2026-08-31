@@ -71,6 +71,16 @@ def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
     return sorted(chosen)
 
 
+# см. docs/decisions.md — почему перелом бывает необъяснимым
+SIGNIFICANT_WEIGHT = 2
+SIGNIFICANT_TYPES = {"patch", "season_start", "expansion"}
+
+
+def is_significant_event(e):
+    return (e["weight"] is not None and e["weight"] >= SIGNIFICANT_WEIGHT) \
+        or e["event_type"] in SIGNIFICANT_TYPES
+
+
 def list_games():
     return query("""
         select app_id, game_name, collection_status
@@ -172,7 +182,7 @@ def data():
     if not raw_daily:
         return jsonify({
             "daily": [], "events": [], "change_points": [],
-            "window": 0, "median_volume": 0
+            "platform_events": [], "window": 0, "median_volume": 0
         })
 
     # ширина окна: обратно пропорциональна медианному объёму
@@ -246,6 +256,27 @@ def data():
             order by 1
         """, (app_id, min_weight))
 
+    # события для объяснения переломов: без фильтра по типу — тип
+    # можно скрыть на графике (например, блоги), но перелом всё равно
+    # нужно объяснить, если такое событие рядом есть
+    cp_events = query("""
+        select distinct published_date as day, event_type, title, weight
+        from marts.patch_impact
+        where app_id = %s and window_code = 'after_7'
+          and (weight is null or weight >= %s)
+        order by 1
+    """, (app_id, min_weight))
+
+    # платформенные события (распродажи, Steam Awards, Next Fest) —
+    # общие для всех игр, не зависят от app_id. Дата приблизительная,
+    # см. docs/decisions.md
+    platform_events = query("""
+        select event_date, event_type, title
+        from core.dim_platform_event
+        where event_date >= %s and event_date <= %s
+        order by event_date
+    """, (raw_daily[0]["day"], raw_daily[-1]["day"]))
+
     change_points = find_change_points(smoothed, sensitivity=sensitivity)
 
     cp_out = []
@@ -254,16 +285,38 @@ def data():
         day_date = datetime.fromisoformat(day).date()
 
         nearby = [
-            e for e in events
+            e for e in cp_events
             if abs((e["day"] - day_date).days) <= 3
         ]
+        major = [e for e in nearby if is_significant_event(e)]
+        minor = [e for e in nearby if not is_significant_event(e)]
+
+        platform_nearby = [
+            e for e in platform_events
+            if abs((e["event_date"] - day_date).days) <= 3
+        ]
+        platform_event = None
+        if platform_nearby:
+            closest = min(platform_nearby,
+                          key=lambda e: abs((e["event_date"] - day_date).days))
+            platform_event = {
+                "date": closest["event_date"].isoformat(),
+                "type": closest["event_type"],
+                "title": closest["title"],
+            }
+
         cp_out.append({
             "day": day,
             "score": round(score, 1),
             "events": [
                 {"type": e["event_type"], "title": e["title"]}
-                for e in nearby
+                for e in major
             ],
+            "events_minor": [
+                {"type": e["event_type"], "title": e["title"]}
+                for e in minor
+            ],
+            "platform_event": platform_event,
         })
 
     return jsonify({
@@ -275,6 +328,11 @@ def data():
              "title": r["title"],
              "weight": float(r["weight"]) if r["weight"] is not None else None}
             for r in events
+        ],
+        "platform_events": [
+            {"date": e["event_date"].isoformat(), "type": e["event_type"],
+             "title": e["title"]}
+            for e in platform_events
         ],
         "change_points": cp_out,
     })

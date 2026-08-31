@@ -15,7 +15,7 @@ flowchart TD
         API_REV["appreviews"]
         API_NEWS["ISteamNews/GetNewsForApp"]
         API_DET["/api/appdetails"]
-        API_CNT["ISteamUserStats/GetNumberOfCurrentPlayers"]
+        API_PLAT["ISteamNews/GetNewsForApp<br>appid 753 (платформа)"]
     end
 
     subgraph rawschema["raw"]
@@ -29,7 +29,7 @@ flowchart TD
         C_REVIEW[("core.fct_review")]
         C_TEXT[("core.review_text")]
         C_PATCH[("core.fct_patch")]
-        C_COUNT[("core.fct_player_count")]
+        C_PLATFORM[("core.dim_platform_event")]
     end
 
     subgraph martsschema["marts"]
@@ -43,12 +43,13 @@ flowchart TD
     API_REV -->|"fetch_reviews.py"| RAW_REV
     API_NEWS -->|"fetch_news.py"| RAW_NEWS
     API_DET -->|"fetch_appdetails.py"| RAW_DET
-    API_CNT -->|"fetch_player_count.py"| C_COUNT
+    API_PLAT -->|"fetch_platform_events.py"| RAW_NEWS
 
     RAW_REV -->|"load_fct_review.py"| C_REVIEW
     RAW_REV -->|"load_fct_review.py"| C_TEXT
     RAW_DET -->|"load_dim_game.py"| C_GAME
     RAW_NEWS -->|"load_fct_patch.py + classify_news.classify()"| C_PATCH
+    RAW_NEWS -->|"fetch_platform_events.load_all()"| C_PLATFORM
 
     C_REVIEW --> M_FLAT
     C_GAME --> M_FLAT
@@ -59,13 +60,14 @@ flowchart TD
     M_FLAT --> WEB
     M_IMPACT --> WEB
     M_CUR --> WEB
+    C_PLATFORM -->|"напрямую, мимо marts"| WEB
 ```
+
+Подробная версия с обязательным порядком загрузчиков и веткой
+фоновой задачи (`web/tasks.py`) — [docs/er/pipeline.drawio](er/pipeline.drawio).
 
 Особенности, которые не видны из схемы:
 
-- `fetch_player_count.py` пишет в `core.fct_player_count` напрямую,
-  минуя `raw`: Steam отдаёт только текущее число игроков, хранить
-  сырой ответ на одно число избыточно.
 - `classify_news.py` не пишет в базу сам — это модуль с регулярками
   и функцией `classify()`, которую вызывает `load_fct_patch.py` при
   загрузке. У `classify_news.py` есть свой `main()`, но он только
@@ -80,130 +82,16 @@ flowchart TD
 
 ## Ядро: звезда в core
 
-```mermaid
-erDiagram
-    dim_game ||--o{ fct_review : "game_sk"
-    dim_date ||--o{ fct_review : "date_sk"
-    dim_time ||--o{ fct_review : "time_sk"
-    dim_language ||--o{ fct_review : "language_sk"
-    fct_review ||--|| review_text : "review_sk"
-
-    dim_game ||--o{ fct_patch : "game_sk"
-    dim_date ||--o{ fct_patch : "date_sk"
-
-    dim_game ||--o{ fct_player_count : "game_sk"
-    dim_date ||--o{ fct_player_count : "date_sk"
-    dim_time ||--o{ fct_player_count : "time_sk"
-
-    dim_game ||--o{ bridge_game_company : "game_sk"
-    dim_company ||--o{ bridge_game_company : "company_sk"
-
-    dim_game ||--o{ bridge_game_genre : "game_sk"
-    dim_genre ||--o{ bridge_game_genre : "genre_sk"
-
-    dim_game ||--o{ bridge_game_category : "game_sk"
-    dim_category ||--o{ bridge_game_category : "category_sk"
-
-    dim_game {
-        int game_sk PK
-        int app_id "натуральный ключ, не unique"
-        text game_name
-        timestamptz valid_from
-        timestamptz valid_to
-        boolean is_current
-    }
-
-    dim_date {
-        int date_sk PK
-        date full_date
-        smallint year
-        smallint month
-        boolean is_weekend
-    }
-
-    dim_time {
-        smallint time_sk PK
-        text hour_label
-        text daypart
-        boolean is_peak
-    }
-
-    dim_language {
-        int language_sk PK
-        text language_code
-        text language_name
-    }
-
-    dim_company {
-        int company_sk PK
-        text company_name
-    }
-
-    dim_genre {
-        int genre_sk PK
-        text genre_name
-    }
-
-    dim_category {
-        int category_sk PK
-        text category_name
-    }
-
-    dim_window {
-        int window_sk PK
-        text window_code
-        int day_from
-        int day_to
-        boolean is_baseline
-    }
-
-    fct_review {
-        bigint review_sk PK
-        bigint recommendation_id UK
-        int game_sk FK
-        int date_sk FK
-        int language_sk FK
-        boolean is_voted_up
-    }
-
-    review_text {
-        bigint review_sk PK
-        text review_body
-    }
-
-    fct_patch {
-        bigint patch_sk PK
-        text gid UK
-        int game_sk FK
-        int date_sk FK
-        text event_type
-        numeric weight
-    }
-
-    fct_player_count {
-        int game_sk PK
-        timestamptz measured_at PK
-        int date_sk FK
-        smallint time_sk FK
-        int player_count
-    }
-
-    bridge_game_company {
-        int game_sk PK
-        int company_sk PK
-        text role PK
-    }
-
-    bridge_game_genre {
-        int game_sk PK
-        int genre_sk PK
-    }
-
-    bridge_game_category {
-        int game_sk PK
-        int category_sk PK
-    }
-```
+ER-диаграмма — [docs/er/core.drawio](er/core.drawio). GitHub
+`.drawio` не рендерит — открыть можно в VS Code (расширение
+Draw.io Integration) или на [diagrams.net](https://app.diagrams.net/).
+Таблицы, нарисованные вручную и заполненные данными
+(`dim_game`, `dim_date`, `dim_time`, `dim_language`, `fct_review`,
+`fct_patch`, `review_text`), — обычным цветом; спроектированные,
+но не заполняемые (`dim_company`, `dim_genre`, `dim_category`
+и три моста `bridge_game_*`) — серым. `dim_window` заполняется
+(миграцией), но не связана с фактами через FK — она в стороне,
+с пометкой о `cross join` в `marts.patch_impact`.
 
 Все таблицы — в схеме `core`. По каждой:
 
@@ -244,14 +132,17 @@ erDiagram
 - **fct_patch** — транзакционный факт: зерно — одна новость Steam
   (патч, анонс, пресса и т.д.), `gid` — натуральный ключ новости,
   уникален.
-- **fct_player_count** — periodic snapshot: зерно — одно измерение
-  числа игроков в момент времени (`game_sk`, `measured_at`).
-  История не восстановима назад, копится только с даты запуска
-  сбора.
 - **bridge_game_company / bridge_game_genre / bridge_game_category**
   — факты без мер (factless fact), мосты many-to-many между игрой
   и компанией/жанром/категорией. Спроектированы, не заполняются:
   соответствующие измерения пусты, заполнять мосты нечем.
+- **dim_platform_event** — события платформы Steam целиком
+  (распродажи, Steam Awards, Next Fest), не игры: нет `game_sk`
+  и вообще никакой связи с остальной звездой — как `dim_window`,
+  она тоже сама по себе. Заполняется `fetch_platform_events.py`
+  из фида appid 753 (служебный, не игра). `event_date` — дата
+  публикации заметки, а не начала события — см. decisions.md,
+  запись 023, там же реальная точность по проверке на трёх датах.
 
 ## Витрины marts
 
@@ -279,7 +170,7 @@ erDiagram
 | Таблица | Заполняется чем | Статус |
 |---|---|---|
 | `raw.reviews` | `fetch_reviews.py` | Растёт, сбор идёт (в т.ч. прямо сейчас) |
-| `raw.news` | `fetch_news.py` | Заполнена (38 строк) |
+| `raw.news` | `fetch_news.py` + `fetch_platform_events.py` | Заполнена (64 строки) |
 | `raw.appdetails` | `fetch_appdetails.py` | Заполнена, по строке на игру (19) |
 | `core.dim_game` | `load_dim_game.py` (SCD2) + заглушка -1 из миграции V4 | Заполнена, 21 версия на 19 игр |
 | `core.dim_date` | миграция V2 | Заполнена целиком при миграции |
@@ -295,7 +186,7 @@ erDiagram
 | `core.fct_review` | `load_fct_review.py` | Заполнена (602219 строк на момент загрузки) |
 | `core.review_text` | `load_fct_review.py` | Заполнена вместе с `fct_review` |
 | `core.fct_patch` | `load_fct_patch.py` | Заполнена (6690 строк) |
-| `core.fct_player_count` | `fetch_player_count.py` | По одному замеру на игру (19 строк) — история копится с даты запуска сбора по расписанию |
+| `core.dim_platform_event` | `fetch_platform_events.py` | Заполнена (80 строк) |
 
 ## Известные особенности
 
@@ -324,3 +215,9 @@ erDiagram
   при работе с Power BI, где такая связь ломает модель данных
   вовсе — см. [decisions.md](decisions.md), запись 012. Сейчас
   используется и в `web/app.py`, для списка игр в интерфейсе.
+- **`web/app.py` читает `core.dim_platform_event` напрямую, минуя
+  marts** — единственное исключение из «marts — витрины, из них
+  читает дашборд» в начале этого документа. Осознанно: витрина
+  здесь агрегировала бы то, что и так уже готово к чтению (нет
+  игры, по которой считать доли/суммы, нет фактов, с которыми
+  джойнить) — лишний слой без функции.
