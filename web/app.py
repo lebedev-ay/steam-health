@@ -1,26 +1,16 @@
-import os
 import re
 from datetime import datetime
 
 import psycopg
 from psycopg.rows import dict_row
-from dotenv import load_dotenv
 from flask import Flask, render_template, jsonify, request
 from celery.result import AsyncResult
 
 from tasks import celery_app, collect_game
-
-load_dotenv()
-
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5433")
-
-DSN = (
-    f"host={DB_HOST} port={DB_PORT} "
-    f"dbname={os.getenv('POSTGRES_DB')} "
-    f"user={os.getenv('POSTGRES_USER')} "
-    f"password={os.getenv('POSTGRES_PASSWORD')}"
-)
+# db.py лежит в collector/ — путь туда добавляет в sys.path сам
+# tasks.py при своём импорте (см. web/tasks.py), поэтому этот
+# import обязан идти после import tasks, а не в общей группе выше
+from db import DSN
 
 app = Flask(__name__)
 
@@ -144,10 +134,27 @@ def task_status(task_id):
 
 @app.route("/api/data")
 def data():
-    app_id = int(request.args.get("app_id"))
+    try:
+        app_id = int(request.args.get("app_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "app_id должен быть числом"}), 400
+
     smoothing = request.args.get("smoothing", "auto")
-    min_weight = float(request.args.get("min_weight", 0))
-    sensitivity = float(request.args.get("sensitivity", 1.5))
+    if smoothing not in ("off", "auto"):
+        try:
+            int(smoothing)
+        except ValueError:
+            return jsonify({"error": "smoothing — off, auto или число дней"}), 400
+
+    try:
+        min_weight = float(request.args.get("min_weight", 0))
+    except ValueError:
+        return jsonify({"error": "min_weight должен быть числом"}), 400
+
+    try:
+        sensitivity = float(request.args.get("sensitivity", 1.5))
+    except ValueError:
+        return jsonify({"error": "sensitivity должен быть числом"}), 400
 
     # types не задан — отдаём все типы событий
     types = request.args.get("types", "")
@@ -238,24 +245,6 @@ def data():
             row["base"] = base
             row["delta"] = round(row["pct"] - base, 1)
 
-    if type_list:
-        events = query("""
-            select distinct published_date as day, event_type, title, weight
-            from marts.patch_impact
-            where app_id = %s and window_code = 'after_7'
-              and event_type = any(%s)
-              and (weight is null or weight >= %s)
-            order by 1
-        """, (app_id, type_list, min_weight))
-    else:
-        events = query("""
-            select distinct published_date as day, event_type, title, weight
-            from marts.patch_impact
-            where app_id = %s and window_code = 'after_7'
-              and (weight is null or weight >= %s)
-            order by 1
-        """, (app_id, min_weight))
-
     # события для объяснения переломов: без фильтра по типу — тип
     # можно скрыть на графике (например, блоги), но перелом всё равно
     # нужно объяснить, если такое событие рядом есть
@@ -266,6 +255,20 @@ def data():
           and (weight is null or weight >= %s)
         order by 1
     """, (app_id, min_weight))
+
+    if type_list:
+        events = query("""
+            select distinct published_date as day, event_type, title, weight
+            from marts.patch_impact
+            where app_id = %s and window_code = 'after_7'
+              and event_type = any(%s)
+              and (weight is null or weight >= %s)
+            order by 1
+        """, (app_id, type_list, min_weight))
+    else:
+        # без фильтра типов это тот же запрос, что и cp_events выше —
+        # не гонять его второй раз
+        events = cp_events
 
     # платформенные события (распродажи, Steam Awards, Next Fest) —
     # общие для всех игр, не зависят от app_id. Дата приблизительная,

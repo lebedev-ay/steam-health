@@ -1,17 +1,8 @@
-import os
 import re
 import psycopg
 from psycopg.rows import dict_row
-from dotenv import load_dotenv
 
-load_dotenv()
-
-DSN = (
-    f"host=localhost port=5433 "
-    f"dbname={os.getenv('POSTGRES_DB')} "
-    f"user={os.getenv('POSTGRES_USER')} "
-    f"password={os.getenv('POSTGRES_PASSWORD')}"
-)
+from db import DSN
 
 PATTERNS = [
     # --- будущее время: анонс, не событие ---

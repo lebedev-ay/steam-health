@@ -1,4 +1,3 @@
-import sys
 import argparse
 from datetime import datetime, timezone
 
@@ -119,7 +118,11 @@ def load_one(conn, app_id, name):
         return None
 
     payload = row["payload"]
-    data = payload[str(app_id)]["data"]
+    info = payload.get(str(app_id)) or {}
+    if not info.get("success") or "data" not in info:
+        print(f"{name}: Steam не вернул данные (success={info.get('success')})")
+        return None
+
     fields = extract(payload, app_id)
     result = load(conn, fields)
     conn.commit()
