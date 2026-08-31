@@ -20,7 +20,7 @@ def fetch_page(app_id, enddate=None):
         params["enddate"] = enddate
 
     response = requests.get(
-        URL.format(app_id=app_id),
+        URL,
         params=params,
         headers={"User-Agent": "steam-health/0.1"},
         timeout=30,
@@ -29,45 +29,70 @@ def fetch_page(app_id, enddate=None):
     return response.json()
 
 
-def latest_published_at(conn, app_id):
-    row = conn.execute(
-        """
-        select max(p.published_at)
-        from core.fct_patch p
-        join core.dim_game g on g.game_sk = p.game_sk
-        where g.app_id = %s
-        """,
-        (app_id,),
-    ).fetchone()
-    return row[0] if row else None
+def known_gids(conn, app_id, gids):
+    # известность gid проверяем по raw.news, а не по core.fct_patch:
+    # загрузчик (load_fct_patch.py) отбрасывает записи с feedname
+    # 'SteamDB', их gid в fct_patch никогда не попадают и всегда
+    # выглядели бы "неизвестными" — ранняя остановка не срабатывала
+    # бы вообще. В raw.news лежит всё, что когда-либо скачали
+    if not gids:
+        return set()
+    rows = conn.execute("""
+        select distinct item ->> 'gid' as gid
+        from raw.news n,
+             jsonb_array_elements(n.payload -> 'appnews' -> 'newsitems') as item
+        where n.app_id = %s and item ->> 'gid' = any(%s)
+    """, (app_id, list(gids))).fetchall()
+    return {r[0] for r in rows}
 
 
-def collect(conn, app_id, name, mode):
+def collect(conn, app_id, name, max_pages, mode):
+    # enddate у Steam — курсор "раньше этой даты", не фильтр "новее".
+    # Листаем от свежих страниц к старым: на каждом шаге просим
+    # то, что раньше минимальной даты уже увиденной страницы
     enddate = None
-    if mode == "incremental":
-        # новости неизменяемы и имеют gid, поэтому можно просто
-        # попросить у API только то, что не новее последнего
-        # известного события. Если событий по игре ещё нет —
-        # ведём себя как full.
-        latest = latest_published_at(conn, app_id)
-        if latest is not None:
-            enddate = int(latest.timestamp())
+    prev_min_date = None
+    total = 0
 
-    try:
-        data = fetch_page(app_id, enddate)
-    except Exception as e:
-        print(f"  ошибка: {e}")
-        return 0
+    for page in range(max_pages):
+        try:
+            data = fetch_page(app_id, enddate)
+        except Exception as e:
+            print(f"  ошибка на странице {page + 1}: {e}")
+            break
 
-    news = (data.get("appnews") or {}).get("newsitems") or []
+        news = (data.get("appnews") or {}).get("newsitems") or []
+        if not news:
+            break
 
-    conn.execute(
-        "insert into raw.news (app_id, payload) values (%s, %s)",
-        (app_id, json.dumps(data)),
-    )
-    conn.commit()
+        page_min_date = min(item["date"] for item in news)
 
-    total = len(news)
+        # защита от зацикливания: просили строго раньше prev_min_date,
+        # а получили не раньше — Steam вернул то же самое или новее
+        if prev_min_date is not None and page_min_date >= prev_min_date:
+            break
+
+        gids = [item["gid"] for item in news]
+        known = known_gids(conn, app_id, gids)
+
+        if len(known) < len(gids):
+            # хотя бы один gid новый — страницу стоит сохранить
+            conn.execute(
+                "insert into raw.news (app_id, payload) values (%s, %s)",
+                (app_id, json.dumps(data)),
+            )
+            conn.commit()
+            total += len(news)
+        elif mode == "incremental":
+            # всё уже известно, дальше будет только старее —
+            # инкремент своё дело сделал. Full идёт до конца
+            # независимо от известности
+            break
+
+        prev_min_date = page_min_date
+        enddate = page_min_date - 1
+
+        time.sleep(1.5)
 
     print(f"{name}: {total}")
     return total
@@ -75,6 +100,7 @@ def collect(conn, app_id, name, mode):
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("max_pages", type=int, nargs="?", default=10)
     parser.add_argument("--app-id", type=int)
     parser.add_argument("--mode", choices=["incremental", "full"], default="incremental")
     return parser.parse_args()
@@ -88,8 +114,7 @@ def main():
 
     with psycopg.connect(DSN) as conn:
         for app_id, name in games:
-            grand_total += collect(conn, app_id, name, args.mode)
-            time.sleep(1.5)
+            grand_total += collect(conn, app_id, name, args.max_pages, args.mode)
 
     print(f"\nвсего: {grand_total}")
 

@@ -69,7 +69,7 @@ def collect_game(self, app_id, mode="incremental"):
 
     progress(4, f"{name}: качаю новости ({mode})")
     with psycopg.connect(DSN) as conn:
-        fetch_news.collect(conn, app_id, name, mode)
+        fetch_news.collect(conn, app_id, name, 10, mode)
 
     progress(5, f"{name}: качаю отзывы ({mode})")
     with psycopg.connect(DSN) as conn:
