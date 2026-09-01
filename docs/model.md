@@ -168,6 +168,13 @@ Draw.io Integration) или на [diagrams.net](https://app.diagrams.net/).
 
 ## Витрины marts
 
+Витрины описаны моделями в `dbt/models/`, не миграциями — здесь
+только что каждая делает и откуда берёт данные, точные определения
+смотреть там. Комментарий на схему marts — `'Витрины, владелец —
+dbt'` — стоит в миграции V1 с самого начала проекта, задолго
+до того, как в проекте появился dbt: было заявлено авансом,
+теперь стало правдой.
+
 - **review_flat** — плоский список отзывов: `app_id`, `review_id`,
   `created_at`, `voted_up`, `language_code`, `created_date`.
   Строится из `core.fct_review` + `core.dim_game` + `core.dim_language`

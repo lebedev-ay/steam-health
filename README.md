@@ -24,12 +24,19 @@ Awards, Next Fest) из служебного фида appid 753: они двиг
 игры и факты по патчам/отзывам. `marts` — витрины поверх core,
 из них дашборд читает данные.
 
+Три зоны ответственности, у каждой свой инструмент. `collector/`
+наполняет raw и core — сходить в API, разобрать JSON, решить, закрыть
+версию SCD2 или завести новую. `db/migration/` держит схему core.
+`dbt/` строит marts: витрина — это всегда select над тем, что уже
+в базе, миграции и Python здесь не нужны. Отсюда следствие: сразу
+после миграций схема marts пуста, её наполняет `dbt run`.
+
 Подробная схема со всеми таблицами, диаграммами и тем, что
 реально заполняется — в [docs/model.md](docs/model.md).
 
 ## Стек
 
-Python, PostgreSQL 16, Docker, Flask + Plotly.
+Python, PostgreSQL 16, dbt, Docker, Flask + Plotly.
 
 Отдельно: пробовал Metabase и Power BI, не подошли — подробности
 в [docs/decisions.md](docs/decisions.md).
@@ -48,8 +55,9 @@ docker compose up -d --build
 ```
 
 Поднимутся postgres и redis, применятся миграции (разовый сервис
-`migrate` — стартует после postgres и до web/worker) и запустится
-дашборд на gunicorn — http://localhost:5000.
+`migrate` — стартует после postgres и до web/worker), соберутся
+витрины (разовый сервис `dbt` — после migrate и тоже до web/worker)
+и запустится дашборд на gunicorn — http://localhost:5000.
 
 ### Локальная разработка
 
@@ -59,11 +67,26 @@ docker compose up -d postgres redis
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python collector/migrate.py
+set -a && source <(tr -d '\r' < .env) && set +a
+(cd dbt && dbt run)
 python web/app.py       # http://localhost:5000, с автоперезагрузкой
 ```
 
 Сервис `web` из compose здесь не поднимаем — иначе он и локальный
 `app.py` одновременно займут порт 5000.
+
+Без `dbt run` marts останется пустой после миграций — дашборд
+поднимется, но без данных. `dbt/profiles.yml` без пароля, все
+параметры соединения — из переменных окружения (`DB_HOST`,
+`DB_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`),
+и, в отличие от Python-скриптов, `.env` сам dbt не читает —
+там это делает `python-dotenv`, а dbt берёт то, что реально
+есть в окружении процесса. Простой `source .env` здесь работать
+не будет: файл в CRLF (Windows-переносы строк), и `\r` прилипает
+к значению последней переменной в строке — пароль перестаёт
+совпадать с тем, что в базе, а dbt откажет с "password
+authentication failed" без объяснения причины. `tr -d '\r'`
+перед source — рабочий обход.
 
 По умолчанию коллекторы `fetch_reviews.py`/`fetch_news.py` качают
 только то, чего ещё нет (`--mode incremental`); `--mode full`
@@ -81,9 +104,8 @@ python collector/fetch_reviews.py 5 --app-id 1245620 --mode full
 В шапке дашборда есть форма «ID игры или ссылка → Собрать»: она
 ставит задачу в очередь (Celery + Redis) и опрашивает её статус,
 не блокируя графики. Задача по шагам проверяет игру в Steam,
-качает appdetails/новости/отзывы (`--mode` из формы) и грузит их
-в core, в конце — `refresh materialized view concurrently` для
-patch_impact (не блокирует чтение, но и не мгновенный).
+качает appdetails/новости/отзывы (`--mode` из формы), грузит их
+в core и в конце пересобирает витрины (`dbt run`).
 
 Поднимается вместе со всем остальным при полном запуске в docker
 (см. «Запуск» выше).
@@ -95,8 +117,11 @@ patch_impact (не блокирует чтение, но и не мгновен�
 ## Структура
 
 - `collector/` — сбор данных и загрузка в хранилище
-- `db/migration/` — миграции схемы
+- `db/migration/` — миграции схемы core
+- `dbt/` — модели витрин marts
 - `web/` — дашборд на Flask + Plotly
+- `sql/adhoc/` — черновые запросы к Steam API для разведки
+  (формат `.http`, не часть пайплайна)
 - `docs/model.md` — модель данных: слои, схема core, витрины
 - `docs/decisions.md` — журнал решений
 
