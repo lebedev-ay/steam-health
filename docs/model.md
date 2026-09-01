@@ -34,6 +34,7 @@ flowchart TD
 
     subgraph martsschema["marts"]
         M_FLAT[("marts.review_flat")]
+        M_DAILY[("marts.review_daily")]
         M_IMPACT[("marts.patch_impact")]
         M_CUR[("marts.dim_game_current")]
     end
@@ -55,7 +56,8 @@ flowchart TD
     C_GAME --> M_FLAT
     C_GAME --> M_CUR
     C_PATCH --> M_IMPACT
-    M_FLAT --> M_IMPACT
+    M_FLAT --> M_DAILY
+    M_DAILY --> M_IMPACT
 
     M_FLAT --> WEB
     M_IMPACT --> WEB
@@ -173,17 +175,31 @@ Draw.io Integration) или на [diagrams.net](https://app.diagrams.net/).
   остальных витрин). До миграции V21 читала `raw.reviews` напрямую
   через `jsonb_array_elements` — подробности в decisions.md,
   запись 017.
+- **review_daily** — дневной агрегат отзывов по игре: `app_id`,
+  `day`, `review_count`, `positive_count`. Строится группировкой
+  `marts.review_flat` по игре и дате, 9232 строки. Снимает
+  диапазонное соединение отдельных отзывов с окнами в
+  `patch_impact` — было 2.1 млрд промежуточных строк и 464
+  секунды сборки, стало равенство по `(app_id, day)` на готовых
+  дневных суммах — см. decisions.md, запись 030.
 - **patch_impact** — по каждому патчу/событию и каждому окну
-  из `dim_window`: число отзывов и число позитивных в этом окне
-  вокруг `published_at`, флаг `window_complete` (окно не обрезано
-  границей собранных данных). Строится из `core.fct_patch` +
-  `core.dim_game` + `core.dim_window`, агрегируя `marts.review_flat`.
+  из `dim_window`: число отзывов и число позитивных в этом окне,
+  флаг `window_complete` (окно не обрезано границей собранных
+  данных). Окна календарные: пара «событие + окно» разворачивается
+  в список дат через `generate_series` и складывается
+  с `marts.review_daily` по равенству `(app_id, day)`. День самого
+  события не входит ни в `before`, ни в `after` — для патча,
+  вышедшего 5 марта, `after_3` это 6, 7 и 8 марта целиком, не
+  72 часа от момента публикации, как считалось раньше. Строится
+  из `core.fct_patch` + `core.dim_game` + `core.dim_window`,
+  агрегируя `marts.review_daily` — см. decisions.md, запись 030.
   Меры окон (`review_count`, `positive_count`, `window_complete`)
   читает таблица влияния событий (`/api/event_impact`) — окна
   `before_7`/`after_7` одного патча, сравнение доли позитива до
   и после. Маркеры и полосы на самом графике берут из этой же
   витрины только дату, тип, заголовок и вес, без окон — см.
-  decisions.md, записи 015 и 026.
+  decisions.md, записи 015 и 026 (числа там посчитаны по прежней,
+  временной семантике окон, до записи 030).
 - **dim_game_current** — по одной строке на игру: текущая версия
   из `core.dim_game` (`is_current` и `app_id > 0`, реальные игры
   без заглушки). Нужна, потому что `core.dim_game` — SCD2
@@ -236,10 +252,11 @@ Draw.io Integration) или на [diagrams.net](https://app.diagrams.net/).
   новая версия по-прежнему получает `valid_from = now()`, момент
   изменения известен.
 - **Связь патч ↔ отзыв — не через FK, а вычисляется по времени**
-  (`created_at` отзыва внутри окна `published_at + day_from/day_to`
-  патча) — см. [decisions.md](decisions.md), запись 010. Отзыв
-  не привязан к конкретному патчу: игрок мог написать через год
-  после десяти патчей подряд.
+  (день отзыва совпадает с одной из календарных дат окна
+  `published_at + day_from/day_to`, день самого события в окно
+  не входит — запись 030) — см. [decisions.md](decisions.md),
+  запись 010. Отзыв не привязан к конкретному патчу: игрок мог
+  написать через год после десяти патчей подряд.
 - **Доли не хранятся, только числитель и знаменатель**
   (`review_count`/`positive_count` в витринах, а не готовый
   процент) — среднее от долей по дням искажает картину, когда
