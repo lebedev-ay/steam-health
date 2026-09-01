@@ -26,10 +26,11 @@ services:
   # разовый прогон миграций перед стартом web/worker. Использует
   # тот же образ, что web/Dockerfile собирает для web/worker, но
   # тому не хватает db/migration/ — Dockerfile копирует только
-  # web/ и collector/. Домонтированный ./web:/app у web/worker
+  # web/, collector/ и dbt/. Домонтированный ./web:/app у web/worker
   # ещё и перекрывает собой всё, что COPY положил в /app при сборке
-  # (кроме /app/collector — он смонтирован отдельно поверх). Здесь
-  # то же самое: докидываем db/ отдельным mount поверх образа
+  # (кроме /app/collector и /app/dbt — они смонтированы отдельно
+  # поверх, см. их volumes ниже). Здесь то же самое: докидываем
+  # db/ отдельным mount поверх образа
   migrate:
     build:
       context: .
@@ -48,6 +49,28 @@ services:
       postgres:
         condition: service_healthy
 
+  # разовая сборка витрин: та же роль для marts, что у migrate для
+  # core — стартует после успешного migrate и до web/worker.
+  # На пустой базе (сразу после миграций) соберёт пустые витрины —
+  # это нормально, ядро наполнят collector-скрипты позже, dbt run
+  # можно перезапустить в любой момент
+  dbt:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    command: dbt run --project-dir dbt --profiles-dir dbt
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: 5432
+    volumes:
+      - ./dbt:/app/dbt
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   web:
     build:
       context: .
@@ -64,12 +87,15 @@ services:
     volumes:
       - ./web:/app
       - ./collector:/app/collector
+      - ./dbt:/app/dbt
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
       migrate:
+        condition: service_completed_successfully
+      dbt:
         condition: service_completed_successfully
     restart: unless-stopped
 
@@ -88,12 +114,15 @@ services:
     volumes:
       - ./web:/app
       - ./collector:/app/collector
+      - ./dbt:/app/dbt
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
       migrate:
+        condition: service_completed_successfully
+      dbt:
         condition: service_completed_successfully
     restart: unless-stopped
 

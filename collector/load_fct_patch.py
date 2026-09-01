@@ -107,16 +107,10 @@ def main():
 
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
         inserted = load_all(conn, args.app_id)
-
-        if args.app_id is not None:
-            print("--app-id не сужает refresh: materialized view пересчитывается "
-                  "целиком для всех игр (~7 минут)")
-
-        conn.execute("refresh materialized view marts.patch_impact")
-
         conn.commit()
 
     print(f"загружено: {inserted}")
+    print("витрины (marts) не пересобраны — запустите dbt run в dbt/")
 
 
 if __name__ == "__main__":

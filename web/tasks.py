@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -12,6 +13,15 @@ for _candidate in (Path(__file__).parent / "collector",
     # проходит is_dir(). Ищем конкретный файл, который там точно есть
     if (_candidate / "db.py").is_file():
         sys.path.insert(0, str(_candidate))
+        break
+
+# та же логика, что для collector/ выше, — dbt/ ищем тем же способом
+# и по тем же двум расположениям (образ / локальный репозиторий)
+DBT_PROJECT_DIR = None
+for _candidate in (Path(__file__).parent / "dbt",
+                    Path(__file__).parent.parent / "dbt"):
+    if (_candidate / "dbt_project.yml").is_file():
+        DBT_PROJECT_DIR = _candidate
         break
 
 import psycopg
@@ -30,7 +40,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 celery_app = Celery("tasks", broker=REDIS_URL, backend=REDIS_URL)
 
-TOTAL_STEPS = 7
+TOTAL_STEPS = 8
 
 
 @celery_app.task(bind=True)
@@ -85,13 +95,34 @@ def collect_game(self, app_id, mode="incremental"):
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
         load_fct_review.load_all(conn, app_id)
 
-    progress(7, f"{name}: загружаю патчи и обновляю витрину")
+    progress(7, f"{name}: загружаю патчи")
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
         load_fct_patch.load_all(conn, app_id)
-        # concurrently — чтобы не блокировать чтение patch_impact
-        # дашбордом на время пересчёта (~7 минут на полный refresh,
-        # см. миграцию V24 и docs/decisions.md)
-        conn.execute("refresh materialized view concurrently marts.patch_impact")
+        conn.commit()
+
+    progress(8, f"{name}: пересобираю витрины (dbt run)")
+    if DBT_PROJECT_DIR is None:
+        raise RuntimeError("каталог dbt/ не найден рядом с web/ ни в образе, ни в репозитории")
+    # без --select: витрины строятся из общего набора моделей
+    # (review_flat -> review_daily -> patch_impact), и выборочная
+    # сборка одной из них рискует оставить остальные рассогласованными
+    # с ядром. Полный dbt run и раньше, при refresh concurrently,
+    # занимал время того же порядка (~7 минут, см. миграцию V24
+    # и docs/decisions.md) — экономии на --select почти нет
+    result = subprocess.run(
+        ["dbt", "run"],
+        cwd=DBT_PROJECT_DIR,
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"dbt run упал (код {result.returncode}):\n"
+            f"{result.stdout}\n{result.stderr}"
+        )
+
+    with psycopg.connect(DSN) as conn:
         conn.execute(
             "update core.dim_game set collection_status = 'complete' "
             "where app_id = %s and is_current",

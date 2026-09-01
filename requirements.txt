@@ -1,8 +1,10 @@
 requests==2.32.3
 psycopg[binary]==3.3.4
-python-dotenv==1.0.1
+python-dotenv==1.2.3
 flask==3.0.3
 plotly==5.24.1
 celery==5.4.0
 redis==5.0.8
 gunicorn==26.2.0
+dbt-core==1.12.3
+dbt-postgres==1.11.0
