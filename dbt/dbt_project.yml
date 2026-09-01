@@ -1,0 +1,8 @@
+name: steam_health
+version: '1.0'
+
+profile: steam_health
+
+model-paths: ['models']
+target-path: 'target'
+clean-targets: ['target', 'dbt_packages']

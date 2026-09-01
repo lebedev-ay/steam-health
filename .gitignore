@@ -11,3 +11,7 @@ __pycache__/
 *.pyc
 chart_*.html
 *.pbix
+# dbt
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/

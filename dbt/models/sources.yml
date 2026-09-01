@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: core
+    description: >
+      Ядро хранилища. Наполняется загрузчиками из collector/,
+      схема — миграциями в db/migration/. dbt только читает.
+    schema: core
+    tables:
+      - name: dim_game
+      - name: dim_language
+      - name: dim_window
+      - name: fct_patch
+      - name: fct_review
+        columns:
+          - name: recommendation_id
+            data_tests:
+              - unique
+              - not_null
