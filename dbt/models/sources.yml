@@ -9,6 +9,7 @@ sources:
     tables:
       - name: dim_game
       - name: dim_language
+      - name: dim_platform_event
       - name: dim_window
       - name: fct_patch
       - name: fct_review

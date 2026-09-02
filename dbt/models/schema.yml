@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: dim_game_current
+    description: >
+      Текущая версия каждой игры, одна строка на app_id — срез
+      dim_game без SCD2-истории и без заглушки Unknown.
+    columns:
+      - name: game_sk
+        data_tests:
+          - unique
+          - not_null
+      - name: app_id
+        data_tests:
+          - unique
+          - not_null
+
+  - name: review_flat
+    description: >
+      Плоский список отзывов, одна строка на отзыв.
+    columns:
+      - name: review_id
+        data_tests:
+          - unique
+          - not_null
+      - name: app_id
+        data_tests:
+          - not_null
+
+  - name: review_daily
+    description: >
+      Дневной агрегат отзывов по игре, одна строка на (app_id, day).
+    columns:
+      - name: app_id
+        data_tests:
+          - not_null
+      - name: day
+        data_tests:
+          - not_null
+
+  - name: patch_impact
+    description: >
+      Влияние события (патча/новости) на долю позитива по каждому
+      окну из dim_window, одна строка на (patch_sk, window_code).
+    columns:
+      - name: patch_sk
+        data_tests:
+          - not_null
+      - name: app_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_game_current')
+                field: app_id
+      - name: window_code
+        data_tests:
+          - not_null

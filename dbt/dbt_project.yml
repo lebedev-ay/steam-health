@@ -6,3 +6,7 @@ profile: steam_health
 model-paths: ['models']
 target-path: 'target'
 clean-targets: ['target', 'dbt_packages']
+
+vars:
+  # порог для dbt/tests/unknown_member_ratio.sql
+  unknown_member_max_ratio: 0.05
