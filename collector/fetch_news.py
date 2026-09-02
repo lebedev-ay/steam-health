@@ -24,11 +24,8 @@ def fetch_page(app_id, enddate=None):
 
 
 def known_gids(conn, app_id, gids):
-    # известность gid проверяем по raw.news, а не по core.fct_patch:
-    # загрузчик (load_fct_patch.py) отбрасывает записи с feedname
-    # 'SteamDB', их gid в fct_patch никогда не попадают и всегда
-    # выглядели бы "неизвестными" — ранняя остановка не срабатывала
-    # бы вообще. В raw.news лежит всё, что когда-либо скачали
+    # по raw.news, а не по core.fct_patch: загрузчик отбрасывает
+    # SteamDB, и его gid всегда выглядели бы неизвестными
     if not gids:
         return set()
     rows = conn.execute("""
@@ -41,9 +38,8 @@ def known_gids(conn, app_id, gids):
 
 
 def collect(conn, app_id, name, max_pages, mode):
-    # enddate у Steam — курсор "раньше этой даты", не фильтр "новее".
-    # Листаем от свежих страниц к старым: на каждом шаге просим
-    # то, что раньше минимальной даты уже увиденной страницы
+    # enddate у Steam - курсор "раньше этой даты", не фильтр "новее"
+    # (см. decisions.md, запись 024): листаем от свежих к старым
     enddate = None
     prev_min_date = None
     total = 0
@@ -60,7 +56,7 @@ def collect(conn, app_id, name, max_pages, mode):
         page_min_date = min(item["date"] for item in news)
 
         # защита от зацикливания: просили строго раньше prev_min_date,
-        # а получили не раньше — Steam вернул то же самое или новее
+        # а получили не раньше - Steam вернул то же самое или новее
         if prev_min_date is not None and page_min_date >= prev_min_date:
             break
 
@@ -68,7 +64,7 @@ def collect(conn, app_id, name, max_pages, mode):
         known = known_gids(conn, app_id, gids)
 
         if len(known) < len(gids):
-            # хотя бы один gid новый — страницу стоит сохранить
+            # хотя бы один gid новый - страницу стоит сохранить
             conn.execute(
                 "insert into raw.news (app_id, payload) values (%s, %s)",
                 (app_id, json.dumps(data)),
@@ -76,9 +72,8 @@ def collect(conn, app_id, name, max_pages, mode):
             conn.commit()
             total += len(news)
         elif mode == "incremental":
-            # всё уже известно, дальше будет только старее —
-            # инкремент своё дело сделал. Full идёт до конца
-            # независимо от известности
+            # всё уже известно, дальше будет только старее -
+            # инкремент своё дело сделал, full идёт до конца
             break
 
         prev_min_date = page_min_date

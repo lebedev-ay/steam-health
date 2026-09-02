@@ -71,12 +71,9 @@ def load_all(conn, app_id=None):
     weight_params = (app_id,) if app_id is not None else ()
 
     conn.execute(f"""
-        -- медиана по app_id, не по game_sk: game_sk — суррогат
-        -- SCD2, у игры с несколькими версиями атрибутов (например,
-        -- сменился metacritic-score) патчи разложены по разным
-        -- game_sk, и медиана считалась бы отдельно для каждой
-        -- версии — веса внутри одной игры переставали быть
-        -- сравнимыми друг с другом
+        -- медиана по app_id, а не по game_sk: иначе у игры
+        -- с несколькими версиями SCD2 веса внутри одной игры
+        -- переставали быть сравнимыми - decisions.md, запись 027
         with medians as (
             select g.app_id,
                    (percentile_cont(0.5)

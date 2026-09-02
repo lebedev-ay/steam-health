@@ -6,9 +6,8 @@ from psycopg.rows import dict_row
 
 from db import DSN, read_games
 
-# Первая версия игры получает открытую нижнюю границу:
-# игра существовала до начала сбора, и события за прошлые годы
-# должны находить свою версию. См. docs/decisions.md, запись 006
+# события за прошлые годы должны находить свою версию, а не улетать
+# в заглушку Unknown - см. decisions.md, запись 006
 FIRST_VERSION_FROM = datetime(2000, 1, 1, tzinfo=timezone.utc)
 
 TRACKED = (

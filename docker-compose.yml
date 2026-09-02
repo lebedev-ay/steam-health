@@ -25,14 +25,8 @@ services:
     mem_limit: 128m
     restart: unless-stopped
 
-  # разовый прогон миграций перед стартом web/worker. Использует
-  # тот же образ, что web/Dockerfile собирает для web/worker, но
-  # тому не хватает db/migration/ — Dockerfile копирует только
-  # web/, collector/ и dbt/. Домонтированный ./web:/app у web/worker
-  # ещё и перекрывает собой всё, что COPY положил в /app при сборке
-  # (кроме /app/collector и /app/dbt — они смонтированы отдельно
-  # поверх, см. их volumes ниже). Здесь то же самое: докидываем
-  # db/ отдельным mount поверх образа
+  # разовый прогон миграций перед стартом web/worker: образ тот же,
+  # но db/migration/ в него не копируется - домонтируем отдельно
   migrate:
     build:
       context: .
@@ -51,11 +45,7 @@ services:
       postgres:
         condition: service_healthy
 
-  # разовая сборка витрин: та же роль для marts, что у migrate для
-  # core — стартует после успешного migrate и до web/worker.
-  # На пустой базе (сразу после миграций) соберёт пустые витрины —
-  # это нормально, ядро наполнят collector-скрипты позже, dbt run
-  # можно перезапустить в любой момент
+  # разовая сборка витрин: после migrate и до web/worker
   dbt:
     build:
       context: .

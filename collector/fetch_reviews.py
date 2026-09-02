@@ -49,14 +49,8 @@ def collect(conn, app_id, name, max_pages, mode, on_page=None):
             break
 
         if mode == "incremental":
-            # filter=recent сортирует по дате СОЗДАНИЯ отзыва. Если
-            # вся страница уже есть в core.fct_review — дальше пойдут
-            # только более старые уже известные отзывы, можно
-            # останавливаться. Но так инкремент не увидит отзывы,
-            # отредактированные после создания (например, автор
-            # перевернул оценку через год) — они остаются на старой
-            # позиции выдачи и не попадут в свежую страницу. Для
-            # полной пересборки с нуля нужен режим full.
+            # filter=recent сортирует по дате создания: вся страница
+            # известна - дальше только старее (decisions.md, 019)
             batch_ids = [int(r["recommendationid"]) for r in reviews]
             known = known_recommendation_ids(conn, batch_ids)
             if len(known) == len(batch_ids):

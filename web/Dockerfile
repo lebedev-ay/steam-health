@@ -2,8 +2,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# git — не для сборки, а для dbt: dbt debug и dbt deps ищут git
-# в PATH независимо от того, использует ли сам проект пакеты dbt
+# git нужен не сборке, а dbt: он ищет его в PATH независимо
+# от того, использует ли проект пакеты dbt
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 

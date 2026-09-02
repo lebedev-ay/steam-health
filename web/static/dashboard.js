@@ -11,23 +11,20 @@ const TYPES = {
   unknown:      { color: '#6b7684', label: 'прочее' }
 };
 
-// те же типы, что SIGNIFICANT_TYPES в web/app.py — считаются
-// крупными независимо от веса при адаптивной плотности (ниже)
+// те же типы, что SIGNIFICANT_TYPES в web/app.py - крупные
+// независимо от веса при адаптивной плотности (ниже)
 const MAJOR_TYPES = new Set(['patch', 'season_start', 'expansion']);
 
-// платформенные события (appid 753): не привязаны к конкретной
-// игре, показываются широкой полосой, а не маркером на кривой
-// приглушённые: почти серые, с лёгким оттенком — фон, не главное
-// bandColor — приглушённая полоса-фон; markerColor — тот же оттенок,
-// но насыщеннее, для отдельного трейса с маркерами (see below)
+// события платформы не привязаны к игре: bandColor - приглушённая
+// полоса-фон, markerColor - тот же оттенок для маркера, насыщеннее
 const PLATFORM_TYPES = {
   sale:   { bandColor: '#9c916f', markerColor: '#d4b106', label: 'распродажа Steam' },
   awards: { bandColor: '#8b8298', markerColor: '#9b6fd6', label: 'Steam Awards' },
   fest:   { bandColor: '#6f8f96', markerColor: '#4fc3d9', label: 'Steam Fest' }
 };
 
-// вытаскивает короткое имя события из полного заголовка заметки —
-// в тултипе нужен "Steam Summer Sale", а не весь пресс-заголовок
+// короткое имя события из заголовка заметки: в тултипе нужен
+// "Steam Summer Sale", а не весь пресс-заголовок
 function platformEventLabel(e) {
   if (e.type === 'awards') return 'Steam Awards';
 
@@ -63,9 +60,8 @@ function truncate(s, n) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
-// адаптивная плотность событий: на широком диапазоне (месяцы, годы)
-// мелкие события прячем, иначе они сливаются в сплошную полосу —
-// на узком диапазоне (< 60 дней) показываем всё
+// на широком диапазоне мелкие события прячем, иначе сливаются
+// в сплошную полосу; на узком (< 60 дней) показываем всё
 function densityFilter(days) {
   const w = e => e.weight ?? 0;
   if (days > 365) return e => w(e) >= 5 || MAJOR_TYPES.has(e.type);
@@ -92,9 +88,8 @@ function cpTraceIndex() {
   return document.getElementById('sentiment').data.findIndex(t => t.name === 'Переломы');
 }
 
-// подсветка маркера при наведении на строку таблицы переломов:
-// временно укрупняем size/line.width у нужных точек через restyle,
-// без перерисовки всего графика
+// подсветка по наведению на строку таблицы: restyle нужных точек
+// вместо перерисовки всего графика
 function highlightChangePoint(cpIdx) {
   if (!cpBaseMarker) return;
   const idxs = cpMarkerIndices[cpIdx] || [];
@@ -128,11 +123,8 @@ function mainEventLabel(c) {
   return '—';
 }
 
-// границы оси Plotly отдаёт то "2025-05-01", то "2025-05-01
-// 12:00:00.5" — берём только календарную дату (первые 10 символов,
-// ISO YYYY-MM-DD сравнивается как строка корректно) и сравниваем
-// с ней c.day, у которого времени не бывает. Включительно с обеих
-// сторон: день считается видимым, если хоть частично попал в диапазон
+// Plotly отдаёт границу оси то с временем, то без - сравниваем
+// по первым 10 символам, ISO-дата сравнивается как строка
 function dayInRange(day, range) {
   if (!range) return true;
   const lo = String(range[0]).slice(0, 10);
@@ -140,12 +132,8 @@ function dayInRange(day, range) {
   return day >= lo && day <= hi;
 }
 
-// список переломов под графиком: клик — зум ±30 дней, наведение —
-// подсветка маркера (см. highlightChangePoint). cps — ПОЛНЫЙ список
-// (не только видимые) — data-idx у строки обязан остаться индексом
-// в нём же, потому что по этому индексу cpMarkerIndices в renderChart
-// находит нужный ромб на графике. Отфильтровать cps перед вызовом
-// и передать сюда урезанный массив — значит разъехаться с индексами
+// cps приходит ПОЛНЫМ списком, не отфильтрованным: data-idx строки
+// должен остаться индексом в нём же, по нему ищется ромб на графике
 function renderChangePointList(cps, range) {
   const el = document.getElementById('cpList');
 
@@ -194,10 +182,8 @@ function renderChangePointList(cps, range) {
   });
 }
 
-// таблица влияния событий — про весь собранный период, не про
-// видимый диапазон (в отличие от таблицы переломов), поэтому
-// строится один раз в load(), не в renderChart. Клик — тот же
-// зум ±30 дней, что и у строки перелома
+// про весь собранный период, а не про видимый диапазон - поэтому
+// строится один раз в load(), не в renderChart
 function renderEventImpact(events) {
   const el = document.getElementById('eventImpact');
 
@@ -241,10 +227,8 @@ function renderEventImpact(events) {
   });
 }
 
-// рисует/перерисовывает график для уже загруженных данных (lastData).
-// range — видимый диапазон оси X (null = вся история). Вызывается
-// и при первой загрузке, и при зуме/панорамировании — без похода
-// на сервер, только пересчёт клиентских слоёв событий
+// перерисовка по уже загруженным данным (range = null - вся история):
+// зум и панорамирование пересчитывают слои событий без похода на сервер
 function renderChart(range) {
   const data = lastData;
   if (!data) return;
@@ -280,7 +264,7 @@ function renderChart(range) {
   const cpIndex = {};
   days.forEach((d, i) => cpIndex[d] = i);
 
-  // события по дням — только те, что проходят фильтр плотности
+  // события по дням - только те, что проходят фильтр плотности
   const visibleEvents = data.events.filter(keepEvent);
 
   const byDay = {};
@@ -288,7 +272,7 @@ function renderChart(range) {
     (byDay[e.day] = byDay[e.day] || []).push(e);
   });
 
-  // фоновые полосы игровых событий — по дню публикации
+  // фоновые полосы игровых событий - по дню публикации
   const eventShapes = Object.entries(byDay).map(([day, items]) => ({
     type: 'rect',
     x0: day, x1: shiftDay(day, 1),
@@ -299,10 +283,8 @@ function renderChart(range) {
     layer: 'below'
   }));
 
-  // платформенные события — широкие полосы шириной в окно поиска
-  // (±3 дня), дата в базе приблизительная, см. docs/decisions.md.
-  // Плотностью не фильтруются: их всего 80 на 12 лет по всем играм,
-  // сплошной полосой не сливаются даже на полном диапазоне
+  // полоса шириной в окно поиска (±3 дня), дата приблизительная.
+  // Плотностью не фильтруем: их 80 на 12 лет, в кашу не сливаются
   const platformEvents = data.platform_events || [];
   const showPlatform = document.getElementById('showPlatform').checked;
 
@@ -313,12 +295,11 @@ function renderChart(range) {
     fillcolor: PLATFORM_TYPES[e.type]?.bandColor || '#6b7684',
     opacity: 0.05,
     line: { width: 0 },
-    layer: 'below'  // под данными — фон, не поверх линии
+    layer: 'below'  // под данными - фон, не поверх линии
   })) : [];
 
-  // маркеры платформенных событий: полосы (shapes) в Plotly не
-  // дают тултип, поэтому дата рядом ещё и точкой — квадрат ниже
-  // треугольников игровых событий (те на topY), насыщеннее полосы
+  // shapes в Plotly не дают тултип, поэтому дата рядом ещё и точкой:
+  // квадрат ниже треугольников игровых событий
   const platformMarkerY = topY - Math.max((topY - floorY) * 0.10, 1);
 
   const platformMarkerTrace = {
@@ -337,7 +318,7 @@ function renderChart(range) {
     hovertemplate: '%{x|%d.%m.%Y}<br>%{text}<extra></extra>'
   };
 
-  // тонкие стебли от маркера перелома вниз к оси — точнее видно дату
+  // тонкие стебли от маркера перелома вниз к оси - точнее видно дату
   const cpStems = cps
     .filter(c => values[cpIndex[c.day]] !== undefined && values[cpIndex[c.day]] !== null)
     .map(c => ({
@@ -350,7 +331,7 @@ function renderChart(range) {
 
   const shapes = [...eventShapes, ...platformShapes, ...cpStems];
 
-  // отдельная серия на каждый тип — даёт кликабельную легенду
+  // отдельная серия на каждый тип - даёт кликабельную легенду
   const byType = {};
   visibleEvents.forEach(e => {
     (byType[e.type] = byType[e.type] || []).push(e);
@@ -362,9 +343,8 @@ function renderChart(range) {
     mode: 'markers',
     name: TYPES[type]?.label || type,
     legendgroup: type,
-    // размер маркера общий для основного графика и миниатюры
-    // rangeslider (Plotly не различает) — уменьшен, чтобы в ней
-    // не было каши; линия настроения там компенсирует толщиной
+    // размер общий с миниатюрой rangeslider (Plotly не различает) -
+    // уменьшен, чтобы в ней не было каши
     marker: {
       size: 7, symbol: 'triangle-down',
       color: TYPES[type]?.color || '#6b7684',
@@ -376,10 +356,8 @@ function renderChart(range) {
     hovertemplate: '%{x}<br>%{text}<extra></extra>'
   }));
 
-  // точки перелома: по ромбу на каждый тип значимого события рядом.
-  // фоновые события (events_minor) в перечисление не идут — только
-  // счётчиком. cpMarkerIndices — какие индексы в cpX/cpY относятся
-  // к какой точке перелома, нужно для подсветки из списка
+  // по ромбу на каждый тип значимого события рядом, фоновые - только
+  // счётчиком. cpMarkerIndices нужен для подсветки из списка
   const cpX = [], cpY = [], cpColor = [], cpSize = [], cpLine = [], cpText = [];
   cpMarkerIndices = [];
 
@@ -391,7 +369,7 @@ function renderChart(range) {
 
     const dir = c.score < 0 ? 'спад' : 'рост';
     const edge = c.score < 0 ? '#ff4d3d' : '#3ddc84';
-    // уменьшен по той же причине, что маркеры-треугольники выше —
+    // уменьшен по той же причине, что треугольники выше -
     // общий размер с миниатюрой rangeslider
     const size = Math.min(7 + Math.abs(c.score) * 0.15, 11);
 
@@ -460,8 +438,8 @@ function renderChart(range) {
     {
       x: days, y: values, mode: 'lines',
       name: isDelta ? 'Отклонение, п.п.' : 'Позитивных, %',
-      // толще и контрастнее — чтобы читалась поверх маркеров
-      // в миниатюре rangeslider (см. комментарий у rangeslider ниже)
+      // толще и контрастнее, чтобы читалась поверх маркеров
+      // в миниатюре rangeslider (см. комментарий у него ниже)
       line: { color: '#f0f4f8', width: 3.5, shape: 'spline', smoothing: 0.4 },
       customdata: totals,
       hovertemplate: isDelta
@@ -497,12 +475,8 @@ function renderChart(range) {
     },
     xaxis: {
       gridcolor: '#333a44',
-      // rangeslider зеркалит в миниатюре все трейсы общей оси —
-      // Plotly не даёт исключить трейс из неё точечно. Компромисс:
-      // маркеры событий/переломов уменьшены (см. их size выше),
-      // линия настроения — потолще и контрастнее (см. её trace),
-      // чтобы читалась поверх. Кнопки периода рядом — не мешают,
-      // дублируют часть навигации, но это ускоряет частые переходы
+      // rangeslider зеркалит все трейсы общей оси, исключить трейс
+      // точечно Plotly не даёт - отсюда размеры маркеров и линии выше
       rangeslider: { visible: true, bgcolor: '#1e232a', bordercolor: '#333a44' },
       rangeselector: {
         buttons: [
@@ -525,10 +499,8 @@ function renderChart(range) {
 
   lastRenderedRange = effectiveRange;
 
-  // подписка один раз: zoom/pan/rangeslider/кнопки периода/сброс
-  // двойным кликом — всё приходит сюда как plotly_relayout
-  // с новым xaxis.range. Перерисовываем только клиентские слои
-  // событий, без похода на сервер (см. renderChart выше)
+  // zoom, pan, rangeslider и кнопки периода приходят сюда одним
+  // plotly_relayout - перерисовываем только клиентские слои
   if (!relayoutBound) {
     relayoutBound = true;
     document.getElementById('sentiment').on('plotly_relayout', () => {
@@ -598,8 +570,8 @@ loadSafe();
 
 const COLLECT_STORAGE_KEY = 'steamHealthCollectTask';
 
-// токен есть только если он задан в окружении сервера - без него
-// форма работает как раньше, заголовок просто не отправляется
+// токен есть, только если задан в окружении сервера - без него
+// форма работает как раньше, заголовок не отправляется
 const COLLECT_TOKEN =
   document.querySelector('meta[name="collect-token"]')?.content || '';
 
@@ -672,7 +644,7 @@ function pollTask(taskId) {
       return;
     }
 
-    // PENDING / STARTED — задача в очереди, прогресса ещё нет
+    // PENDING / STARTED - задача в очереди, прогресса ещё нет
     showCollectProgress('задача поставлена в очередь…', 'busy');
     setTimeout(tick, 2000);
   };
@@ -700,8 +672,8 @@ document.getElementById('collectBtn').addEventListener('click', async () => {
     const body = await res.json();
 
     if (res.status === 409) {
-      // сбор уже идёт (у другой игры) — подписываемся на прогресс
-      // занятой задачи тем же pollTask, чтобы видеть реальный ход
+      // сбор уже идёт у другой игры - подписываемся на её прогресс
+      // тем же pollTask, чтобы видеть реальный ход
       showCollectProgress('сейчас идёт сбор другой игры, слежу за прогрессом…', 'busy');
       pollTask(body.busy_task_id);
       return;

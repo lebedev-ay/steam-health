@@ -34,11 +34,8 @@ TOTAL_STEPS = 8
 LOCK_KEY = "collect:lock"
 LOCK_TTL = 15 * 60
 
-# безопасное снятие замка: удаляем, только если значение в нём —
-# всё ещё id этой самой задачи. Без проверки: если TTL истёк, пока
-# задача ещё реально работала (сбой heartbeat, зависший dbt run),
-# а другая задача уже успела встать на освободившийся замок — finally
-# снёс бы уже чужой, активный замок
+# снимаем замок, только если в нём всё ещё id этой задачи: иначе
+# после истечения TTL finally снёс бы чужой, уже активный замок
 _RELEASE_LOCK_SCRIPT = """
 if redis.call("get", KEYS[1]) == ARGV[1] then
     return redis.call("del", KEYS[1])
@@ -78,7 +75,7 @@ def collect_game(self, app_id, mode="incremental"):
             progress(3, f"{name}: обновляю dim_game")
             load_dim_game.load_one(conn, app_id, name)
             # с этого момента в dim_game есть строка на эту игру:
-            # если что-то дальше упадёт, статус так и останется 'partial'
+            # если что-то дальше упадёт, статус останется 'partial'
             conn.execute(
                 "update core.dim_game set collection_status = 'partial' "
                 "where app_id = %s and is_current",
@@ -96,9 +93,8 @@ def collect_game(self, app_id, mode="incremental"):
         progress(5, f"{name}: качаю отзывы ({mode})")
         with psycopg.connect(DSN) as conn:
             def on_page(page, total):
-                # heartbeat: страницы качаются дольше, чем LOCK_TTL,
-                # только у очень объёмных игр, но продлеваем на каждой —
-                # дёшево, а замок не должен истечь посреди реальной работы
+                # продлеваем на каждой странице: дёшево, а замок
+                # не должен истечь посреди реальной работы
                 redis_client.expire(LOCK_KEY, LOCK_TTL)
                 progress(5, f"{name}: качаю отзывы ({mode})", progress=f"{page} стр., {total} отзывов")
 
@@ -118,14 +114,9 @@ def collect_game(self, app_id, mode="incremental"):
             conn.commit()
 
         progress(8, f"{name}: пересобираю витрины (dbt run)")
-        # без --select: витрины строятся из общего набора моделей
-        # (review_flat -> review_daily -> patch_impact), и выборочная
-        # сборка одной из них рискует оставить остальные рассогласованными
-        # с ядром. Полный dbt run и раньше, при refresh concurrently,
-        # занимал время того же порядка (~7 минут, см. миграцию V24
-        # и docs/decisions.md) — экономии на --select почти нет
-        # heartbeat из on_page сюда не доходит (dbt run — не постраничный
-        # сбор), поэтому продлеваем явно перед запуском
+        # без --select: модели связаны, выборочная сборка рассогласует
+        # витрины с ядром, а экономии почти нет - decisions.md, запись 026
+        # heartbeat из on_page сюда не доходит - продлеваем замок явно
         redis_client.expire(LOCK_KEY, LOCK_TTL)
         result = subprocess.run(
             ["dbt", "run"],
@@ -150,6 +141,6 @@ def collect_game(self, app_id, mode="incremental"):
 
         return {"app_id": app_id, "name": name, "mode": mode}
     finally:
-        # замок снимается всегда — и при успехе, и при падении на любом
+        # замок снимается всегда - и при успехе, и при падении на любом
         # шаге, иначе следующий сбор будет ждать LOCK_TTL впустую
         redis_client.eval(_RELEASE_LOCK_SCRIPT, 1, LOCK_KEY, self.request.id)

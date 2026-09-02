@@ -23,7 +23,7 @@ def query(sql, params=()):
 def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
     """
     Ищет точки перелома: где среднее ПОСЛЕ заметно отличается
-    от среднего ДО. sensitivity — сколько сигм считать переломом.
+    от среднего ДО. sensitivity - сколько сигм считать переломом.
     """
     n = len(smoothed)
     scores = [None] * n
@@ -61,22 +61,14 @@ def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
     return sorted(chosen)
 
 
-# см. docs/decisions.md — почему перелом бывает необъяснимым
+# см. decisions.md, запись 022 - почему перелом бывает необъяснимым
 SIGNIFICANT_WEIGHT = 2
 SIGNIFICANT_TYPES = {"patch", "season_start", "expansion"}
 
-# для таблицы влияния событий (см. decisions.md): меньше — доля
-# позитива скачет от случайности объёма, а не от самого события
+# для таблицы влияния событий: меньше - доля позитива скачет
+# от случайности объёма, а не от самого события
 EVENT_IMPACT_MIN_REVIEWS = 30
-# 10 п.п. был по распределению верным, но завышенным по смыслу:
-# таблица усредняет неделю до/после, детект переломов смотрит
-# на конкретный день — резкий скачок за 2-3 дня в недельном окне
-# растворяется. На Cyberpunk 2077 (1091500) события с полными
-# окнами и объёмом есть, максимальный недельный сдвиг — 4.8 п.п.
-# при базовом уровне ~94%; порог 10 отсекал их все. Устойчивый
-# недельный сдвиг такого масштаба (Marathon, 78% → 31%) — редкость,
-# а не норма. На 1565 событиях порог >= 3 п.п. оставляет 801,
-# >= 5 — 520, >= 10 — 185 (~10 на игру из 19, слишком строго)
+# 10 п.п. отсекал почти всё, 3 оставляет верхушку - decisions.md, 026
 EVENT_IMPACT_MIN_SHIFT = 3
 EVENT_IMPACT_LIMIT = 20
 
@@ -138,7 +130,7 @@ def start_collect():
         return jsonify({"error": "некорректный режим сбора"}), 400
 
     task_id = uuid.uuid4().hex
-    # nx=True — проверка и установка одной атомарной операцией:
+    # nx=True - проверка и установка одной атомарной операцией:
     # без него два одновременных запроса оба увидели бы "замка нет"
     # и оба прошли бы дальше
     ok = redis_client.set(LOCK_KEY, task_id, nx=True, ex=LOCK_TTL)
@@ -276,9 +268,8 @@ def data():
             row["base"] = base
             row["delta"] = round(row["pct"] - base, 1)
 
-    # события для объяснения переломов: без фильтров по типу и весу —
-    # тип можно скрыть на графике, а слабый патч всё равно может
-    # оказаться причиной перелома, и тогда его нужно назвать
+    # без фильтров по типу и весу: скрытый на графике тип и слабый
+    # патч тоже могут оказаться причиной перелома
     cp_events = query("""
         select distinct published_date as day, event_type, title, weight
         from marts.patch_impact
@@ -286,14 +277,13 @@ def data():
         order by 1
     """, (app_id,))
 
-    # маркеры на графике — те же события, но с порогом значимости
-    # из формы; это подмножество cp_events, второй запрос не нужен
+    # маркеры на графике - те же события с порогом значимости
+    # из формы, подмножество cp_events: второй запрос не нужен
     events = [e for e in cp_events
               if e["weight"] is None or e["weight"] >= min_weight]
 
-    # платформенные события (распродажи, Steam Awards, Next Fest) —
-    # общие для всех игр, не зависят от app_id. Дата приблизительная,
-    # см. docs/decisions.md
+    # общие для всех игр, не зависят от app_id. Дата приблизительная
+    # (по публикации заметки) - см. decisions.md, запись 023
     platform_events = query("""
         select event_date, event_type, title
         from core.dim_platform_event
@@ -369,9 +359,8 @@ def event_impact():
     except (TypeError, ValueError):
         return jsonify({"error": "app_id должен быть числом"}), 400
 
-    # before_7 и after_7 одного patch_sk — окна должны быть полными
-    # (иначе сравниваем целое с обрезанным, запись 009) и не мельче
-    # EVENT_IMPACT_MIN_REVIEWS отзывов в каждом
+    # окна должны быть полными, иначе сравниваем целое с обрезанным
+    # (запись 009), и не мельче EVENT_IMPACT_MIN_REVIEWS в каждом
     rows = query("""
         select
             b.patch_sk, b.published_date, b.event_type, b.title,
@@ -389,8 +378,8 @@ def event_impact():
 
     events = []
     for r in rows:
-        # доли — деление сумм в конце, а не усреднение готовых
-        # процентов (принцип из decisions.md, запись 008)
+        # доли - деление сумм в конце, а не усреднение готовых
+        # процентов (см. decisions.md, запись 008)
         before_pct = 100 * float(r["before_positive"]) / r["before_count"]
         after_pct = 100 * float(r["after_positive"]) / r["after_count"]
         shift = after_pct - before_pct

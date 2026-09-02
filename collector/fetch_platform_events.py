@@ -8,14 +8,11 @@ from psycopg.rows import dict_row
 from db import DSN
 
 URL = "https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/"
-PLATFORM_APP_ID = 753  # служебный appid Steam, не игра — в games.txt не идёт
+PLATFORM_APP_ID = 753  # служебный appid Steam, не игра - в games.txt не идёт
 
-# распродажи: сезон/праздник + sale, "steam" может стоять и перед
-# словом-сезоном ("Steam Summer Sale"), и между ним и sale
-# ("Spring Steam Sale") — оба порядка встречаются в реальных данных.
-# Голый "steam sale" без сезона/праздника НЕ ловим: он же ловит
-# издательские распродажи вида "Capcom Steam sale", "Xbox Steam
-# sale" — это не события платформы, а промо конкретного паблишера
+# сезон/праздник + sale, "steam" встречается в обоих порядках.
+# Голый "steam sale" не ловим: под него попадают издательские
+# распродажи вида "Capcom Steam sale" - промо, не событие платформы
 SALE_RE = re.compile(
     r'\b(summer|winter|spring|autumn|fall|holiday|black\s+friday|'
     r'halloween|lunar new year|chinese new year|christmas)'
@@ -23,16 +20,12 @@ SALE_RE = re.compile(
     re.IGNORECASE,
 )
 
-# "game of the year" сам по себе не триггерит — слишком много
-# несвязанных премий (The Game Awards и т.п.). В реальных данных
-# GOTY у Steam Awards всегда идёт вместе с "steam awards" в том же
-# заголовке, так что отдельная проверка на GOTY ничего не добавляет
+# "game of the year" отдельно не проверяем: слишком много чужих
+# премий, а у Steam Awards он всегда идёт вместе с "steam awards"
 AWARDS_RE = re.compile(r'\bsteam\s+awards\b', re.IGNORECASE)
 
-# \bnext fest\b — частный случай \w+\s+fest\b, отдельный паттерн
-# не нужен. Проверено на реальных данных: кроме Next Fest сюда же
-# попадают Replayability Fest и Digital Tabletop Fest — тоже
-# платформенные фесты Steam, ложных срабатываний не найдено
+# next fest - частный случай \w+\s+fest\b. Сюда же попадают
+# Replayability и Digital Tabletop Fest, тоже платформенные
 FEST_RE = re.compile(r'\b\w+\s+fest\b', re.IGNORECASE)
 
 
@@ -43,7 +36,7 @@ def classify_event(title):
         return "sale"
     if FEST_RE.search(title):
         return "fest"
-    return None  # железо, суды, Гейб Ньюэлл и т.д. — не наше
+    return None  # железо, суды, Гейб Ньюэлл и т.д. - не наше
 
 
 def fetch_page():
@@ -58,9 +51,8 @@ def fetch_page():
 
 
 def fetch(conn):
-    # один вызов с count=500 покрывает 2014–сегодня для этого фида
-    # (проверено: сообщений про платформу немного, 500 хватает с
-    # большим запасом) — постраничный сбор назад по времени не нужен
+    # один вызов с count=500 покрывает весь фид с 2014 года:
+    # постраничный обход назад по времени здесь не нужен
     data = fetch_page()
     news = (data.get("appnews") or {}).get("newsitems") or []
 
