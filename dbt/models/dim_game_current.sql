@@ -1,6 +1,6 @@
 {{ config(materialized='view') }}
 
-SELECT
+select
     game_sk,
     app_id,
     game_name,
@@ -9,9 +9,6 @@ SELECT
     metacritic_score,
     release_date_parsed,
     collection_status
-FROM {{ source('core', 'dim_game') }}
-WHERE is_current
-  AND app_id > 0
-
-
-  
+from {{ source('core', 'dim_game') }}
+where is_current
+  and app_id > 0
