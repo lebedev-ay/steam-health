@@ -8,6 +8,7 @@ import psycopg
 from db import DSN, read_games
 
 URL = "https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/"
+REQUEST_PAUSE = 1.5
 
 
 def fetch_page(app_id, enddate=None):
@@ -92,7 +93,7 @@ def collect(conn, app_id, name, max_pages, mode):
         prev_min_date = page_min_date
         enddate = page_min_date - 1
 
-        time.sleep(1.5)
+        time.sleep(REQUEST_PAUSE)
 
     print(f"{name}: {total}")
     return total

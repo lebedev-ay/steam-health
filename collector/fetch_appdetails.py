@@ -8,6 +8,7 @@ import psycopg
 from db import DSN, read_games
 
 URL = "https://store.steampowered.com/api/appdetails"
+REQUEST_PAUSE = 1.5
 
 
 def fetch(app_id):
@@ -41,7 +42,7 @@ def main():
         status, payload = fetch(app_id)
         save(app_id, status, payload)
         print(f"{name}: {status}")
-        time.sleep(1.5)
+        time.sleep(REQUEST_PAUSE)
 
 if __name__ == "__main__":
     main()

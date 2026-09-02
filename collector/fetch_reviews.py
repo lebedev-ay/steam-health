@@ -8,6 +8,7 @@ import psycopg
 from db import DSN, read_games
 
 URL = "https://store.steampowered.com/appreviews/{app_id}"
+REQUEST_PAUSE = 1.5
 
 
 def fetch_page(app_id, cursor):
@@ -83,7 +84,7 @@ def collect(conn, app_id, name, max_pages, mode, on_page=None):
             break
         cursor = next_cursor
 
-        time.sleep(1.5)
+        time.sleep(REQUEST_PAUSE)
 
     print(f"{name}: {total}")
     return total
