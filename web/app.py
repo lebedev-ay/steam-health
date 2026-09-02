@@ -1,4 +1,5 @@
 import re
+import uuid
 from datetime import datetime
 
 import psycopg
@@ -6,7 +7,7 @@ from psycopg.rows import dict_row
 from flask import Flask, render_template, jsonify, request
 from celery.result import AsyncResult
 
-from tasks import celery_app, collect_game
+from tasks import celery_app, collect_game, redis_client, LOCK_KEY, LOCK_TTL
 # db.py лежит в collector/ — путь туда добавляет в sys.path сам
 # tasks.py при своём импорте (см. web/tasks.py), поэтому этот
 # import обязан идти после import tasks, а не в общей группе выше
@@ -128,8 +129,19 @@ def start_collect():
     if mode not in ("incremental", "full"):
         return jsonify({"error": "некорректный режим сбора"}), 400
 
-    task = collect_game.delay(app_id, mode)
-    return jsonify({"task_id": task.id})
+    task_id = uuid.uuid4().hex
+    # nx=True — проверка и установка одной атомарной операцией:
+    # без него два одновременных запроса оба увидели бы "замка нет"
+    # и оба прошли бы дальше
+    ok = redis_client.set(LOCK_KEY, task_id, nx=True, ex=LOCK_TTL)
+    if not ok:
+        return jsonify({
+            "error": "сейчас идёт сбор другой игры",
+            "busy_task_id": redis_client.get(LOCK_KEY),
+        }), 409
+
+    collect_game.apply_async(args=[app_id, mode], task_id=task_id)
+    return jsonify({"task_id": task_id})
 
 
 @app.route("/api/task/<task_id>")
@@ -411,4 +423,4 @@ def event_impact():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000)

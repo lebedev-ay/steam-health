@@ -688,6 +688,14 @@ document.getElementById('collectBtn').addEventListener('click', async () => {
     });
     const body = await res.json();
 
+    if (res.status === 409) {
+      // сбор уже идёт (у другой игры) — подписываемся на прогресс
+      // занятой задачи тем же pollTask, чтобы видеть реальный ход
+      showCollectProgress('сейчас идёт сбор другой игры, слежу за прогрессом…', 'busy');
+      pollTask(body.busy_task_id);
+      return;
+    }
+
     if (!res.ok) {
       showCollectProgress(`ошибка: ${body.error || res.status}`, 'error');
       setCollectRunning(false);
