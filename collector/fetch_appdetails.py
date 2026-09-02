@@ -1,4 +1,5 @@
 import json
+import time
 import argparse
 
 import requests
@@ -9,16 +10,17 @@ from db import DSN, read_games
 URL = "https://store.steampowered.com/api/appdetails"
 
 
-def fetch(app_id: int):
+def fetch(app_id):
     response = requests.get(
         URL,
         params={"appids": app_id, "cc": "us", "l": "english"},
+        headers={"User-Agent": "steam-health/0.1"},
         timeout=30,
     )
     return response.status_code, response.json() if response.ok else None
 
 
-def save(app_id: int, status: int, payload):
+def save(app_id, status, payload):
     with psycopg.connect(DSN) as conn:
         conn.execute(
             "insert into raw.appdetails (app_id, http_status, payload) values (%s, %s, %s)",
@@ -34,7 +36,6 @@ def parse_args():
 
 
 def main():
-    import time
     args = parse_args()
     for app_id, name in read_games(args.app_id):
         status, payload = fetch(app_id)
