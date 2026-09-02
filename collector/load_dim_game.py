@@ -51,18 +51,104 @@ def extract(payload, app_id):
     }
 
 
+def extract_links(payload, app_id):
+    data = payload[str(app_id)]["data"]
+
+    return {
+        "developer": data.get("developers") or [],
+        "publisher": data.get("publishers") or [],
+        # id жанра Steam отдаёт строкой, id категории числом
+        "genres": [(int(g["id"]), g["description"]) for g in data.get("genres") or []],
+        "categories": [(int(c["id"]), c["description"])
+                       for c in data.get("categories") or []],
+    }
+
+
+def find_company_sk(conn, company_name):
+    conn.execute(
+        """
+        insert into core.dim_company (company_name)
+        values (%s)
+        on conflict (company_name) do nothing
+        """,
+        (company_name,),
+    )
+    row = conn.execute(
+        "select company_sk from core.dim_company where company_name = %s",
+        (company_name,),
+    ).fetchone()
+    return row["company_sk"]
+
+
+def load_links(conn, game_sk, links):
+    # мосты переписываются целиком под этот game_sk: у новой версии SCD2
+    # они свои, у закрытых остаются те, что были на их момент
+    conn.execute("delete from core.bridge_game_company where game_sk = %s", (game_sk,))
+    conn.execute("delete from core.bridge_game_genre where game_sk = %s", (game_sk,))
+    conn.execute("delete from core.bridge_game_category where game_sk = %s", (game_sk,))
+
+    for role in ("developer", "publisher"):
+        for company_name in links[role]:
+            conn.execute(
+                """
+                insert into core.bridge_game_company (game_sk, company_sk, role)
+                values (%s, %s, %s)
+                on conflict do nothing
+                """,
+                (game_sk, find_company_sk(conn, company_name), role),
+            )
+
+    for genre_sk, genre_name in links["genres"]:
+        conn.execute(
+            """
+            insert into core.dim_genre (genre_sk, genre_name)
+            values (%s, %s)
+            on conflict (genre_sk) do update set genre_name = excluded.genre_name
+            """,
+            (genre_sk, genre_name),
+        )
+        conn.execute(
+            """
+            insert into core.bridge_game_genre (game_sk, genre_sk)
+            values (%s, %s)
+            on conflict do nothing
+            """,
+            (game_sk, genre_sk),
+        )
+
+    for category_sk, category_name in links["categories"]:
+        conn.execute(
+            """
+            insert into core.dim_category (category_sk, category_name)
+            values (%s, %s)
+            on conflict (category_sk) do update set category_name = excluded.category_name
+            """,
+            (category_sk, category_name),
+        )
+        conn.execute(
+            """
+            insert into core.bridge_game_category (game_sk, category_sk)
+            values (%s, %s)
+            on conflict do nothing
+            """,
+            (game_sk, category_sk),
+        )
+
+
 def insert_version(conn, fields, valid_from):
     columns = ", ".join(ALL_FIELDS)
     placeholders = ", ".join(["%s"] * len(ALL_FIELDS))
     values = [fields[c] for c in ALL_FIELDS]
 
-    conn.execute(
+    row = conn.execute(
         f"""
         insert into core.dim_game ({columns}, valid_from, is_current)
         values ({placeholders}, %s, true)
+        returning game_sk
         """,
         values + [valid_from],
-    )
+    ).fetchone()
+    return row["game_sk"]
 
 
 def load(conn, fields):
@@ -72,8 +158,7 @@ def load(conn, fields):
     ).fetchone()
 
     if current is None:
-        insert_version(conn, fields, FIRST_VERSION_FROM)
-        return "created"
+        return insert_version(conn, fields, FIRST_VERSION_FROM), "created"
 
     changed = [f for f in TRACKED if current[f] != fields[f]]
 
@@ -86,7 +171,7 @@ def load(conn, fields):
             """,
             (fields["game_name"], fields["metacritic_url"], current["game_sk"]),
         )
-        return "unchanged"
+        return current["game_sk"], "unchanged"
 
     changed_at = datetime.now(timezone.utc)
 
@@ -98,9 +183,8 @@ def load(conn, fields):
         """,
         (changed_at, current["game_sk"]),
     )
-    insert_version(conn, fields, changed_at)
 
-    return f"new version ({', '.join(changed)})"
+    return insert_version(conn, fields, changed_at), f"new version ({', '.join(changed)})"
 
 
 def load_one(conn, app_id, name):
@@ -124,7 +208,8 @@ def load_one(conn, app_id, name):
         return None
 
     fields = extract(payload, app_id)
-    result = load(conn, fields)
+    game_sk, result = load(conn, fields)
+    load_links(conn, game_sk, extract_links(payload, app_id))
     conn.commit()
 
     print(f"{name}: {result}")

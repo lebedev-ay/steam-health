@@ -89,9 +89,10 @@ ER-диаграмма — [docs/er/core.drawio](er/core.drawio). GitHub
 Draw.io Integration) или на [diagrams.net](https://app.diagrams.net/).
 Таблицы, нарисованные вручную и заполненные данными
 (`dim_game`, `dim_date`, `dim_time`, `dim_language`, `fct_review`,
-`fct_patch`, `review_text`), — обычным цветом; спроектированные,
-но не заполняемые (`dim_company`, `dim_genre`, `dim_category`
-и три моста `bridge_game_*`) — серым. `dim_window` заполняется
+`fct_patch`, `review_text`), — обычным цветом; `dim_company`,
+`dim_genre`, `dim_category` и три моста `bridge_game_*` — серым.
+Серый цвет остался с тех пор, когда они были пусты: с записи 035
+они заполняются, диаграмма это ещё не отражает. `dim_window` заполняется
 (миграцией), но не связана с фактами через FK — она в стороне,
 с пометкой о `cross join` в `marts.patch_impact`.
 
@@ -124,8 +125,11 @@ Draw.io Integration) или на [diagrams.net](https://app.diagrams.net/).
   Не связана ни с одним фактом через FK — используется в
   `marts.patch_impact` через `cross join`.
 - **dim_company / dim_genre / dim_category** — справочники
-  разработчика/издателя, жанра, категории. Спроектированы,
-  но ни одна колонка ни разу не заполнена никаким скриптом.
+  разработчика/издателя, жанра, категории. Заполняются
+  `load_dim_game.py` из `raw.appdetails` (поля `developers`,
+  `publishers`, `genres`, `categories`). `genre_sk` и `category_sk`
+  — идентификаторы самого Steam, `company_sk` свой серийный:
+  компанию Steam отдаёт строкой без id.
 - **fct_review** — транзакционный факт с элементами accumulating
   snapshot: зерно — один отзыв (`recommendation_id` уникален).
   У отзыва есть три временных вехи (`created_at`, `updated_at`,
@@ -156,8 +160,10 @@ Draw.io Integration) или на [diagrams.net](https://app.diagrams.net/).
   загрузку.
 - **bridge_game_company / bridge_game_genre / bridge_game_category**
   — факты без мер (factless fact), мосты many-to-many между игрой
-  и компанией/жанром/категорией. Спроектированы, не заполняются:
-  соответствующие измерения пусты, заполнять мосты нечем.
+  и компанией/жанром/категорией. Заполняются `load_dim_game.py`
+  вместе со справочниками и всегда на текущий `game_sk`: новая
+  версия SCD2 получает свои мосты, у закрытых остаются те, что были
+  на их момент — см. [decisions.md](decisions.md), запись 035.
 - **dim_platform_event** — события платформы Steam целиком
   (распродажи, Steam Awards, Next Fest), не игры: нет `game_sk`
   и вообще никакой связи с остальной звездой — как `dim_window`,
@@ -229,12 +235,12 @@ dbt'` — стоит в миграции V1 с самого начала про�
 | `core.dim_time` | миграция V3 | Заполнена целиком при миграции (24 строки) |
 | `core.dim_language` | `load_fct_review.py` (find-or-create) + заглушка -1 из V5 | Заполнена, 32 языка |
 | `core.dim_window` | миграция V12 | Заполнена целиком при миграции (7 строк) |
-| `core.dim_company` | — | Спроектирована, не заполняется |
-| `core.dim_genre` | — | Спроектирована, не заполняется |
-| `core.dim_category` | — | Спроектирована, не заполняется |
-| `core.bridge_game_company` | — | Пусто |
-| `core.bridge_game_genre` | — | Пусто |
-| `core.bridge_game_category` | — | Пусто |
+| `core.dim_company` | `load_dim_game.py` из `raw.appdetails` | Заполнена, 26 компаний |
+| `core.dim_genre` | `load_dim_game.py` из `raw.appdetails` | Заполнена, 10 жанров (id от Steam) |
+| `core.dim_category` | `load_dim_game.py` из `raw.appdetails` | Заполнена, 52 категории (id от Steam) |
+| `core.bridge_game_company` | `load_dim_game.py` | Заполнен, 43 строки на снимок |
+| `core.bridge_game_genre` | `load_dim_game.py` | Заполнен, 67 строк на снимок |
+| `core.bridge_game_category` | `load_dim_game.py` | Заполнен, 396 строк на снимок |
 | `core.fct_review` | `load_fct_review.py` | Растёт по мере сбора, 967094 строк на снимок; до ~50 тыс. свежих отзывов на игру, не вся история — см. «Известные особенности» |
 | `core.review_text` | `load_fct_review.py` | Заполнена вместе с `fct_review` |
 | `core.fct_patch` | `load_fct_patch.py` | Растёт по мере сбора, 13358 строк на снимок |
