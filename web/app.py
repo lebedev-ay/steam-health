@@ -1,3 +1,4 @@
+import os
 import re
 import uuid
 from datetime import datetime
@@ -81,6 +82,10 @@ EVENT_IMPACT_MIN_REVIEWS = 30
 EVENT_IMPACT_MIN_SHIFT = 3
 EVENT_IMPACT_LIMIT = 20
 
+# защита /api/collect от случайного запроса, не от целенаправленного:
+# токен уезжает в html страницы. Настоящая защита - basic auth в nginx
+COLLECT_TOKEN = os.getenv("COLLECT_TOKEN", "")
+
 
 def is_significant_event(e):
     return (e["weight"] is not None and e["weight"] >= SIGNIFICANT_WEIGHT) \
@@ -110,7 +115,8 @@ def parse_app_id(raw):
 
 @app.route("/")
 def index():
-    return render_template("index.html", games=list_games())
+    return render_template("index.html", games=list_games(),
+                           collect_token=COLLECT_TOKEN)
 
 
 @app.route("/api/games")
@@ -120,6 +126,9 @@ def games():
 
 @app.route("/api/collect", methods=["POST"])
 def start_collect():
+    if COLLECT_TOKEN and request.headers.get("X-Collect-Token") != COLLECT_TOKEN:
+        return jsonify({"error": "нужен заголовок X-Collect-Token"}), 401
+
     body = request.get_json(silent=True) or {}
     app_id = parse_app_id(body.get("app_id"))
     mode = body.get("mode", "incremental")

@@ -598,6 +598,11 @@ loadSafe();
 
 const COLLECT_STORAGE_KEY = 'steamHealthCollectTask';
 
+// токен есть только если он задан в окружении сервера - без него
+// форма работает как раньше, заголовок просто не отправляется
+const COLLECT_TOKEN =
+  document.querySelector('meta[name="collect-token"]')?.content || '';
+
 function setCollectRunning(running) {
   document.getElementById('collectBtn').disabled = running;
   document.getElementById('collectAppId').disabled = running;
@@ -681,9 +686,12 @@ document.getElementById('collectBtn').addEventListener('click', async () => {
   showCollectProgress('запускаю…', 'busy');
 
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (COLLECT_TOKEN) headers['X-Collect-Token'] = COLLECT_TOKEN;
+
     const res = await fetch('/api/collect', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ app_id: rawId, mode })
     });
     const body = await res.json();
