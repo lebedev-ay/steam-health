@@ -109,7 +109,7 @@ def main():
         conn.commit()
 
     print(f"загружено: {inserted}")
-    print("витрины (marts) не пересобраны — запустите dbt run в dbt/")
+    print("витрины (marts) не пересобраны - запустите dbt run в dbt/")
 
 
 if __name__ == "__main__":

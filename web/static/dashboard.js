@@ -148,7 +148,7 @@ function renderChangePointList(cps, range) {
 
   if (!visible.length) {
     el.innerHTML = '<div class="cp-empty">в видимом диапазоне переломов ' +
-      'нет — расширьте диапазон или сбросьте зум двойным кликом</div>';
+      'нет - расширьте диапазон или сбросьте зум двойным кликом</div>';
     return;
   }
 
@@ -188,7 +188,7 @@ function renderEventImpact(events) {
   const el = document.getElementById('eventImpact');
 
   if (!events.length) {
-    el.innerHTML = '<div class="cp-empty">заметных сдвигов не нашлось — ' +
+    el.innerHTML = '<div class="cp-empty">заметных сдвигов не нашлось - ' +
       'либо у игры не было резких скачков настроения (это нормально), ' +
       'либо не набралось событий с двумя полными окнами и достаточным ' +
       'объёмом отзывов (мало патчей или история собрана недавно)</div>';

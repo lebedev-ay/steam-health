@@ -88,7 +88,7 @@ def collect_game(self, app_id, mode="incremental"):
             _, completed = fetch_news.collect(conn, app_id, name,
                                               COLLECT_NEWS_PAGES, mode)
         if not completed:
-            raise RuntimeError(f"{name}: не удалось докачать новости (шаг 4) — статус остаётся partial")
+            raise RuntimeError(f"{name}: не удалось докачать новости (шаг 4) - статус остаётся partial")
 
         progress(5, f"{name}: качаю отзывы ({mode})")
         with psycopg.connect(DSN) as conn:
@@ -102,7 +102,7 @@ def collect_game(self, app_id, mode="incremental"):
                                                  COLLECT_REVIEW_PAGES, mode,
                                                  on_page=on_page)
         if not completed:
-            raise RuntimeError(f"{name}: не удалось докачать отзывы (шаг 5) — статус остаётся partial")
+            raise RuntimeError(f"{name}: не удалось докачать отзывы (шаг 5) - статус остаётся partial")
 
         progress(6, f"{name}: загружаю отзывы в core")
         with psycopg.connect(DSN, row_factory=dict_row) as conn:
