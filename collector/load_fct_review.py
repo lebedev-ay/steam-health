@@ -110,6 +110,7 @@ def load_all(conn, app_id=None):
     app_filter = "where r.app_id = %s" if app_id is not None else ""
     params = (app_id,) if app_id is not None else ()
 
+    conn.execute("drop table if exists tmp_review")
     conn.execute(f"""
         create temporary table tmp_review as
         select row_number() over () as rn, app_id, item
