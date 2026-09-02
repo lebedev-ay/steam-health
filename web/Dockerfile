@@ -14,4 +14,9 @@ COPY web/ .
 COPY collector/ collector/
 COPY dbt/ dbt/
 
+# в образе web/ распакован в корень /app, а collector/ и dbt/ лежат
+# внутри него - не так, как в репозитории, где они соседи web/
+ENV PYTHONPATH=/app/collector:/app/dbt
+ENV DBT_PROJECT_DIR=/app/dbt
+
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "app:app"]

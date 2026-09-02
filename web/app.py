@@ -8,11 +8,9 @@ from psycopg.rows import dict_row
 from flask import Flask, render_template, jsonify, request
 from celery.result import AsyncResult
 
-from tasks import celery_app, collect_game, redis_client, LOCK_KEY, LOCK_TTL
-# db.py лежит в collector/ — путь туда добавляет в sys.path сам
-# tasks.py при своём импорте (см. web/tasks.py), поэтому этот
-# import обязан идти после import tasks, а не в общей группе выше
 from db import DSN
+from tasks import (celery_app, collect_game, redis_client,
+                   LOCK_KEY, LOCK_TTL, COLLECT_REVIEW_PAGES)
 
 app = Flask(__name__)
 
@@ -116,7 +114,8 @@ def parse_app_id(raw):
 @app.route("/")
 def index():
     return render_template("index.html", games=list_games(),
-                           collect_token=COLLECT_TOKEN)
+                           collect_token=COLLECT_TOKEN,
+                           review_pages=COLLECT_REVIEW_PAGES)
 
 
 @app.route("/api/games")
@@ -191,10 +190,6 @@ def data():
         sensitivity = float(request.args.get("sensitivity", 1.5))
     except ValueError:
         return jsonify({"error": "sensitivity должен быть числом"}), 400
-
-    # types не задан — отдаём все типы событий
-    types = request.args.get("types", "")
-    type_list = [t for t in types.split(",") if t]
 
     raw_daily = query("""
         with bounds as (
@@ -281,30 +276,20 @@ def data():
             row["base"] = base
             row["delta"] = round(row["pct"] - base, 1)
 
-    # события для объяснения переломов: без фильтра по типу — тип
-    # можно скрыть на графике (например, блоги), но перелом всё равно
-    # нужно объяснить, если такое событие рядом есть
+    # события для объяснения переломов: без фильтров по типу и весу —
+    # тип можно скрыть на графике, а слабый патч всё равно может
+    # оказаться причиной перелома, и тогда его нужно назвать
     cp_events = query("""
         select distinct published_date as day, event_type, title, weight
         from marts.patch_impact
         where app_id = %s and window_code = 'after_7'
-          and (weight is null or weight >= %s)
         order by 1
-    """, (app_id, min_weight))
+    """, (app_id,))
 
-    if type_list:
-        events = query("""
-            select distinct published_date as day, event_type, title, weight
-            from marts.patch_impact
-            where app_id = %s and window_code = 'after_7'
-              and event_type = any(%s)
-              and (weight is null or weight >= %s)
-            order by 1
-        """, (app_id, type_list, min_weight))
-    else:
-        # без фильтра типов это тот же запрос, что и cp_events выше —
-        # не гонять его второй раз
-        events = cp_events
+    # маркеры на графике — те же события, но с порогом значимости
+    # из формы; это подмножество cp_events, второй запрос не нужен
+    events = [e for e in cp_events
+              if e["weight"] is None or e["weight"] >= min_weight]
 
     # платформенные события (распродажи, Steam Awards, Next Fest) —
     # общие для всех игр, не зависят от app_id. Дата приблизительная,

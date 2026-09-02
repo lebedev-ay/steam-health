@@ -615,7 +615,7 @@ function showCollectProgress(text, kind) {
   el.style.color = kind === 'error' ? '#ff6b5b' : (kind === 'ok' ? '#3ddc84' : '#8a95a3');
 }
 
-async function refreshGamesList() {
+async function refreshGamesList(appId) {
   const res = await fetch('/api/games');
   const list = await res.json();
   const select = document.getElementById('game');
@@ -625,11 +625,14 @@ async function refreshGamesList() {
     .map(g => `<option value="${g.app_id}">${g.game_name}${g.collection_status === 'partial' ? ' (данные неполные)' : ''}</option>`)
     .join('');
 
-  if ([...select.options].some(o => o.value === current)) {
-    select.value = current;
-  } else if (select.options.length) {
-    loadSafe();
+  const wanted = appId != null ? String(appId) : current;
+  if ([...select.options].some(o => o.value === wanted)) {
+    select.value = wanted;
   }
+
+  // зовётся только после успешного сбора: данные собранной игры
+  // изменились, поэтому график перерисовываем всегда
+  if (select.options.length) loadSafe();
 }
 
 function pollTask(taskId) {
@@ -658,7 +661,7 @@ function pollTask(taskId) {
       showCollectProgress(`готово: ${body.result?.name || 'игра собрана'}`, 'ok');
       setCollectRunning(false);
       localStorage.removeItem(COLLECT_STORAGE_KEY);
-      refreshGamesList();
+      refreshGamesList(body.result?.app_id);
       return;
     }
 

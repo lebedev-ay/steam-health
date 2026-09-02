@@ -68,6 +68,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python collector/migrate.py
 set -a && source .env && set +a
+export PYTHONPATH=collector
 (cd dbt && dbt run)
 python web/app.py       # http://localhost:5000, с автоперезагрузкой
 ```

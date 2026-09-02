@@ -1,28 +1,6 @@
 import os
 import subprocess
-import sys
 from pathlib import Path
-
-# В образе collector/ лежит рядом с этим файлом (web/collector,
-# см. web/Dockerfile); при локальном запуске из репозитория —
-# на уровень выше (../collector, web/ и collector/ соседи).
-for _candidate in (Path(__file__).parent / "collector",
-                    Path(__file__).parent.parent / "collector"):
-    # существование каталога не гарантирует, что это тот collector/ —
-    # пустой каталог (например, случайно созданный Docker-ом) тоже
-    # проходит is_dir(). Ищем конкретный файл, который там точно есть
-    if (_candidate / "db.py").is_file():
-        sys.path.insert(0, str(_candidate))
-        break
-
-# та же логика, что для collector/ выше, — dbt/ ищем тем же способом
-# и по тем же двум расположениям (образ / локальный репозиторий)
-DBT_PROJECT_DIR = None
-for _candidate in (Path(__file__).parent / "dbt",
-                    Path(__file__).parent.parent / "dbt"):
-    if (_candidate / "dbt_project.yml").is_file():
-        DBT_PROJECT_DIR = _candidate
-        break
 
 import psycopg
 import redis
@@ -38,6 +16,15 @@ import load_fct_patch
 from db import DSN
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+DBT_PROJECT_DIR = Path(
+    os.getenv("DBT_PROJECT_DIR", Path(__file__).parent.parent / "dbt")
+)
+
+# сколько страниц берёт сбор из дашборда: отзывы по 100 на страницу,
+# новости по 500. Для более глубокой выкачки - коллекторы напрямую
+COLLECT_REVIEW_PAGES = int(os.getenv("COLLECT_REVIEW_PAGES", 30))
+COLLECT_NEWS_PAGES = int(os.getenv("COLLECT_NEWS_PAGES", 10))
 
 celery_app = Celery("tasks", broker=REDIS_URL, backend=REDIS_URL)
 redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
@@ -101,7 +88,8 @@ def collect_game(self, app_id, mode="incremental"):
 
         progress(4, f"{name}: качаю новости ({mode})")
         with psycopg.connect(DSN) as conn:
-            _, completed = fetch_news.collect(conn, app_id, name, 10, mode)
+            _, completed = fetch_news.collect(conn, app_id, name,
+                                              COLLECT_NEWS_PAGES, mode)
         if not completed:
             raise RuntimeError(f"{name}: не удалось докачать новости (шаг 4) — статус остаётся partial")
 
@@ -114,7 +102,9 @@ def collect_game(self, app_id, mode="incremental"):
                 redis_client.expire(LOCK_KEY, LOCK_TTL)
                 progress(5, f"{name}: качаю отзывы ({mode})", progress=f"{page} стр., {total} отзывов")
 
-            _, completed = fetch_reviews.collect(conn, app_id, name, 30, mode, on_page=on_page)
+            _, completed = fetch_reviews.collect(conn, app_id, name,
+                                                 COLLECT_REVIEW_PAGES, mode,
+                                                 on_page=on_page)
         if not completed:
             raise RuntimeError(f"{name}: не удалось докачать отзывы (шаг 5) — статус остаётся partial")
 
@@ -128,8 +118,6 @@ def collect_game(self, app_id, mode="incremental"):
             conn.commit()
 
         progress(8, f"{name}: пересобираю витрины (dbt run)")
-        if DBT_PROJECT_DIR is None:
-            raise RuntimeError("каталог dbt/ не найден рядом с web/ ни в образе, ни в репозитории")
         # без --select: витрины строятся из общего набора моделей
         # (review_flat -> review_daily -> patch_impact), и выборочная
         # сборка одной из них рискует оставить остальные рассогласованными
