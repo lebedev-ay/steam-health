@@ -397,8 +397,8 @@ def event_impact():
     for r in rows:
         # доли — деление сумм в конце, а не усреднение готовых
         # процентов (принцип из decisions.md, запись 008)
-        before_pct = 100 * r["before_positive"] / r["before_count"]
-        after_pct = 100 * r["after_positive"] / r["after_count"]
+        before_pct = 100 * float(r["before_positive"]) / r["before_count"]
+        after_pct = 100 * float(r["after_positive"]) / r["after_count"]
         shift = after_pct - before_pct
 
         if abs(shift) < EVENT_IMPACT_MIN_SHIFT:

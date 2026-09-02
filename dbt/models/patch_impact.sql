@@ -46,8 +46,8 @@ expanded as (
     from patches p
     cross join {{ source('core', 'dim_window') }} w
     cross join lateral generate_series(
-        (p.published_at::date + (case when w.day_from >= 0 then w.day_from + 1 else w.day_from end))::timestamp,
-        (p.published_at::date + (case when w.day_to   >  0 then w.day_to        else -1        end))::timestamp,
+        ((p.published_at at time zone 'utc')::date + (case when w.day_from >= 0 then w.day_from + 1 else w.day_from end))::timestamp,
+        ((p.published_at at time zone 'utc')::date + (case when w.day_to   >  0 then w.day_to        else -1        end))::timestamp,
         interval '1 day'
     ) as d
 ),
@@ -56,8 +56,8 @@ counted as (
     select
         e.patch_sk,
         e.window_code,
-        coalesce(sum(rd.review_count), 0)   as review_count,
-        coalesce(sum(rd.positive_count), 0) as positive_count
+        coalesce(sum(rd.review_count), 0)::int   as review_count,
+        coalesce(sum(rd.positive_count), 0)::int as positive_count
     from expanded e
     left join {{ ref('review_daily') }} rd
         on rd.app_id = e.app_id
@@ -75,15 +75,15 @@ select
     p.body_length,
     p.weight,
     p.published_at,
-    p.published_at::date as published_date,
+    (p.published_at at time zone 'utc')::date as published_date,
     w.window_code,
     w.day_from,
     w.day_to,
     w.is_baseline,
     c.review_count,
     c.positive_count,
-    p.published_at::date + w.day_from >= b.data_from
-        and p.published_at::date + w.day_to <= b.data_to
+    (p.published_at at time zone 'utc')::date + w.day_from >= b.data_from
+        and (p.published_at at time zone 'utc')::date + w.day_to <= b.data_to
         as window_complete
 from patches p
 cross join {{ source('core', 'dim_window') }} w
