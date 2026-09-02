@@ -67,7 +67,7 @@ docker compose up -d postgres redis
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python collector/migrate.py
-set -a && source <(tr -d '\r' < .env) && set +a
+set -a && source .env && set +a
 (cd dbt && dbt run)
 python web/app.py       # http://localhost:5000, с автоперезагрузкой
 ```
@@ -81,12 +81,7 @@ python web/app.py       # http://localhost:5000, с автоперезагруз
 `DB_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`),
 и, в отличие от Python-скриптов, `.env` сам dbt не читает —
 там это делает `python-dotenv`, а dbt берёт то, что реально
-есть в окружении процесса. Простой `source .env` здесь работать
-не будет: файл в CRLF (Windows-переносы строк), и `\r` прилипает
-к значению последней переменной в строке — пароль перестаёт
-совпадать с тем, что в базе, а dbt откажет с "password
-authentication failed" без объяснения причины. `tr -d '\r'`
-перед source — рабочий обход.
+есть в окружении процесса, отсюда и `source .env` перед ним.
 
 По умолчанию коллекторы `fetch_reviews.py`/`fetch_news.py` качают
 только то, чего ещё нет (`--mode incremental`); `--mode full`
