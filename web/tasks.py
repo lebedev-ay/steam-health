@@ -66,10 +66,10 @@ def collect_game(self, app_id, mode="incremental"):
     name = data.get("name", str(app_id))
 
     progress(2, f"{name}: сохраняю appdetails")
-    fetch_appdetails.save(app_id, status, payload)
-
-    progress(3, f"{name}: обновляю dim_game")
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
+        fetch_appdetails.save(conn, app_id, status, payload)
+
+        progress(3, f"{name}: обновляю dim_game")
         load_dim_game.load_one(conn, app_id, name)
         # с этого момента в dim_game есть строка на эту игру:
         # если что-то дальше упадёт, статус так и останется 'partial'
@@ -82,14 +82,18 @@ def collect_game(self, app_id, mode="incremental"):
 
     progress(4, f"{name}: качаю новости ({mode})")
     with psycopg.connect(DSN) as conn:
-        fetch_news.collect(conn, app_id, name, 10, mode)
+        _, completed = fetch_news.collect(conn, app_id, name, 10, mode)
+    if not completed:
+        raise RuntimeError(f"{name}: не удалось докачать новости (шаг 4) — статус остаётся partial")
 
     progress(5, f"{name}: качаю отзывы ({mode})")
     with psycopg.connect(DSN) as conn:
         def on_page(page, total):
             progress(5, f"{name}: качаю отзывы ({mode})", progress=f"{page} стр., {total} отзывов")
 
-        fetch_reviews.collect(conn, app_id, name, 30, mode, on_page=on_page)
+        _, completed = fetch_reviews.collect(conn, app_id, name, 30, mode, on_page=on_page)
+    if not completed:
+        raise RuntimeError(f"{name}: не удалось докачать отзывы (шаг 5) — статус остаётся partial")
 
     progress(6, f"{name}: загружаю отзывы в core")
     with psycopg.connect(DSN, row_factory=dict_row) as conn:

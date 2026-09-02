@@ -5,18 +5,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from classify_news import classify
-from db import DSN
-
-
-def find_game_sk(conn, app_id, moment):
-    row = conn.execute(
-        """
-        select game_sk from core.dim_game
-        where app_id = %s and %s >= valid_from and %s < valid_to
-        """,
-        (app_id, moment, moment),
-    ).fetchone()
-    return row["game_sk"] if row else -1
+from db import DSN, find_game_sk
 
 
 def load_all(conn, app_id=None):
@@ -58,6 +47,12 @@ def load_all(conn, app_id=None):
             values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             on conflict (gid) do update set
                 game_sk = excluded.game_sk,
+                date_sk = excluded.date_sk,
+                published_at = excluded.published_at,
+                title = excluded.title,
+                url = excluded.url,
+                feed_type = excluded.feed_type,
+                feedname = excluded.feedname,
                 is_patch = excluded.is_patch,
                 event_type = excluded.event_type,
                 version = excluded.version,
@@ -69,7 +64,10 @@ def load_all(conn, app_id=None):
         )
         inserted += 1
 
-    conn.execute("""
+    weight_filter = "and g.app_id = %s" if app_id is not None else ""
+    weight_params = (app_id,) if app_id is not None else ()
+
+    conn.execute(f"""
         -- медиана по app_id, не по game_sk: game_sk — суррогат
         -- SCD2, у игры с несколькими версиями атрибутов (например,
         -- сменился metacritic-score) патчи разложены по разным
@@ -91,7 +89,8 @@ def load_all(conn, app_id=None):
         where g.game_sk = p.game_sk
           and g.app_id = m.app_id
           and p.body_length > 0
-    """)
+          {weight_filter}
+    """, weight_params)
 
     return inserted
 

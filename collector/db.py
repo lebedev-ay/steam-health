@@ -18,6 +18,17 @@ DSN = (
 GAMES = Path(__file__).parent / "games.txt"
 
 
+def find_game_sk(conn, app_id, moment):
+    row = conn.execute(
+        """
+        select game_sk from core.dim_game
+        where app_id = %s and %s >= valid_from and %s < valid_to
+        """,
+        (app_id, moment, moment),
+    ).fetchone()
+    return row["game_sk"] if row else -1
+
+
 def read_games(app_id=None):
     games = []
     for line in GAMES.read_text(encoding="utf-8").splitlines():

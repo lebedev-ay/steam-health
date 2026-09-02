@@ -4,20 +4,9 @@ from datetime import datetime, timezone
 import psycopg
 from psycopg.rows import dict_row
 
-from db import DSN
+from db import DSN, find_game_sk
 
 BATCH_SIZE = 1000
-
-
-def find_game_sk(conn, app_id, moment):
-    row = conn.execute(
-        """
-        select game_sk from core.dim_game
-        where app_id = %s and %s >= valid_from and %s < valid_to
-        """,
-        (app_id, moment, moment),
-    ).fetchone()
-    return row["game_sk"] if row else -1
 
 
 def find_language_sk(conn, language_code):

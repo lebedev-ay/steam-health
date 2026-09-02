@@ -9,6 +9,7 @@ from db import DSN, read_games
 
 URL = "https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/"
 REQUEST_PAUSE = 1.5
+RETRY_PAUSES = (2, 4, 8)
 
 
 def fetch_page(app_id, enddate=None):
@@ -56,11 +57,18 @@ def collect(conn, app_id, name, max_pages, mode):
     total = 0
 
     for page in range(max_pages):
-        try:
-            data = fetch_page(app_id, enddate)
-        except Exception as e:
-            print(f"  ошибка на странице {page + 1}: {e}")
-            break
+        data = None
+        for attempt in range(len(RETRY_PAUSES) + 1):
+            try:
+                data = fetch_page(app_id, enddate)
+                break
+            except requests.RequestException as e:
+                print(f"  ошибка на странице {page + 1}, попытка {attempt + 1}: {e}")
+                if attempt < len(RETRY_PAUSES):
+                    time.sleep(RETRY_PAUSES[attempt])
+
+        if data is None:
+            return total, False
 
         news = (data.get("appnews") or {}).get("newsitems") or []
         if not news:
@@ -96,7 +104,7 @@ def collect(conn, app_id, name, max_pages, mode):
         time.sleep(REQUEST_PAUSE)
 
     print(f"{name}: {total}")
-    return total
+    return total, True
 
 
 def parse_args():
@@ -112,12 +120,20 @@ def main():
 
     games = read_games(args.app_id)
     grand_total = 0
+    incomplete = []
 
     with psycopg.connect(DSN) as conn:
         for app_id, name in games:
-            grand_total += collect(conn, app_id, name, args.max_pages, args.mode)
+            total, completed = collect(conn, app_id, name, args.max_pages, args.mode)
+            grand_total += total
+            if not completed:
+                incomplete.append(name)
 
     print(f"\nвсего: {grand_total}")
+
+    if incomplete:
+        print(f"не докачано: {', '.join(incomplete)}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
