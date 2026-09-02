@@ -2,20 +2,19 @@ import json
 import time
 import argparse
 
-import requests
 import psycopg
 
+import steam_api
 from db import DSN, read_games
 
 URL = "https://store.steampowered.com/appreviews/{app_id}"
 REQUEST_PAUSE = 1.5
-RETRY_PAUSES = (2, 4, 8)
 
 
 def fetch_page(app_id, cursor):
-    response = requests.get(
+    return steam_api.get(
         URL.format(app_id=app_id),
-        params={
+        {
             "json": 1,
             "filter": "recent",
             "language": "all",
@@ -23,11 +22,7 @@ def fetch_page(app_id, cursor):
             "num_per_page": 100,
             "cursor": cursor,
         },
-        headers={"User-Agent": "steam-health/0.1"},
-        timeout=30,
     )
-    response.raise_for_status()
-    return response.json()
 
 
 def known_recommendation_ids(conn, ids):
@@ -45,16 +40,7 @@ def collect(conn, app_id, name, max_pages, mode, on_page=None):
     total = 0
 
     for page in range(max_pages):
-        data = None
-        for attempt in range(len(RETRY_PAUSES) + 1):
-            try:
-                data = fetch_page(app_id, cursor)
-                break
-            except requests.RequestException as e:
-                print(f"  ошибка на странице {page + 1}, попытка {attempt + 1}: {e}")
-                if attempt < len(RETRY_PAUSES):
-                    time.sleep(RETRY_PAUSES[attempt])
-
+        data = fetch_page(app_id, cursor)
         if data is None:
             return total, False
 

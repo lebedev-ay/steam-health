@@ -1,4 +1,6 @@
 import re
+from collections import Counter
+
 import psycopg
 from psycopg.rows import dict_row
 
@@ -61,22 +63,6 @@ def extract_version(title):
         return None
     return version
 
-def version_weight(version):
-    """Крупность релиза по номеру: 3 мажорный, 2 минорный, 1 мелкий."""
-    if not version:
-        return None
-    parts = version.split('.')
-    # ищем последний ненулевой уровень
-    last = 0
-    for i, p in enumerate(parts):
-        if p.strip('0'):
-            last = i
-    if last == 0:
-        return 3
-    if last == 1:
-        return 2
-    return 1
-
 def classify(title):
     version = extract_version(title)
 
@@ -93,7 +79,6 @@ def classify(title):
 
     return None, "unknown"
 
-from collections import Counter
 
 def main():
     with psycopg.connect(DSN, row_factory=dict_row) as conn:

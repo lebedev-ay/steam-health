@@ -1,26 +1,20 @@
 import time
-from pathlib import Path
 
 import requests
 
-GAMES = Path(__file__).parent / "games.txt"
+from db import read_games
+
 URL = "https://store.steampowered.com/api/appdetails"
 
 
 def main():
-    for line in GAMES.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-
-        app_id, expected = line.split(maxsplit=1)
-
+    for app_id, expected in read_games():
         r = requests.get(
             URL,
             params={"appids": app_id, "filters": "basic", "cc": "us", "l": "english"},
             timeout=30,
         )
-        body = r.json().get(app_id, {})
+        body = r.json().get(str(app_id), {})
 
         if not body.get("success"):
             print(f"{app_id:>9}  ОШИБКА — не найдено (ожидалось: {expected})")

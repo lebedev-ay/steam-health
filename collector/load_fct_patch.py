@@ -1,16 +1,16 @@
 import argparse
-from datetime import datetime, timezone
 
 import psycopg
 from psycopg.rows import dict_row
 
 from classify_news import classify
 from db import DSN, find_game_sk
+from fetch_platform_events import PLATFORM_APP_ID
 
 
 def load_all(conn, app_id=None):
     app_filter = "and n.app_id = %s" if app_id is not None else ""
-    params = (app_id,) if app_id is not None else ()
+    params = (PLATFORM_APP_ID, app_id) if app_id is not None else (PLATFORM_APP_ID,)
 
     rows = conn.execute(f"""
         select distinct on (item ->> 'gid')
@@ -25,6 +25,9 @@ def load_all(conn, app_id=None):
         from raw.news n,
              jsonb_array_elements(n.payload -> 'appnews' -> 'newsitems') as item
         where item ->> 'feedname' not in ('SteamDB')
+          -- фид платформы живёт в core.dim_platform_event, игры для него
+          -- в dim_game нет - в fct_patch он давал только заглушки Unknown
+          and n.app_id <> %s
         {app_filter}
         order by item ->> 'gid', n.fetched_at desc
     """, params).fetchall()

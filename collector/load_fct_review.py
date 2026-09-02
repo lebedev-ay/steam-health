@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import psycopg
 from psycopg.rows import dict_row
 
-from db import DSN, find_game_sk
+from db import DSN
 
 BATCH_SIZE = 1000
 
@@ -28,7 +28,7 @@ def find_language_sk(conn, language_code):
     return row["language_sk"]
 
 
-def load_review(conn, app_id, item, language_cache):
+def load_review(conn, game_sk, item, language_cache):
     author = item.get("author") or {}
 
     created_at = datetime.fromtimestamp(int(item["timestamp_created"]), tz=timezone.utc)
@@ -38,8 +38,6 @@ def load_review(conn, app_id, item, language_cache):
 
     dev_ts = item.get("timestamp_dev_responded")
     dev_responded_at = datetime.fromtimestamp(int(dev_ts), tz=timezone.utc) if dev_ts else None
-
-    game_sk = find_game_sk(conn, app_id, created_at)
 
     language_code = item.get("language")
     if language_code not in language_cache:
@@ -99,18 +97,29 @@ def load_all(conn, app_id=None):
     app_filter = "where r.app_id = %s" if app_id is not None else ""
     params = (app_id,) if app_id is not None else ()
 
+    # версия игры на момент отзыва ищется одним join, а не запросом
+    # на каждый отзыв. Пересечение интервалов SCD2 задвоило бы строки,
+    # но оно запрещено ограничением из V30 - см. decisions.md, запись 034
     conn.execute("drop table if exists tmp_review")
     conn.execute(f"""
         create temporary table tmp_review as
-        select row_number() over () as rn, app_id, item
+        select row_number() over () as rn,
+               coalesce(g.game_sk, -1) as game_sk,
+               d.item
         from (
             select distinct on (item ->> 'recommendationid')
-                r.app_id, item
+                r.app_id,
+                item,
+                to_timestamp((item ->> 'timestamp_created')::bigint) as created_at
             from raw.reviews r,
                  jsonb_array_elements(r.payload -> 'reviews') as item
             {app_filter}
             order by item ->> 'recommendationid', r.fetched_at desc
         ) d
+        left join core.dim_game g
+               on g.app_id = d.app_id
+              and d.created_at >= g.valid_from
+              and d.created_at <  g.valid_to
     """, params)
     conn.commit()
 
@@ -124,7 +133,7 @@ def load_all(conn, app_id=None):
     while True:
         rows = conn.execute(
             """
-            select rn, app_id, item from tmp_review
+            select rn, game_sk, item from tmp_review
             where rn > %s
             order by rn
             limit %s
@@ -136,7 +145,7 @@ def load_all(conn, app_id=None):
             break
 
         for r in rows:
-            load_review(conn, r["app_id"], r["item"], language_cache)
+            load_review(conn, r["game_sk"], r["item"], language_cache)
             last_rn = r["rn"]
 
         conn.commit()
