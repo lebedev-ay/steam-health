@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import psycopg
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -30,19 +31,25 @@ def find_game_sk(conn, app_id, moment):
 
 
 def read_games(app_id=None):
-    games = []
-    for line in GAMES.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        line_app_id, name = line.split(maxsplit=1)
-        games.append((int(line_app_id), name))
+    # состав игр - те, по которым уже есть сырьё в raw.appdetails.
+    # Имя берётся из ядра; пока игра туда не загружена, вместо имени
+    # идёт app_id. Явный app_id возвращается всегда, даже если игры
+    # в базе ещё нет - так заводится новая
+    with psycopg.connect(DSN) as conn:
+        if app_id is not None:
+            row = conn.execute(
+                "select game_name from core.dim_game "
+                "where app_id = %s and is_current",
+                (app_id,),
+            ).fetchone()
+            return [(app_id, row[0] if row else str(app_id))]
 
-    if app_id is None:
-        return games
+        rows = conn.execute("""
+            select a.app_id, g.game_name
+            from (select distinct app_id from raw.appdetails) a
+            left join core.dim_game g
+                   on g.app_id = a.app_id and g.is_current
+            order by a.app_id
+        """).fetchall()
 
-    for gid, name in games:
-        if gid == app_id:
-            return [(gid, name)]
-
-    return [(app_id, str(app_id))]
+    return [(app_id, name or str(app_id)) for app_id, name in rows]
