@@ -8,7 +8,7 @@ from psycopg.rows import dict_row
 from db import DSN
 
 URL = "https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/"
-PLATFORM_APP_ID = 753  # служебный appid Steam, не игра - в games.txt не идёт
+PLATFORM_APP_ID = 753  # служебный appid Steam, не игра
 
 # сезон/праздник + sale, "steam" встречается в обоих порядках.
 # Голый "steam sale" не ловим: под него попадают издательские

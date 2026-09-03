@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 
 import psycopg
 from dotenv import load_dotenv
@@ -15,8 +14,6 @@ DSN = (
     f"user={os.getenv('POSTGRES_USER')} "
     f"password={os.getenv('POSTGRES_PASSWORD')}"
 )
-
-GAMES = Path(__file__).parent / "games.txt"
 
 
 def find_game_sk(conn, app_id, moment):
