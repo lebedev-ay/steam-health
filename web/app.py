@@ -269,11 +269,18 @@ def data():
             row["delta"] = round(row["pct"] - base, 1)
 
     # без фильтров по типу и весу: скрытый на графике тип и слабый
-    # патч тоже могут оказаться причиной перелома
+    # патч тоже могут оказаться причиной перелома.
+    # distinct: Steam выпускает один анонс под несколькими gid,
+    # на графике такому событию положен один маркер
     cp_events = query("""
-        select distinct published_date as day, event_type, title, weight
-        from marts.patch_impact
-        where app_id = %s and window_code = 'after_7'
+        select distinct
+               (p.published_at at time zone 'utc')::date as day,
+               p.event_type,
+               p.title,
+               p.weight
+        from core.fct_patch p
+        join core.dim_game g on g.game_sk = p.game_sk
+        where g.app_id = %s
         order by 1
     """, (app_id,))
 
