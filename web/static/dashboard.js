@@ -62,19 +62,31 @@ function truncate(s, n) {
 
 // на широком диапазоне мелкие события прячем, иначе сливаются
 // в сплошную полосу; на узком (< 60 дней) показываем всё
-function densityFilter(days) {
-  const w = e => e.weight ?? 0;
-  if (days > 365) return e => w(e) >= 5 || MAJOR_TYPES.has(e.type);
-  if (days >= 180) return e => w(e) >= 2 || MAJOR_TYPES.has(e.type);
-  if (days >= 60) return e => w(e) >= 1 || MAJOR_TYPES.has(e.type);
-  return () => true;
+function densityThreshold(days) {
+  if (days > 365) return 5;
+  if (days >= 180) return 2;
+  if (days >= 60) return 1;
+  return 0;
 }
 
-function densityLabel(days) {
-  if (days > 365) return 'показаны значимые события (вес ≥ 5 или патч/сезон/дополнение)';
-  if (days >= 180) return 'показаны значимые события (вес ≥ 2 или патч/сезон/дополнение)';
-  if (days >= 60) return 'показаны события с весом ≥ 1 или патч/сезон/дополнение';
-  return 'показаны все события';
+function densityFilter(days) {
+  const limit = densityThreshold(days);
+  if (!limit) return () => true;
+  return e => (e.weight ?? 0) >= limit || MAJOR_TYPES.has(e.type);
+}
+
+// фильтров два, и подпись обязана описывать оба: порог из формы
+// сервер применяет ко всем событиям без исключений, порог плотности
+// применяется на клиенте, и патчи, сезоны и дополнения его обходят
+function eventFilterLabel(days, minWeight) {
+  const limit = densityThreshold(days);
+  if (!minWeight && !limit) return 'показаны все события';
+  if (!minWeight) return `показаны события с весом ≥ ${limit} или патч/сезон/дополнение`;
+  if (limit > minWeight) {
+    return `показаны события с весом ≥ ${limit}, ` +
+           `патчи, сезоны и дополнения - от ${minWeight}`;
+  }
+  return `показаны события с весом ≥ ${minWeight}`;
 }
 
 let lastData = null;
@@ -204,6 +216,7 @@ function renderChart(range) {
     ? Math.abs(new Date(effectiveRange[1]) - new Date(effectiveRange[0])) / 86400000
     : Infinity;
   const keepEvent = densityFilter(windowDays);
+  const minWeight = parseFloat(document.getElementById('minWeight').value) || 0;
 
   const visibleCpCount = cps.filter(c => dayInRange(c.day, effectiveRange)).length;
   const cpCountText = visibleCpCount === cps.length
@@ -212,7 +225,7 @@ function renderChart(range) {
 
   document.getElementById('info').textContent =
     `окно ${data.window} дн., медиана ${data.median_volume} отзывов/день, ` +
-    `${cpCountText}; ${densityLabel(windowDays)}`;
+    `${cpCountText}; ${eventFilterLabel(windowDays, minWeight)}`;
 
   renderChangePointList(cps, effectiveRange);
 
