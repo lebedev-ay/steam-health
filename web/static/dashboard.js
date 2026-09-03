@@ -399,6 +399,12 @@ function renderChart(range) {
       marker: { color: 'rgba(110,150,190,0.28)' },
       hovertemplate: '%{x}<br>Отзывов: %{y}<extra></extra>'
     },
+    ...(isDelta ? [] : [{
+      x: days, y: data.daily.map(d => d.base), mode: 'lines',
+      name: 'База, медиана 90 дней',
+      line: { color: '#8a95a3', width: 1.5, dash: 'dot' },
+      hovertemplate: '%{x}<br>База: %{y}%<extra></extra>'
+    }]),
     {
       x: days, y: values, mode: 'lines',
       name: isDelta ? 'Отклонение, п.п.' : 'Позитивных, %',
