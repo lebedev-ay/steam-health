@@ -106,4 +106,3 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .cp-list .cp-up { color: #3ddc84; }
 .cp-list .cp-down { color: #ff4d3d; }
 .cp-list .cp-empty { color: #6b7684; padding: 6px 0; }
-.section-title { margin-top: 20px; font-size: 14px; color: #c7d0d9; font-weight: 600; }

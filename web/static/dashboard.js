@@ -182,51 +182,6 @@ function renderChangePointList(cps, range) {
   });
 }
 
-// про весь собранный период, а не про видимый диапазон - поэтому
-// строится один раз в load(), не в renderChart
-function renderEventImpact(events) {
-  const el = document.getElementById('eventImpact');
-
-  if (!events.length) {
-    el.innerHTML = '<div class="cp-empty">заметных сдвигов не нашлось - ' +
-      'либо у игры не было резких скачков настроения (это нормально), ' +
-      'либо не набралось событий с двумя полными окнами и достаточным ' +
-      'объёмом отзывов (мало патчей или история собрана недавно)</div>';
-    return;
-  }
-
-  const rows = events.map(e => {
-    const dirClass = e.shift < 0 ? 'cp-down' : 'cp-up';
-    const dateStr = new Date(e.day + 'T00:00:00').toLocaleDateString('ru-RU');
-    const sign = e.shift > 0 ? '+' : '';
-    return `<tr class="cp-row" data-day="${e.day}">
-      <td>${dateStr}</td>
-      <td>${TYPES[e.type]?.label || e.type}</td>
-      <td>${truncate(e.title, 60)}</td>
-      <td>${e.before_pct}%</td>
-      <td>${e.after_pct}%</td>
-      <td class="${dirClass}">${sign}${e.shift} п.п.</td>
-    </tr>`;
-  }).join('');
-
-  el.innerHTML = `<table>
-    <thead><tr>
-      <th>Дата</th><th>Тип</th><th>Заголовок</th>
-      <th>Позитив до</th><th>Позитив после</th><th>Сдвиг</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
-
-  el.querySelectorAll('.cp-row').forEach(row => {
-    const day = row.dataset.day;
-    row.addEventListener('click', () => {
-      Plotly.relayout('sentiment', {
-        'xaxis.range': [shiftDay(day, -30), shiftDay(day, 30)]
-      });
-    });
-  });
-}
-
 // перерисовка по уже загруженным данным (range = null - вся история):
 // зум и панорамирование пересчитывают слои событий без похода на сервер
 function renderChart(range) {
@@ -522,17 +477,11 @@ async function load() {
   const sensitivity = document.getElementById('sensitivity').value;
   const minWeight = document.getElementById('minWeight').value;
 
-  const [dataRes, impactRes] = await Promise.all([
-    fetch(`/api/data?app_id=${appId}&smoothing=${smoothing}` +
-      `&min_weight=${minWeight}&sensitivity=${sensitivity}`),
-    fetch(`/api/event_impact?app_id=${appId}`)
-  ]);
-  const data = await dataRes.json();
-  const impact = await impactRes.json();
+  const res = await fetch(`/api/data?app_id=${appId}&smoothing=${smoothing}` +
+    `&min_weight=${minWeight}&sensitivity=${sensitivity}`);
 
-  lastData = data;
+  lastData = await res.json();
   renderChart(null);
-  renderEventImpact(impact.events || []);
 }
 
 const CONTROL_IDS = ['game', 'smoothing', 'sensitivity', 'minWeight', 'mode', 'showPlatform'];

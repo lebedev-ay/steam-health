@@ -65,13 +65,6 @@ def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
 SIGNIFICANT_WEIGHT = 2
 SIGNIFICANT_TYPES = {"patch", "season_start", "expansion"}
 
-# для таблицы влияния событий: меньше - доля позитива скачет
-# от случайности объёма, а не от самого события
-EVENT_IMPACT_MIN_REVIEWS = 30
-# 10 п.п. отсекал почти всё, 3 оставляет верхушку - decisions.md, 026
-EVENT_IMPACT_MIN_SHIFT = 3
-EVENT_IMPACT_LIMIT = 20
-
 # защита /api/collect от случайного запроса, не от целенаправленного:
 # токен уезжает в html страницы. Настоящая защита - basic auth в nginx
 COLLECT_TOKEN = os.getenv("COLLECT_TOKEN", "")
@@ -357,59 +350,6 @@ def data():
         ],
         "change_points": cp_out,
     })
-
-
-@app.route("/api/event_impact")
-def event_impact():
-    try:
-        app_id = int(request.args.get("app_id"))
-    except (TypeError, ValueError):
-        return jsonify({"error": "app_id должен быть числом"}), 400
-
-    # окна должны быть полными, иначе сравниваем целое с обрезанным
-    # (запись 009), и не мельче EVENT_IMPACT_MIN_REVIEWS в каждом
-    rows = query("""
-        select
-            b.patch_sk, b.published_date, b.event_type, b.title,
-            b.review_count as before_count,
-            b.positive_count as before_positive,
-            a.review_count as after_count,
-            a.positive_count as after_positive
-        from marts.patch_impact b
-        join marts.patch_impact a on a.patch_sk = b.patch_sk
-        where b.app_id = %s
-          and b.window_code = 'before_7' and b.window_complete
-          and a.window_code = 'after_7' and a.window_complete
-          and b.review_count >= %s and a.review_count >= %s
-    """, (app_id, EVENT_IMPACT_MIN_REVIEWS, EVENT_IMPACT_MIN_REVIEWS))
-
-    events = []
-    for r in rows:
-        # доли - деление сумм в конце, а не усреднение готовых
-        # процентов (см. decisions.md, запись 008)
-        before_pct = 100 * float(r["before_positive"]) / r["before_count"]
-        after_pct = 100 * float(r["after_positive"]) / r["after_count"]
-        shift = after_pct - before_pct
-
-        if abs(shift) < EVENT_IMPACT_MIN_SHIFT:
-            continue
-
-        events.append({
-            "day": r["published_date"].isoformat(),
-            "type": r["event_type"],
-            "title": r["title"],
-            "before_pct": round(before_pct, 1),
-            "after_pct": round(after_pct, 1),
-            "shift": round(shift, 1),
-            "before_count": r["before_count"],
-            "before_positive": r["before_positive"],
-            "after_count": r["after_count"],
-            "after_positive": r["after_positive"],
-        })
-
-    events.sort(key=lambda e: abs(e["shift"]), reverse=True)
-
-    return jsonify({"events": events[:EVENT_IMPACT_LIMIT]})
 
 
 if __name__ == "__main__":
