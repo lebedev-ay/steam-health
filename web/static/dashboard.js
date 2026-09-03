@@ -465,7 +465,10 @@ function renderChart(range) {
     legend: { orientation: 'h', y: 1.10, bgcolor: 'rgba(0,0,0,0)' }
   }, { responsive: true });
 
-  lastRenderedRange = effectiveRange;
+  // копией, а не ссылкой: переданный массив Plotly держит как свой
+  // xaxis.range и меняет на месте, поэтому сравнение с ним в
+  // обработчике ниже всегда давало равенство и гасило перерисовку
+  lastRenderedRange = effectiveRange ? effectiveRange.slice() : null;
 
   // zoom, pan, rangeslider и кнопки периода приходят сюда одним
   // plotly_relayout - перерисовываем только клиентские слои
