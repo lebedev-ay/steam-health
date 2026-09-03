@@ -323,7 +323,8 @@ def data():
             "day": day,
             "score": round(score, 1),
             "events": [
-                {"type": e["event_type"], "title": e["title"]}
+                {"type": e["event_type"], "title": e["title"],
+                 "weight": float(e["weight"]) if e["weight"] is not None else None}
                 for e in major
             ],
             "events_minor": [

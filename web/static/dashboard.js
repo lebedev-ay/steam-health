@@ -50,12 +50,6 @@ function shiftDay(day, n) {
   return d.toISOString().slice(0, 10);
 }
 
-function shiftHours(day, h) {
-  const d = new Date(day + 'T00:00:00');
-  d.setHours(d.getHours() + h);
-  return d.toISOString().slice(0, 19);
-}
-
 function truncate(s, n) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
@@ -324,8 +318,9 @@ function renderChart(range) {
     hovertemplate: '%{x}<br>%{text}<extra></extra>'
   }));
 
-  // по ромбу на каждый тип значимого события рядом, фоновые - только
-  // счётчиком. cpMarkerIndices нужен для подсветки из списка
+  // один ромб на перелом: разрешение внутри суток данными не
+  // подкреплено, зерно дневное. Цвет - по событию с наибольшим весом,
+  // остальные типы перечисляются в тултипе цветными строками
   const cpX = [], cpY = [], cpColor = [], cpSize = [], cpLine = [], cpText = [];
   cpMarkerIndices = [];
 
@@ -350,33 +345,34 @@ function renderChart(range) {
 
     const kinds = [...new Set(c.events.map(e => e.type))];
 
+    let color = '#3a4048';
+    let body;
+
     if (kinds.length === 0) {
-      cpX.push(c.day); cpY.push(baseY);
-      cpColor.push('#3a4048'); cpSize.push(size);
-      cpLine.push(edge);
-      myIndices.push(cpX.length - 1);
-      const head = c.events_minor.length
+      body = c.events_minor.length
         ? `${c.events_minor.length} фоновых событий рядом`
         : 'событий рядом нет';
-      cpText.push(`<b>${dir} ${c.score} п.п.</b><br>${head}${platformLine}`);
-      return;
+    } else {
+      const strongest = c.events.reduce(
+        (a, e) => (e.weight ?? 0) > (a.weight ?? 0) ? e : a, c.events[0]);
+      color = TYPES[strongest.type]?.color || '#6b7684';
+
+      // цвет строки в тултипе Plotly задаётся только через span:
+      // фон и рамки он игнорирует, поэтому маркер типа - символом
+      body = kinds.map(k => {
+        const titles = c.events.filter(e => e.type === k)
+          .map(e => e.title).join('<br>');
+        const kc = TYPES[k]?.color || '#6b7684';
+        return `<span style="color:${kc}">◆ ${TYPES[k]?.label || k}:</span>` +
+               `<br>${titles}`;
+      }).join('<br>');
+      body += minorLine;
     }
 
-    // несколько ромбов, разнесённых по времени внутри суток
-    const step = 24 / (kinds.length + 1);
-    kinds.forEach((k, i) => {
-      cpX.push(shiftHours(c.day, Math.round(step * (i + 1))));
-      cpY.push(baseY);
-      cpColor.push(TYPES[k]?.color || '#6b7684');
-      cpSize.push(size);
-      cpLine.push(edge);
-      myIndices.push(cpX.length - 1);
-      const titles = c.events.filter(e => e.type === k)
-        .map(e => e.title).join('<br>');
-      cpText.push(
-        `<b>${dir} ${c.score} п.п.</b><br>` +
-        `${TYPES[k]?.label || k}:<br>${titles}${minorLine}${platformLine}`);
-    });
+    cpX.push(c.day); cpY.push(baseY);
+    cpColor.push(color); cpSize.push(size); cpLine.push(edge);
+    myIndices.push(cpX.length - 1);
+    cpText.push(`<b>${dir} ${c.score} п.п.</b><br>${body}${platformLine}`);
   });
 
   const cpLineWidth = cpX.map(() => 2.5);
