@@ -24,6 +24,7 @@
 
 <div class="controls">
   <label>Игра:
+    <input type="text" id="gameFilter" placeholder="фильтр" style="width:90px">
     <select id="game">
       {% for g in games %}
       <option value="{{ g.app_id }}">{{ g.game_name }}{% if g.collection_status == 'partial' %} (данные неполные){% endif %}</option>

@@ -502,6 +502,25 @@ async function load() {
   renderChart(null);
 }
 
+// полный список игр держим отдельно от select: фильтр перерисовывает
+// его содержимое, и выбранная игра выпадать из него не должна
+let gameOptions = [...document.getElementById('game').options]
+  .map(o => ({ value: o.value, label: o.textContent }));
+
+function renderGameOptions(preferred) {
+  const select = document.getElementById('game');
+  const wanted = preferred != null ? String(preferred) : select.value;
+  const q = document.getElementById('gameFilter').value.trim().toLowerCase();
+
+  const visible = gameOptions.filter(
+    o => o.value === wanted || o.label.toLowerCase().includes(q));
+
+  select.innerHTML = visible
+    .map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+
+  if (visible.some(o => o.value === wanted)) select.value = wanted;
+}
+
 const CONTROL_IDS = ['game', 'smoothing', 'sensitivity', 'minWeight', 'mode', 'showPlatform'];
 
 function setControlsDisabled(disabled) {
@@ -531,6 +550,7 @@ async function loadSafe() {
 }
 
 CONTROL_IDS.forEach(id => document.getElementById(id).addEventListener('change', loadSafe));
+document.getElementById('gameFilter').addEventListener('input', () => renderGameOptions());
 loadSafe();
 
 // --- фоновый сбор данных по игре ---
@@ -557,21 +577,16 @@ function showCollectProgress(text, kind) {
 async function refreshGamesList(appId) {
   const res = await fetch('/api/games');
   const list = await res.json();
-  const select = document.getElementById('game');
-  const current = select.value;
 
-  select.innerHTML = list
-    .map(g => `<option value="${g.app_id}">${g.game_name}${g.collection_status === 'partial' ? ' (данные неполные)' : ''}</option>`)
-    .join('');
-
-  const wanted = appId != null ? String(appId) : current;
-  if ([...select.options].some(o => o.value === wanted)) {
-    select.value = wanted;
-  }
+  gameOptions = list.map(g => ({
+    value: String(g.app_id),
+    label: g.game_name + (g.collection_status === 'partial' ? ' (данные неполные)' : '')
+  }));
+  renderGameOptions(appId);
 
   // зовётся только после успешного сбора: данные собранной игры
   // изменились, поэтому график перерисовываем всегда
-  if (select.options.length) loadSafe();
+  if (document.getElementById('game').options.length) loadSafe();
 }
 
 function pollTask(taskId) {
