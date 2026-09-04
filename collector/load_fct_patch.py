@@ -70,6 +70,18 @@ def load_all(conn, app_id=None):
     weight_filter = "and g.app_id = %s" if app_id is not None else ""
     weight_params = (app_id,) if app_id is not None else ()
 
+    # вес снимается перед пересчётом и в более широкой области, чем сам
+    # пересчёт: медиана могла исчезнуть вместе с последним патчем игры,
+    # и тогда update до такой игры не доходит, а старое число остаётся
+    conn.execute(f"""
+        update core.fct_patch p
+        set weight = null
+        from core.dim_game g
+        where g.game_sk = p.game_sk
+          and p.weight is not null
+          {weight_filter}
+    """, weight_params)
+
     conn.execute(f"""
         -- медиана по app_id, а не по game_sk: иначе у игры
         -- с несколькими версиями SCD2 веса внутри одной игры
