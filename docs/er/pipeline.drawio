@@ -182,7 +182,32 @@
                         <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                </root>
+                
+                <mxCell id="300" value="fetch_platform_events.py&lt;br&gt;fetch()" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="565" y="160" width="140" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="301" value="fetch_platform_events.py&lt;br&gt;load_all()" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="565" y="480" width="140" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="302" value="core.dim_platform_event" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=12;fillColor=#ffffff;strokeColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="385" y="705" width="170" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="310" value="appid 753" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;" parent="1" source="12" target="300" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="311" value="" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;" parent="1" source="300" target="22" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="312" value="" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;" parent="1" source="22" target="301" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="313" value="" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;" parent="1" source="301" target="302" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="314" value="напрямую, мимо marts" style="html=1;endArrow=open;dashed=1;dashPattern=4 3;rounded=0;fontSize=11;strokeColor=#666666;fontColor=#666666;" parent="1" source="302" target="56" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
         </mxGraphModel>
     </diagram>
 </mxfile>
