@@ -20,6 +20,11 @@ def query(sql, params=()):
         return conn.execute(sql, params).fetchall()
 
 
+# на ровном ряде разброс сдвигов нулевой, порог тоже, и нестрогое
+# сравнение объявляло переломом каждый день с нулевым сдвигом
+MIN_SHIFT_PP = 1.0
+
+
 def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
     """
     Ищет точки перелома: где среднее ПОСЛЕ заметно отличается
@@ -49,7 +54,9 @@ def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
 
     candidates = [
         (i, scores[i]) for i in range(n)
-        if scores[i] is not None and abs(scores[i]) >= threshold
+        if scores[i] is not None
+        and abs(scores[i]) > threshold
+        and abs(scores[i]) >= MIN_SHIFT_PP
     ]
     candidates.sort(key=lambda x: -abs(x[1]))
 
