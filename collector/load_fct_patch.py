@@ -4,7 +4,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from classify_news import classify
-from db import DSN, find_game_sk
+from db import DSN
 from fetch_platform_events import PLATFORM_APP_ID
 
 
@@ -13,25 +13,35 @@ def load_all(conn, app_id=None):
     params = (PLATFORM_APP_ID, app_id) if app_id is not None else (PLATFORM_APP_ID,)
 
     # зерно - пара «событие - игра»: одну заметку про несколько игр
-    # берём по разу на каждую (см. миграцию V34)
+    # берём по разу на каждую (см. миграцию V34).
+    # Версия игры ищется одним join, а не запросом на каждую строку;
+    # пересечение интервалов SCD2 задвоило бы события, но оно запрещено
+    # ограничением из V30
     rows = conn.execute(f"""
-        select distinct on (item ->> 'gid', n.app_id)
-            n.app_id,
-            item ->> 'gid'      as gid,
-            item ->> 'title'    as title,
-            item ->> 'url'      as url,
-            item ->> 'feedname' as feedname,
-            (item ->> 'feed_type')::int as feed_type,
-            length(item ->> 'contents') as body_length,
-            to_timestamp((item ->> 'date')::bigint) as published_at
-        from raw.news n,
-             jsonb_array_elements(n.payload -> 'appnews' -> 'newsitems') as item
-        where item ->> 'feedname' not in ('SteamDB')
-          -- фид платформы живёт в core.dim_platform_event, игры для него
-          -- в dim_game нет - в fct_patch он давал только заглушки Unknown
-          and n.app_id <> %s
-        {app_filter}
-        order by item ->> 'gid', n.app_id, n.fetched_at desc
+        select d.*, coalesce(g.game_sk, -1) as game_sk
+        from (
+            select distinct on (item ->> 'gid', n.app_id)
+                n.app_id,
+                item ->> 'gid'      as gid,
+                item ->> 'title'    as title,
+                item ->> 'url'      as url,
+                item ->> 'feedname' as feedname,
+                (item ->> 'feed_type')::int as feed_type,
+                length(item ->> 'contents') as body_length,
+                to_timestamp((item ->> 'date')::bigint) as published_at
+            from raw.news n,
+                 jsonb_array_elements(n.payload -> 'appnews' -> 'newsitems') as item
+            where item ->> 'feedname' not in ('SteamDB')
+              -- фид платформы живёт в core.dim_platform_event, игры для
+              -- него в dim_game нет - в fct_patch он давал только заглушки
+              and n.app_id <> %s
+            {app_filter}
+            order by item ->> 'gid', n.app_id, n.fetched_at desc
+        ) d
+        left join core.dim_game g
+               on g.app_id = d.app_id
+              and d.published_at >= g.valid_from
+              and d.published_at <  g.valid_to
     """, params).fetchall()
 
     inserted = 0
@@ -41,7 +51,6 @@ def load_all(conn, app_id=None):
         else:
             version, kind = None, "press"
 
-        game_sk = find_game_sk(conn, r["app_id"], r["published_at"])
         date_sk = int(r["published_at"].strftime("%Y%m%d"))
 
         conn.execute(
@@ -62,7 +71,7 @@ def load_all(conn, app_id=None):
                 version = excluded.version,
                 body_length = excluded.body_length
             """,
-            (r["gid"], game_sk, date_sk, r["published_at"], r["title"],
+            (r["gid"], r["game_sk"], date_sk, r["published_at"], r["title"],
              r["url"], r["feed_type"], r["feedname"], r["body_length"],
              kind == "patch", kind, version),
         )
