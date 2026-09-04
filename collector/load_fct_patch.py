@@ -86,7 +86,7 @@ def load_all(conn, app_id=None):
         -- медиана по app_id, а не по game_sk: иначе у игры
         -- с несколькими версиями SCD2 веса внутри одной игры
         -- переставали быть сравнимыми - decisions.md, запись 027
-        with medians as (
+        with patch_medians as (
             select g.app_id,
                    (percentile_cont(0.5)
                       within group (order by p.body_length))::numeric as med
@@ -94,6 +94,25 @@ def load_all(conn, app_id=None):
             join core.dim_game g on g.game_sk = p.game_sk
             where p.body_length > 0 and p.event_type = 'patch'
             group by g.app_id
+        ),
+        -- запасная база на случай, когда классификатор не распознал
+        -- у игры ни одного патча: без неё шкала веса обнуляется целиком.
+        -- Заглушка Unknown сюда не идёт - это не игра
+        all_medians as (
+            select g.app_id,
+                   (percentile_cont(0.5)
+                      within group (order by p.body_length))::numeric as med
+            from core.fct_patch p
+            join core.dim_game g on g.game_sk = p.game_sk
+            where p.body_length > 0 and g.app_id > 0
+            group by g.app_id
+        ),
+        -- базы не смешиваются: есть хоть один патч - медиана только
+        -- по патчам, иначе веса внутри игры перестанут быть сравнимыми
+        medians as (
+            select a.app_id, coalesce(pm.med, a.med) as med
+            from all_medians a
+            left join patch_medians pm on pm.app_id = a.app_id
         )
         update core.fct_patch p
         set weight = round(p.body_length::numeric / greatest(m.med, 1), 2)
