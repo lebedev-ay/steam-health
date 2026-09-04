@@ -203,29 +203,24 @@ def data():
             "error": f"sensitivity - число от {SENSITIVITY_MIN} до {SENSITIVITY_MAX}"
         }), 400
 
+    # дневной агрегат уже посчитан витриной; календарь нужен, чтобы
+    # дни без отзывов попадали в ряд нулями, а не выпадали из него
     raw_daily = query("""
         with bounds as (
-            select min(created_date) as d_from, max(created_date) as d_to
-            from marts.review_flat
+            select min(day) as d_from, max(day) as d_to
+            from marts.review_daily
             where app_id = %s
         ),
         calendar as (
             select generate_series(d_from, d_to, interval '1 day')::date as day
             from bounds
-        ),
-        actual as (
-            select created_date as day,
-                   count(*) as total,
-                   count(*) filter (where voted_up) as positive
-            from marts.review_flat
-            where app_id = %s
-            group by 1
         )
         select c.day,
-               coalesce(a.total, 0) as total,
-               coalesce(a.positive, 0) as positive
+               coalesce(d.review_count, 0) as total,
+               coalesce(d.positive_count, 0) as positive
         from calendar c
-        left join actual a on a.day = c.day
+        left join marts.review_daily d
+               on d.app_id = %s and d.day = c.day
         order by c.day
     """, (app_id, app_id))
 
