@@ -144,7 +144,11 @@ function renderChangePointList(cps, range) {
   const el = document.getElementById('cpList');
 
   if (!cps.length) {
-    el.innerHTML = '<div class="cp-empty">переломов не найдено</div>';
+    const note = document.createElement('div');
+    note.className = 'cp-empty';
+    note.textContent = (lastData && lastData.change_points_note)
+      || 'переломов не найдено';
+    el.replaceChildren(note);
     return;
   }
 

@@ -23,12 +23,14 @@ def query(sql, params=()):
 # на ровном ряде разброс сдвигов нулевой, порог тоже, и нестрогое
 # сравнение объявляло переломом каждый день с нулевым сдвигом
 MIN_SHIFT_PP = 1.0
+MIN_SCORED_DAYS = 30
 
 
 def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
     """
     Ищет точки перелома: где среднее ПОСЛЕ заметно отличается
     от среднего ДО. sensitivity - сколько сигм считать переломом.
+    Возвращает найденные точки и причину, если искать было не на чем.
     """
     n = len(smoothed)
     scores = [None] * n
@@ -45,8 +47,9 @@ def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
         scores[i] = sum(after) / len(after) - sum(before) / len(before)
 
     clean = [abs(s) for s in scores if s is not None]
-    if len(clean) < 30:
-        return []
+    if len(clean) < MIN_SCORED_DAYS:
+        return [], (f"мало данных: сдвиг посчитан для {len(clean)} дней из {n}, "
+                    f"детектору нужно не меньше {MIN_SCORED_DAYS}")
 
     mean = sum(clean) / len(clean)
     var = sum((x - mean) ** 2 for x in clean) / len(clean)
@@ -65,7 +68,7 @@ def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
         if all(abs(i - j) >= min_gap for j, _ in chosen):
             chosen.append((i, score))
 
-    return sorted(chosen)
+    return sorted(chosen), None
 
 
 # см. decisions.md, запись 022 - почему перелом бывает необъяснимым
@@ -212,6 +215,7 @@ def data():
     if not raw_daily:
         return jsonify({
             "daily": [], "events": [], "change_points": [],
+            "change_points_note": "по этой игре ещё нет собранных отзывов",
             "platform_events": [], "window": 0, "median_volume": 0
         })
 
@@ -298,7 +302,7 @@ def data():
         order by event_date
     """, (raw_daily[0]["day"], raw_daily[-1]["day"]))
 
-    change_points = find_change_points(smoothed, sensitivity=sensitivity)
+    change_points, cp_note = find_change_points(smoothed, sensitivity=sensitivity)
 
     cp_out = []
     for idx, score in change_points:
@@ -357,6 +361,7 @@ def data():
             for e in platform_events
         ],
         "change_points": cp_out,
+        "change_points_note": cp_note,
     })
 
 
