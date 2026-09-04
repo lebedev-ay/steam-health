@@ -6,7 +6,7 @@ from psycopg.rows import dict_row
 
 from db import DSN, read_games
 
-# события за прошлые годы должны находить свою версию, а не улетать
+# события за прошлые годы должны находить свою версию, иначе улетят
 # в заглушку Unknown - см. decisions.md, запись 006
 FIRST_VERSION_FROM = datetime(2000, 1, 1, tzinfo=timezone.utc)
 

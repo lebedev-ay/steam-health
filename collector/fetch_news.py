@@ -64,7 +64,6 @@ def collect(conn, app_id, name, max_pages, mode):
         gids = [item["gid"] for item in news]
 
         if any(g not in known for g in gids):
-            # хотя бы один gid новый - страницу стоит сохранить
             conn.execute(
                 "insert into raw.news (app_id, payload) values (%s, %s)",
                 (app_id, json.dumps(data)),

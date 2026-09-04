@@ -97,9 +97,9 @@ def load_all(conn, app_id=None):
     app_filter = "where r.app_id = %s" if app_id is not None else ""
     params = (app_id,) if app_id is not None else ()
 
-    # версия игры на момент отзыва ищется одним join, а не запросом
-    # на каждый отзыв. Пересечение интервалов SCD2 задвоило бы строки,
-    # но оно запрещено ограничением из V30 - см. decisions.md, запись 034
+    # версия игры на момент отзыва ищется одним join. Задвоить строки
+    # могло бы только пересечение интервалов SCD2, запрещённое
+    # ограничением из V30 - см. decisions.md, запись 034
     conn.execute("drop table if exists tmp_review")
     conn.execute(f"""
         create temporary table tmp_review as

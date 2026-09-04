@@ -19,8 +19,8 @@ const PLATFORM_TYPES = {
   fest:   { bandColor: '#6f8f96', markerColor: '#4fc3d9', label: 'Steam Fest' }
 };
 
-// короткое имя события из заголовка заметки: в тултипе нужен
-// "Steam Summer Sale", а не весь пресс-заголовок
+// в тултипе показывается короткое имя вроде "Steam Summer Sale"
+// вместо всего пресс-заголовка
 function platformEventLabel(e) {
   if (e.type === 'awards') return 'Steam Awards';
 
@@ -128,7 +128,7 @@ function mainEventLabel(c) {
 }
 
 // границы оси Plotly пишет в своём формате и со временем, поэтому
-// сравнение строк ловило бы различия записи, а не диапазона
+// сравнение строк ловило бы различия записи вместо различий диапазона
 function sameRange(a, b) {
   if (!a || !b) return a === b;
   return Date.parse(a[0]) === Date.parse(b[0])
@@ -144,8 +144,8 @@ function dayInRange(day, range) {
   return day >= lo && day <= hi;
 }
 
-// cps приходит ПОЛНЫМ списком, не отфильтрованным: data-idx строки
-// должен остаться индексом в нём же, по нему ищется ромб на графике
+// cps приходит полным списком: data-idx строки обязан остаться
+// индексом в нём же, по нему ищется ромб на графике
 function renderChangePointList(cps, range) {
   const el = document.getElementById('cpList');
 
@@ -249,7 +249,6 @@ function renderChart(range) {
   const cpIndex = {};
   days.forEach((d, i) => cpIndex[d] = i);
 
-  // события по дням - только те, что проходят фильтр плотности
   const visibleEvents = data.events.filter(keepEvent);
 
   const byDay = {};
@@ -257,7 +256,6 @@ function renderChart(range) {
     (byDay[e.day] = byDay[e.day] || []).push(e);
   });
 
-  // фоновые полосы игровых событий - по дню публикации
   const eventShapes = Object.entries(byDay).map(([day, items]) => ({
     type: 'rect',
     x0: day, x1: shiftDay(day, 1),
@@ -303,7 +301,7 @@ function renderChart(range) {
     hovertemplate: '%{x|%d.%m.%Y}<br>%{text}<extra></extra>'
   };
 
-  // тонкие стебли от маркера перелома вниз к оси - точнее видно дату
+  // стебель до оси помогает точнее прочесть дату перелома
   const cpStems = cps
     .filter(c => values[cpIndex[c.day]] !== undefined && values[cpIndex[c.day]] !== null)
     .map(c => ({
@@ -490,9 +488,9 @@ function renderChart(range) {
     legend: { orientation: 'h', y: 1.10, bgcolor: 'rgba(0,0,0,0)' }
   }, { responsive: true });
 
-  // копией, а не ссылкой: переданный массив Plotly держит как свой
-  // xaxis.range и меняет на месте, поэтому сравнение с ним в
-  // обработчике ниже всегда давало равенство и гасило перерисовку
+  // копия обязательна: переданный массив Plotly держит как свой
+  // xaxis.range и меняет на месте, так что ссылка на него всегда
+  // сравнивалась бы сама с собой
   lastRenderedRange = effectiveRange ? effectiveRange.slice() : null;
 
   // zoom, pan, rangeslider и кнопки периода приходят сюда одним
@@ -522,8 +520,8 @@ async function load() {
     `&min_weight=${minWeight}&sensitivity=${sensitivity}`);
   const body = await res.json().catch(() => null);
 
-  // на 400 и 500 в теле лежит {error}, а не ряд: рисовать нечего,
-  // и текст сервера полезнее, чем падение на data.daily
+  // на 400 и 500 в теле лежит {error}: рисовать нечего, и текст
+  // сервера полезнее падения на data.daily
   if (!res.ok || !body || !body.daily) {
     throw new Error((body && body.error) || `сервер ответил ${res.status}`);
   }
