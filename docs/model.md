@@ -1,42 +1,43 @@
 # Модель данных
 
-`raw` хранит ответы Steam API как есть, append-only, без единой
-трансформации. `core` — размерная модель (звезда): измерения
-и факты, дедуплицированные и типизированные. `marts` — витрины
-поверх core, из них читает дашборд. Разделение
-нужно, чтобы дедупликация и разбор JSON происходили один раз
-при загрузке, а не на каждый запрос витрины (см. [decisions.md](decisions.md), запись 017).
+Что где лежит и с каким зерном. Почему именно так - в
+[decisions.md](decisions.md), сюда вынесены только ссылки на номера записей.
 
-## Слои и потоки данных
+`raw` хранит ответы Steam API как есть, append-only. `core` - размерная
+модель: измерения и факты, дедуплицированные и типизированные. `marts` -
+витрины поверх core, из них читает дашборд. Разделение нужно, чтобы
+дедупликация и разбор JSON происходили один раз при загрузке, а не на каждый
+запрос витрины (запись 017).
+
+## Потоки данных
 
 ```mermaid
 flowchart TD
     subgraph steam["Steam API"]
         API_REV["appreviews"]
-        API_NEWS["ISteamNews/GetNewsForApp"]
-        API_DET["/api/appdetails"]
-        API_PLAT["ISteamNews/GetNewsForApp<br>appid 753 (платформа)"]
+        API_NEWS["GetNewsForApp"]
+        API_DET["appdetails"]
+        API_PLAT["GetNewsForApp<br>appid 753"]
     end
 
     subgraph rawschema["raw"]
-        RAW_REV[("raw.reviews")]
-        RAW_NEWS[("raw.news")]
-        RAW_DET[("raw.appdetails")]
+        RAW_REV[("reviews")]
+        RAW_NEWS[("news")]
+        RAW_DET[("appdetails")]
     end
 
     subgraph coreschema["core"]
-        C_GAME[("core.dim_game")]
-        C_REVIEW[("core.fct_review")]
-        C_TEXT[("core.review_text")]
-        C_PATCH[("core.fct_patch")]
-        C_PLATFORM[("core.dim_platform_event")]
+        C_GAME[("dim_game")]
+        C_REVIEW[("fct_review")]
+        C_TEXT[("review_text")]
+        C_PATCH[("fct_patch")]
+        C_PLATFORM[("dim_platform_event")]
     end
 
     subgraph martsschema["marts"]
-        M_FLAT[("marts.review_flat")]
-        M_DAILY[("marts.review_daily")]
-        M_IMPACT[("marts.patch_impact")]
-        M_CUR[("marts.dim_game_current")]
+        M_FLAT[("review_flat")]
+        M_DAILY[("review_daily")]
+        M_CUR[("dim_game_current")]
     end
 
     WEB["web/app.py"]
@@ -49,243 +50,192 @@ flowchart TD
     RAW_REV -->|"load_fct_review.py"| C_REVIEW
     RAW_REV -->|"load_fct_review.py"| C_TEXT
     RAW_DET -->|"load_dim_game.py"| C_GAME
-    RAW_NEWS -->|"load_fct_patch.py + classify_news.classify()"| C_PATCH
+    RAW_NEWS -->|"load_fct_patch.py"| C_PATCH
     RAW_NEWS -->|"fetch_platform_events.load_all()"| C_PLATFORM
 
     C_REVIEW --> M_FLAT
     C_GAME --> M_FLAT
     C_GAME --> M_CUR
-    C_PATCH --> M_IMPACT
     M_FLAT --> M_DAILY
-    M_DAILY --> M_IMPACT
 
-    M_FLAT --> WEB
-    M_IMPACT --> WEB
+    M_DAILY --> WEB
     M_CUR --> WEB
+    C_PATCH -->|"события для графика"| WEB
     C_PLATFORM -->|"напрямую, мимо marts"| WEB
 ```
 
-Подробная версия с обязательным порядком загрузчиков и веткой
-фоновой задачи (`web/tasks.py`) — [docs/er/pipeline.drawio](er/pipeline.drawio).
+Подробная версия с порядком загрузчиков и веткой фоновой задачи -
+[pipeline.drawio](er/pipeline.drawio).
 
-Особенности, которые не видны из схемы:
+Вне схемы: `classify_news.py` - модуль с регулярками, его `classify()`
+вызывает `load_fct_patch.py`; `migrate.py` применяет файлы из
+`db/migration/` и ведёт `public.schema_history` (в нумерации пропущен V22,
+запись 018). `load_fct_review.py` нужно перезапускать после каждого сбора
+отзывов, иначе `core` отстаёт от `raw`.
 
-- `classify_news.py` не пишет в базу сам — это модуль с регулярками
-  и функцией `classify()`, которую вызывает `load_fct_patch.py` при
-  загрузке. У `classify_news.py` есть свой `main()`, но он только
-  печатает распределение типов на экран — диагностика, а не часть
-  пайплайна.
-- `migrate.py` вне этой схемы: применяет файлы из `db/migration/`
-  и ведёт `public.schema_history`.
-  В нумерации миграций есть пропуск: файла V22 нет, `migrate.py`
-  сортирует по номеру версии и такой пропуск переживает (запись 018).
-- Обязательный порядок: `load_fct_review.py` нужно перезапускать
-  после каждого сбора отзывов, иначе `core` отстаёт от `raw`
-  (см. TODO.md).
+## Звезда в core
 
-## Ядро: звезда в core
+```mermaid
+erDiagram
+    dim_game ||--o{ fct_review : "game_sk"
+    dim_game ||--o{ fct_patch : "game_sk"
+    dim_date ||--o{ fct_review : "date_sk"
+    dim_date ||--o{ fct_patch : "date_sk"
+    dim_time ||--o{ fct_review : "time_sk"
+    dim_language ||--o{ fct_review : "language_sk"
+    fct_review ||--|| review_text : "review_sk"
 
-ER-диаграмма — [docs/er/core.drawio](er/core.drawio). GitHub
-`.drawio` не рендерит - открыть можно в VS Code (расширение
-Draw.io Integration) или на [diagrams.net](https://app.diagrams.net/).
-Таблицы, нарисованные вручную и заполненные данными
-(`dim_game`, `dim_date`, `dim_time`, `dim_language`, `fct_review`,
-`fct_patch`, `review_text`), — обычным цветом; `dim_company`,
-`dim_genre`, `dim_category` и три моста `bridge_game_*` — серым.
-Серый цвет остался с тех пор, когда они были пусты: с записи 035
-они заполняются, диаграмма это ещё не отражает. `dim_window` заполняется
-(миграцией), но не связана с фактами через FK - она в стороне,
-с пометкой о `cross join` в `marts.patch_impact`.
+    dim_game {
+        int game_sk PK
+        int app_id "не уникален, SCD2"
+        timestamptz valid_from
+        timestamptz valid_to
+    }
+    fct_review {
+        bigint review_sk PK
+        bigint recommendation_id UK
+        timestamptz created_at
+    }
+    fct_patch {
+        bigint patch_sk PK
+        text gid "UK вместе с game_sk"
+        timestamptz published_at
+        numeric weight
+    }
+    review_text {
+        bigint review_sk PK
+    }
+    dim_date {
+        int date_sk PK
+    }
+    dim_time {
+        int time_sk PK
+    }
+    dim_language {
+        int language_sk PK
+        text language_code
+    }
+```
 
-Все таблицы — в схеме `core`. По каждой:
+Атрибуты игры вынесены отдельной диаграммой: восемнадцать таблиц в одной
+читать невозможно.
 
-- **dim_game** — измерение игры, SCD2. Зерно: одна строка на
-  версию атрибутов игры (`app_id` не уникален, уникален
-  `app_id` среди строк с `is_current`). Новая версия появляется,
-  когда меняются отслеживаемые поля (метакритик-оценка, тип
-  приложения, статус раннего доступа и т.д.) - тогда старая
-  строка получает `valid_to`, новая — `valid_from`. Строка
-  `game_sk = -1, app_id = -1` — заглушка для фактов без
-  распознанной игры. Пересечение интервалов `[valid_from,
-  valid_to)` двух версий одного `app_id` запрещено ограничением
-  исключения на уровне таблицы (миграция V30) — см.
-  [decisions.md](decisions.md), запись 025.
-- **dim_date** — календарь на 2012–2030, заполняется целиком
-  миграцией V2, без ETL.
-- **dim_time** — 24 строки, час 0–23, заполняется целиком
-  миграцией V3, без ETL.
-- **dim_language** — код и имя языка отзыва. Заполняется
-  «на лету» из `load_fct_review.py`: язык, которого ещё нет,
-  вставляется при первой встрече. Строка `language_sk = -1`
-  — заглушка на случай пустого поля `language`. Колонка
-  `language_name` не заполняется никогда - Steam API отдаёт
-  только код языка (`schinese`, `russian`), человекочитаемое имя
-  неоткуда взять без отдельного справочника, который не заводили.
-- **dim_window** — 7 фиксированных окон до/после патча
-  (`before_28` … `after_14`), заполняется целиком миграцией V12.
-  Не связана ни с одним фактом через FK - используется в
-  `marts.patch_impact` через `cross join`.
-- **dim_company / dim_genre / dim_category** — справочники
-  разработчика/издателя, жанра, категории. Заполняются
-  `load_dim_game.py` из `raw.appdetails` (поля `developers`,
-  `publishers`, `genres`, `categories`). `genre_sk` и `category_sk`
-  — идентификаторы самого Steam, `company_sk` свой серийный:
-  компанию Steam отдаёт строкой без id.
-- **fct_review** — транзакционный факт с элементами accumulating
-  snapshot: зерно — один отзыв (`recommendation_id` уникален).
-  У отзыва есть три временных вехи (`created_at`, `updated_at`,
-  `dev_responded_at`), которые дозаполняются по мере жизни отзыва
-  — это и есть накопительный снимок. Мутируемые меры (`votes_up`,
-  `votes_funny`, `comment_count`, `weighted_vote_score`,
-  `is_voted_up`) обновляются через `on conflict do update`
-  при повторной загрузке. Колонка `refunded` не заполняется
-  никогда - Steam API её в ответе не отдаёт вовсе, поле
-  спроектировано на будущее. Собирается не вся история отзывов —
-  см. «Известные особенности».
-- **review_text** — текст отзыва отдельно от `fct_review`
-  (1:1 по `review_sk`), чтобы не таскать длинный текст в каждый
-  join с фактом.
-- **fct_patch** — транзакционный факт: зерно — одна новость Steam
-  (патч, анонс, пресса и т.д.), `gid` — натуральный ключ новости,
-  уникален. Глубина истории ограничена тем, что вообще отдаёт
-  Steam через `GetNewsForApp`. До постраничного обхода назад
-  по времени (см. [decisions.md](decisions.md), запись 028) часть
-  игр упиралась в потолок одного запроса - реально обрезаны были
-  четыре игры из 21 (Baldur's Gate 3, Cyberpunk 2077, Destiny 2,
-  Rust), у остальных близкие к 500 значения оказались их настоящим
-  объёмом, не обрезкой. 497 строк здесь — с `game_sk = -1`:
-  `load_fct_patch.py` читает `raw.news` без фильтра по `app_id`
-  и грузит заодно фид платформы (appid 753), для которого игры
-  в `dim_game` нет. Заглушка `Unknown` из V4 отрабатывает по
-  назначению - факт без опознанной игры не теряется и не ломает
-  загрузку.
-- **bridge_game_company / bridge_game_genre / bridge_game_category**
-  — факты без мер (factless fact), мосты many-to-many между игрой
-  и компанией/жанром/категорией. Заполняются `load_dim_game.py`
-  вместе со справочниками и всегда на текущий `game_sk`: новая
-  версия SCD2 получает свои мосты, у закрытых остаются те, что были
-  на их момент — см. [decisions.md](decisions.md), запись 035.
-- **dim_platform_event** — события платформы Steam целиком
-  (распродажи, Steam Awards, Next Fest), не игры: нет `game_sk`
-  и вообще никакой связи с остальной звездой — как `dim_window`,
-  она тоже сама по себе. Заполняется `fetch_platform_events.py`
-  из фида appid 753 (служебный, не игра). `event_date` — дата
-  публикации заметки, а не начала события — см. decisions.md,
-  запись 023, там же реальная точность по проверке на трёх датах.
+```mermaid
+erDiagram
+    dim_game ||--o{ bridge_game_company : "game_sk"
+    dim_game ||--o{ bridge_game_genre : "game_sk"
+    dim_game ||--o{ bridge_game_category : "game_sk"
+    dim_company ||--o{ bridge_game_company : "company_sk"
+    dim_genre ||--o{ bridge_game_genre : "genre_sk"
+    dim_category ||--o{ bridge_game_category : "category_sk"
+
+    dim_company {
+        int company_sk PK
+        text company_name UK
+    }
+    dim_genre {
+        int genre_sk PK "id от Steam"
+    }
+    dim_category {
+        int category_sk PK "id от Steam"
+    }
+    bridge_game_company {
+        int game_sk PK
+        int company_sk PK
+        text role PK "developer, publisher"
+    }
+    bridge_game_genre {
+        int game_sk PK
+        int genre_sk PK
+    }
+    bridge_game_category {
+        int game_sk PK
+        int category_sk PK
+    }
+```
+
+Нарисованная от руки версия - [core.drawio](er/core.drawio); GitHub `.drawio`
+не рендерит, открывается в VS Code или на diagrams.net.
+
+Зерно и особенности по таблицам:
+
+- **dim_game** - одна строка на версию атрибутов игры, SCD2. `app_id`
+  уникален только среди `is_current`. Строка `game_sk = -1` - заглушка для
+  фактов без распознанной игры. Пересечение интервалов
+  `[valid_from, valid_to)` запрещено ограничением исключения (V30,
+  запись 025). `valid_from` первой версии - 2000 год (запись 006).
+- **fct_review** - один отзыв. Три временные вехи (`created_at`,
+  `updated_at`, `dev_responded_at`) дозаполняются по мере жизни отзыва,
+  мутируемые меры обновляются через `on conflict do update`. Колонка
+  `refunded` не заполняется: Steam её не отдаёт.
+- **fct_patch** - пара «событие - игра». Уникален не `gid`, а
+  `(gid, game_sk)`: одна новость Steam может относиться к нескольким играм,
+  и для каждой это свой факт со своим весом (V34).
+- **dim_date**, **dim_time** заполняются целиком миграциями V2 и V3,
+  без ETL. **dim_language** - на лету при первой встрече языка;
+  `language_name` пуст, Steam отдаёт только код.
+- **Справочники и мосты** заполняет `load_dim_game.py` из `raw.appdetails`
+  (запись 035), мосты пишутся на текущий `game_sk`.
+- **dim_platform_event** - события платформы целиком. Ни `game_sk`,
+  ни связи с остальной звездой: это не игра. `event_date` - дата
+  публикации заметки, не начала события (запись 023).
 
 ## Витрины marts
 
-Витрины описаны моделями в `dbt/models/`, не миграциями - здесь
-только что каждая делает и откуда берёт данные, точные определения
-смотреть там. Комментарий на схему marts — `'Витрины, владелец —
-dbt'` — стоит в миграции V1 с самого начала проекта, задолго
-до того, как в проекте появился dbt: было заявлено авансом,
-теперь стало правдой.
+Описаны моделями в `dbt/models/`, точные определения смотреть там.
 
-- **review_flat** — плоский список отзывов: `app_id`, `review_id`,
-  `created_at`, `voted_up`, `language_code`, `created_date`.
-  Строится из `core.fct_review` + `core.dim_game` + `core.dim_language`
-  (суррогатные ключи разворачиваются в натуральные для удобства
-  остальных витрин). До миграции V21 читала `raw.reviews` напрямую
-  через `jsonb_array_elements` — подробности в decisions.md,
-  запись 017.
-- **review_daily** — дневной агрегат отзывов по игре: `app_id`,
-  `day`, `review_count`, `positive_count`. Строится группировкой
-  `marts.review_flat` по игре и дате, 9232 строки. Снимает
-  диапазонное соединение отдельных отзывов с окнами в
-  `patch_impact` - было 2.1 млрд промежуточных строк и 464
-  секунды сборки, стало равенство по `(app_id, day)` на готовых
-  дневных суммах — см. decisions.md, запись 030.
-- **patch_impact** — по каждому патчу/событию и каждому окну
-  из `dim_window`: число отзывов и число позитивных в этом окне,
-  флаг `window_complete` (окно не обрезано границей собранных
-  данных). Окна календарные: пара «событие + окно» разворачивается
-  в список дат через `generate_series` и складывается
-  с `marts.review_daily` по равенству `(app_id, day)`. День самого
-  события не входит ни в `before`, ни в `after` - для патча,
-  вышедшего 5 марта, `after_3` это 6, 7 и 8 марта целиком, не
-  72 часа от момента публикации, как считалось раньше. Строится
-  из `core.fct_patch` + `core.dim_game` + `core.dim_window`,
-  агрегируя `marts.review_daily` — см. decisions.md, запись 030.
-  Меры окон (`review_count`, `positive_count`, `window_complete`)
-  читает таблица влияния событий (`/api/event_impact`) — окна
-  `before_7`/`after_7` одного патча, сравнение доли позитива до
-  и после. Маркеры и полосы на самом графике берут из этой же
-  витрины только дату, тип, заголовок и вес, без окон — см.
-  decisions.md, записи 015 и 026 (числа там посчитаны по прежней,
-  временной семантике окон, до записи 030).
-- **dim_game_current** — по одной строке на игру: текущая версия
-  из `core.dim_game` (`is_current` и `app_id > 0`, реальные игры
-  без заглушки). Нужна, потому что `core.dim_game` — SCD2
-  и `app_id` там не уникален; для списка игр в интерфейсе
-  и для join «один к одному» нужен именно текущий срез.
+- **review_flat** - плоский список отзывов с натуральными ключами вместо
+  суррогатных: `app_id`, `review_id`, `created_at`, `voted_up`,
+  `language_code`, `created_date`. Заглушка `app_id = -1` отфильтрована.
+- **review_daily** - дневной агрегат по игре: `app_id`, `day`,
+  `review_count`, `positive_count`. Дашборд берёт дневной ряд отсюда,
+  а не пересчитывает его на каждый запрос.
+- **dim_game_current** - по строке на игру, текущая версия из `dim_game`
+  без заглушки. Нужна, потому что `app_id` в SCD2 не уникален (запись 012).
 
-## Что заполняется, а что нет
+Витрины окон здесь больше нет: `patch_impact` удалена в V33 вместе
+с таблицей влияния событий, список событий для графика дашборд читает прямо
+из `core.fct_patch`.
 
-Снимок на 2026-08-31 - таблицы растут по мере сбора, конкретные
-числа дальше устареют. Порядок величины и какие таблицы вообще
-заполняются — не устареет.
+## Что заполняется
 
-| Таблица | Заполняется чем | Статус |
+Снимок на 2026-09-04. Числа устареют, порядок величины - нет.
+
+| Таблица | Чем заполняется | Строк |
 |---|---|---|
-| `raw.reviews` | `fetch_reviews.py` | Растёт по мере сбора, 13853 строк на снимок |
-| `raw.news` | `fetch_news.py` + `fetch_platform_events.py` | Растёт по мере сбора, 82 строки на снимок |
-| `raw.appdetails` | `fetch_appdetails.py` | 24 строки на 21 игру (часть переснята повторно) |
-| `core.dim_game` | `load_dim_game.py` (SCD2) + заглушка -1 из миграции V4 | Заполнена, 23 версии на 21 игру |
-| `core.dim_date` | миграция V2 | Заполнена целиком при миграции |
-| `core.dim_time` | миграция V3 | Заполнена целиком при миграции (24 строки) |
-| `core.dim_language` | `load_fct_review.py` (find-or-create) + заглушка -1 из V5 | Заполнена, 32 языка |
-| `core.dim_window` | миграция V12 | Заполнена целиком при миграции (7 строк) |
-| `core.dim_company` | `load_dim_game.py` из `raw.appdetails` | Заполнена, 26 компаний |
-| `core.dim_genre` | `load_dim_game.py` из `raw.appdetails` | Заполнена, 10 жанров (id от Steam) |
-| `core.dim_category` | `load_dim_game.py` из `raw.appdetails` | Заполнена, 52 категории (id от Steam) |
-| `core.bridge_game_company` | `load_dim_game.py` | Заполнен, 43 строки на снимок |
-| `core.bridge_game_genre` | `load_dim_game.py` | Заполнен, 67 строк на снимок |
-| `core.bridge_game_category` | `load_dim_game.py` | Заполнен, 396 строк на снимок |
-| `core.fct_review` | `load_fct_review.py` | Растёт по мере сбора, 967094 строк на снимок; до ~50 тыс. свежих отзывов на игру, не вся история — см. «Известные особенности» |
-| `core.review_text` | `load_fct_review.py` | Заполнена вместе с `fct_review` |
-| `core.fct_patch` | `load_fct_patch.py` | Растёт по мере сбора, 13358 строк на снимок |
-| `core.dim_platform_event` | `fetch_platform_events.py` | Заполнена, 80 строк на снимок |
+| `raw.reviews` | `fetch_reviews.py` | 21 446 |
+| `raw.news` | `fetch_news.py`, `fetch_platform_events.py` | 85 |
+| `raw.appdetails` | `fetch_appdetails.py` | 29 |
+| `core.dim_game` | `load_dim_game.py` + заглушка из V4 | 23 версии на 21 игру |
+| `core.dim_date` | миграция V2 | 10 227 |
+| `core.dim_time` | миграция V3 | 24 |
+| `core.dim_language` | `load_fct_review.py` + заглушка из V5 | 32 |
+| `core.dim_company` | `load_dim_game.py` | 26 |
+| `core.dim_genre` | `load_dim_game.py` | 10 |
+| `core.dim_category` | `load_dim_game.py` | 52 |
+| `core.bridge_game_company` | `load_dim_game.py` | 43 |
+| `core.bridge_game_genre` | `load_dim_game.py` | 67 |
+| `core.bridge_game_category` | `load_dim_game.py` | 396 |
+| `core.fct_review` | `load_fct_review.py` | 1 439 966 |
+| `core.review_text` | `load_fct_review.py` | 1 439 966 |
+| `core.fct_patch` | `load_fct_patch.py` | 13 418 |
+| `core.dim_platform_event` | `fetch_platform_events.py` | 80 |
+| `marts.review_flat` | dbt | 1 439 966 |
+| `marts.review_daily` | dbt | 10 578 |
+| `marts.dim_game_current` | dbt | 21 |
 
 ## Известные особенности
 
-- **Собираем не всю историю отзывов, а до ~50 тысяч свежих
-  на игру.** Для менее популярных игр это вся история, для
-  крупных — только последние месяцы. Осознанно: задаче нужна
-  плотность отзывов рядом с патчем, чтобы найти сдвиг настроения,
-  а не полный архив с релиза. Следствие — `window_complete`
-  в `patch_impact` помечает события старше границы сбора как
-  необсчитываемые, и таблица влияния событий (`/api/event_impact`)
-  показывает только то, что попало в собранный период.
-- **SCD2 в dim_game, `valid_from` первой версии игры — 2000 год.**
-  Первая версия игры получает открытую нижнюю границу
-  (`FIRST_VERSION_FROM` в `load_dim_game.py`): игра существовала
-  до начала сбора, и события за прошлые годы должны находить свою
-  версию, а не улетать в заглушку `Unknown` — см.
-  [decisions.md](decisions.md), запись 006. При SCD2-изменении
-  новая версия по-прежнему получает `valid_from = now()`, момент
-  изменения известен.
-- **Связь патч ↔ отзыв — не через FK, а вычисляется по времени**
-  (день отзыва совпадает с одной из календарных дат окна
-  `published_at + day_from/day_to`, день самого события в окно
-  не входит — запись 030) — см. [decisions.md](decisions.md),
-  запись 010. Отзыв не привязан к конкретному патчу: игрок мог
-  написать через год после десяти патчей подряд.
-- **Доли не хранятся, только числитель и знаменатель**
-  (`review_count`/`positive_count` в витринах, а не готовый
-  процент) - среднее от долей по дням искажает картину, когда
-  дни отличаются по объёму отзывов на порядки — см.
-  [decisions.md](decisions.md), запись 008.
-- **dim_game_current существует отдельно от dim_game**, потому
-  что `dim_game` — SCD2, и `app_id` там не уникален: прямой join
-  на «текущую» игру даёт задвоение или требует условие на
-  `valid_from`/`valid_to` в каждом запросе. Изначально понадобился
-  при работе с Power BI, где такая связь ломает модель данных
-  вовсе — см. [decisions.md](decisions.md), запись 012. Сейчас
-  используется и в `web/app.py`, для списка игр в интерфейсе.
-- **`web/app.py` читает `core.dim_platform_event` напрямую, минуя
-  marts** — единственное исключение из «marts — витрины, из них
-  читает дашборд» в начале этого документа. Осознанно: витрина
-  здесь агрегировала бы то, что и так уже готово к чтению (нет
-  игры, по которой считать доли/суммы, нет фактов, с которыми
-  джойнить) — лишний слой без функции.
+- **Собирается не вся история отзывов, а до ~50 тысяч свежих на игру.**
+  Для менее популярных игр это вся история, для крупных - последние месяцы.
+  Задаче нужна плотность отзывов рядом с патчем, а не полный архив
+  с релиза.
+- **Связь патча и отзыва вычисляется по времени, а не через FK**
+  (запись 010). Отзыв не привязан к конкретному патчу: игрок мог написать
+  через год после десяти патчей подряд.
+- **Доли не хранятся, только числитель и знаменатель** (запись 008):
+  среднее от долей по дням искажает картину, когда дни отличаются
+  по объёму на порядки.
+- **`web/app.py` читает `core.dim_platform_event` напрямую, минуя marts** -
+  единственное исключение из «витрины для дашборда». Витрина здесь
+  агрегировала бы то, что и так готово к чтению.
