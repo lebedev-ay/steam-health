@@ -23,17 +23,17 @@ def fetch_page(app_id, enddate=None):
     return steam_api.get(URL, params)
 
 
-def known_gids(conn, app_id, gids):
+def known_gids(conn, app_id):
     # по raw.news, а не по core.fct_patch: загрузчик отбрасывает
-    # SteamDB, и его gid всегда выглядели бы неизвестными
-    if not gids:
-        return set()
+    # SteamDB, и его gid всегда выглядели бы неизвестными.
+    # Один запрос на прогон: разворачивать jsonb всех сохранённых
+    # страниц заново на каждую новую - работа, растущая квадратично
     rows = conn.execute("""
         select distinct item ->> 'gid' as gid
         from raw.news n,
              jsonb_array_elements(n.payload -> 'appnews' -> 'newsitems') as item
-        where n.app_id = %s and item ->> 'gid' = any(%s)
-    """, (app_id, list(gids))).fetchall()
+        where n.app_id = %s
+    """, (app_id,)).fetchall()
     return {r[0] for r in rows}
 
 
@@ -43,6 +43,7 @@ def collect(conn, app_id, name, max_pages, mode):
     enddate = None
     prev_min_date = None
     total = 0
+    known = known_gids(conn, app_id)
 
     for page in range(max_pages):
         data = fetch_page(app_id, enddate)
@@ -61,15 +62,15 @@ def collect(conn, app_id, name, max_pages, mode):
             break
 
         gids = [item["gid"] for item in news]
-        known = known_gids(conn, app_id, gids)
 
-        if len(known) < len(gids):
+        if any(g not in known for g in gids):
             # хотя бы один gid новый - страницу стоит сохранить
             conn.execute(
                 "insert into raw.news (app_id, payload) values (%s, %s)",
                 (app_id, json.dumps(data)),
             )
             conn.commit()
+            known.update(gids)
             total += len(news)
         elif mode == "incremental":
             # всё уже известно, дальше будет только старее -
