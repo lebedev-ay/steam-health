@@ -627,8 +627,14 @@ async function refreshGamesList(appId) {
   if (document.getElementById('game').options.length) loadSafe();
 }
 
+// Celery отдаёт PENDING и для задачи в очереди, и для неизвестного id -
+// различить их нельзя, поэтому ожидание ограничено по времени
+const PENDING_TRIES = 30;
+const POLL_INTERVAL_MS = 2000;
+
 function pollTask(taskId) {
   setCollectRunning(true);
+  let pendingLeft = PENDING_TRIES;
 
   const tick = async () => {
     let body;
@@ -637,7 +643,7 @@ function pollTask(taskId) {
       body = await res.json();
     } catch (e) {
       showCollectProgress('нет связи с сервером, пробую ещё раз…', 'busy');
-      setTimeout(tick, 2000);
+      setTimeout(tick, POLL_INTERVAL_MS);
       return;
     }
 
@@ -645,7 +651,7 @@ function pollTask(taskId) {
       const m = body.meta;
       const extra = m.progress ? ` (${m.progress})` : '';
       showCollectProgress(`шаг ${m.step}/${m.total}: ${m.message}${extra}`, 'busy');
-      setTimeout(tick, 2000);
+      setTimeout(tick, POLL_INTERVAL_MS);
       return;
     }
 
@@ -665,8 +671,15 @@ function pollTask(taskId) {
     }
 
     // PENDING / STARTED - задача в очереди, прогресса ещё нет
+    if (--pendingLeft <= 0) {
+      showCollectProgress('задача не найдена: очередь её не знает, ' +
+        'воркер мог не запуститься', 'error');
+      setCollectRunning(false);
+      localStorage.removeItem(COLLECT_STORAGE_KEY);
+      return;
+    }
     showCollectProgress('задача поставлена в очередь…', 'busy');
-    setTimeout(tick, 2000);
+    setTimeout(tick, POLL_INTERVAL_MS);
   };
 
   tick();
