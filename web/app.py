@@ -25,6 +25,13 @@ def query(sql, params=()):
 MIN_SHIFT_PP = 1.0
 MIN_SCORED_DAYS = 30
 
+# границы параметров /api/data. Верхняя граница сглаживания - порядок
+# длины ряда у тихой игры; за ней окно накрывает всю историю целиком
+SMOOTHING_MAX_DAYS = 91
+SENSITIVITY_MIN = 0.1
+SENSITIVITY_MAX = 10
+MIN_WEIGHT_MAX = 1000
+
 
 def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
     """
@@ -172,19 +179,29 @@ def data():
     smoothing = request.args.get("smoothing", "auto")
     if smoothing not in ("off", "auto"):
         try:
-            int(smoothing)
+            days = int(smoothing)
         except ValueError:
-            return jsonify({"error": "smoothing — off, auto или число дней"}), 400
+            days = None
+        if days is None or not 1 <= days <= SMOOTHING_MAX_DAYS:
+            return jsonify({
+                "error": f"smoothing - off, auto или целое от 1 до {SMOOTHING_MAX_DAYS}"
+            }), 400
 
     try:
         min_weight = float(request.args.get("min_weight", 0))
     except ValueError:
-        return jsonify({"error": "min_weight должен быть числом"}), 400
+        min_weight = None
+    if min_weight is None or not 0 <= min_weight <= MIN_WEIGHT_MAX:
+        return jsonify({"error": f"min_weight - число от 0 до {MIN_WEIGHT_MAX}"}), 400
 
     try:
         sensitivity = float(request.args.get("sensitivity", 1.5))
     except ValueError:
-        return jsonify({"error": "sensitivity должен быть числом"}), 400
+        sensitivity = None
+    if sensitivity is None or not SENSITIVITY_MIN <= sensitivity <= SENSITIVITY_MAX:
+        return jsonify({
+            "error": f"sensitivity - число от {SENSITIVITY_MIN} до {SENSITIVITY_MAX}"
+        }), 400
 
     raw_daily = query("""
         with bounds as (
