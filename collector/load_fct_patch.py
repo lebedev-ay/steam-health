@@ -12,8 +12,10 @@ def load_all(conn, app_id=None):
     app_filter = "and n.app_id = %s" if app_id is not None else ""
     params = (PLATFORM_APP_ID, app_id) if app_id is not None else (PLATFORM_APP_ID,)
 
+    # зерно - пара «событие - игра»: одну заметку про несколько игр
+    # берём по разу на каждую (см. миграцию V34)
     rows = conn.execute(f"""
-        select distinct on (item ->> 'gid')
+        select distinct on (item ->> 'gid', n.app_id)
             n.app_id,
             item ->> 'gid'      as gid,
             item ->> 'title'    as title,
@@ -29,7 +31,7 @@ def load_all(conn, app_id=None):
           -- в dim_game нет - в fct_patch он давал только заглушки Unknown
           and n.app_id <> %s
         {app_filter}
-        order by item ->> 'gid', n.fetched_at desc
+        order by item ->> 'gid', n.app_id, n.fetched_at desc
     """, params).fetchall()
 
     inserted = 0
@@ -48,8 +50,7 @@ def load_all(conn, app_id=None):
                 (gid, game_sk, date_sk, published_at, title, url,
                  feed_type, feedname, body_length, is_patch, event_type, version)
             values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            on conflict (gid) do update set
-                game_sk = excluded.game_sk,
+            on conflict (gid, game_sk) do update set
                 date_sk = excluded.date_sk,
                 published_at = excluded.published_at,
                 title = excluded.title,
