@@ -54,6 +54,15 @@ function truncate(s, n) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
+// заголовки новостей и имена игр приходят из Steam, то есть их пишет
+// кто угодно. Экранируем всё, что подставляется в разметку, которую
+// собираем строкой - тултипы Plotly
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
 // на широком диапазоне мелкие события прячем, иначе сливаются
 // в сплошную полосу; на узком (< 60 дней) показываем всё
 function densityThreshold(days) {
@@ -157,27 +166,40 @@ function renderChangePointList(cps, range) {
     .filter(({ c }) => dayInRange(c.day, range));
 
   if (!visible.length) {
-    el.innerHTML = '<div class="cp-empty">в видимом диапазоне переломов ' +
-      'нет - расширьте диапазон или сбросьте зум двойным кликом</div>';
+    const note = document.createElement('div');
+    note.className = 'cp-empty';
+    note.textContent = 'в видимом диапазоне переломов нет - ' +
+      'расширьте диапазон или сбросьте зум двойным кликом';
+    el.replaceChildren(note);
     return;
   }
 
-  const rows = visible.map(({ c, i }) => {
+  const table = document.createElement('table');
+  const head = table.createTHead().insertRow();
+  ['Дата', 'Напр.', 'Величина', 'Главное событие'].forEach(t => {
+    const th = document.createElement('th');
+    th.textContent = t;
+    head.append(th);
+  });
+
+  const body = table.createTBody();
+  visible.forEach(({ c, i }) => {
     const dir = c.score < 0 ? 'спад' : 'рост';
     const dirClass = c.score < 0 ? 'cp-down' : 'cp-up';
     const dateStr = new Date(c.day + 'T00:00:00').toLocaleDateString('ru-RU');
-    return `<tr class="cp-row" data-idx="${i}">
-      <td>${dateStr}</td>
-      <td class="${dirClass}">${dir}</td>
-      <td class="${dirClass}">${Math.abs(c.score)} п.п.</td>
-      <td>${mainEventLabel(c)}</td>
-    </tr>`;
-  }).join('');
 
-  el.innerHTML = `<table>
-    <thead><tr><th>Дата</th><th>Напр.</th><th>Величина</th><th>Главное событие</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
+    const row = body.insertRow();
+    row.className = 'cp-row';
+    row.dataset.idx = i;
+    [[dateStr, ''], [dir, dirClass], [`${Math.abs(c.score)} п.п.`, dirClass],
+     [mainEventLabel(c), '']].forEach(([text, cls]) => {
+      const td = row.insertCell();
+      td.textContent = text;
+      if (cls) td.className = cls;
+    });
+  });
+
+  el.replaceChildren(table);
 
   el.querySelectorAll('.cp-row').forEach(row => {
     const idx = +row.dataset.idx;
@@ -280,7 +302,7 @@ function renderChart(range) {
       line: { color: '#14161a', width: 1 }
     },
     text: platformEvents.map(e =>
-      `${PLATFORM_TYPES[e.type]?.label || e.type}<br>${e.title}`),
+      `${PLATFORM_TYPES[e.type]?.label || e.type}<br>${esc(e.title)}`),
     hovertemplate: '%{x|%d.%m.%Y}<br>%{text}<extra></extra>'
   };
 
@@ -317,8 +339,8 @@ function renderChart(range) {
       line: { color: '#14161a', width: 1 }
     },
     text: items.map(e => e.weight
-      ? `${TYPES[type]?.label || type} ×${e.weight}<br>${e.title}`
-      : `${TYPES[type]?.label || type}<br>${e.title}`),
+      ? `${TYPES[type]?.label || type} ×${e.weight}<br>${esc(e.title)}`
+      : `${TYPES[type]?.label || type}<br>${esc(e.title)}`),
     hovertemplate: '%{x}<br>%{text}<extra></extra>'
   }));
 
@@ -344,7 +366,7 @@ function renderChart(range) {
       ? `<br>и ещё ${c.events_minor.length} событий`
       : '';
     const platformLine = c.platform_event
-      ? `<br><b>платформа:</b> ${platformEventLabel(c.platform_event)}`
+      ? `<br><b>платформа:</b> ${esc(platformEventLabel(c.platform_event))}`
       : '';
 
     const kinds = [...new Set(c.events.map(e => e.type))];
@@ -365,7 +387,7 @@ function renderChart(range) {
       // фон и рамки он игнорирует, поэтому маркер типа - символом
       body = kinds.map(k => {
         const titles = c.events.filter(e => e.type === k)
-          .map(e => e.title).join('<br>');
+          .map(e => esc(e.title)).join('<br>');
         const kc = TYPES[k]?.color || '#6b7684';
         return `<span style="color:${kc}">◆ ${TYPES[k]?.label || k}:</span>` +
                `<br>${titles}`;
@@ -519,8 +541,7 @@ function renderGameOptions(preferred) {
   const visible = gameOptions.filter(
     o => o.value === wanted || o.label.toLowerCase().includes(q));
 
-  select.innerHTML = visible
-    .map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+  select.replaceChildren(...visible.map(o => new Option(o.label, o.value)));
 
   if (visible.some(o => o.value === wanted)) select.value = wanted;
 }
@@ -574,7 +595,13 @@ function setCollectRunning(running) {
 
 function showCollectProgress(text, kind) {
   const el = document.getElementById('collectProgress');
-  el.innerHTML = (kind === 'busy' ? '<span class="spinner-sm"></span>' : '') + text;
+  el.replaceChildren();
+  if (kind === 'busy') {
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner-sm';
+    el.append(spinner);
+  }
+  el.append(document.createTextNode(text));
   el.style.color = kind === 'error' ? '#ff6b5b' : (kind === 'ok' ? '#3ddc84' : '#8a95a3');
 }
 
