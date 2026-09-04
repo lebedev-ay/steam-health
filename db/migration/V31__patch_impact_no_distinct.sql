@@ -1,11 +1,7 @@
--- distinct в reviews было нужно, пока review_flat разворачивала
--- raw.reviews с дублями (запись 017). После V21 review_flat читает
--- core.fct_review, где recommendation_id уникален — дедупликация
--- уже произошла на загрузке, тут distinct лишний: пересортировывал
--- под миллион строк на каждый refresh просто так.
---
--- Всё остальное — колонки, окна, bounds, window_complete,
--- группировка — как в V23, без изменений.
+-- distinct в reviews был нужен, пока review_flat разворачивала
+-- raw.reviews с дублями (запись 017). После V21 источником стала
+-- core.fct_review с уникальным recommendation_id, дедупликация
+-- происходит на загрузке. Остальное определение - как в V23.
 
 drop materialized view marts.patch_impact;
 
