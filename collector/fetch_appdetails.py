@@ -2,9 +2,9 @@ import json
 import time
 import argparse
 
-import requests
 import psycopg
 
+import steam_api
 from db import DSN, read_games
 
 URL = "https://store.steampowered.com/api/appdetails"
@@ -12,13 +12,9 @@ REQUEST_PAUSE = 1.5
 
 
 def fetch(app_id):
-    response = requests.get(
-        URL,
-        params={"appids": app_id, "cc": "us", "l": "english"},
-        headers={"User-Agent": "steam-health/0.1"},
-        timeout=30,
-    )
-    return response.status_code, response.json() if response.ok else None
+    payload, status = steam_api.get_with_status(
+        URL, {"appids": app_id, "cc": "us", "l": "english"})
+    return status, payload
 
 
 def save(conn, app_id, status, payload):
