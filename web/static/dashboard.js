@@ -523,8 +523,15 @@ async function load() {
 
   const res = await fetch(`/api/data?app_id=${appId}&smoothing=${smoothing}` +
     `&min_weight=${minWeight}&sensitivity=${sensitivity}`);
+  const body = await res.json().catch(() => null);
 
-  lastData = await res.json();
+  // на 400 и 500 в теле лежит {error}, а не ряд: рисовать нечего,
+  // и текст сервера полезнее, чем падение на data.daily
+  if (!res.ok || !body || !body.daily) {
+    throw new Error((body && body.error) || `сервер ответил ${res.status}`);
+  }
+
+  lastData = body;
   renderChart(null);
 }
 
