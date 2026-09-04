@@ -553,7 +553,12 @@ function renderGameOptions(preferred) {
   if (visible.some(o => o.value === wanted)) select.value = wanted;
 }
 
-const CONTROL_IDS = ['game', 'smoothing', 'sensitivity', 'minWeight', 'mode', 'showPlatform'];
+// перезапрашивают данные только те элементы, что входят в /api/data.
+// Режим показа и полосы платформы меняют одну отрисовку, и полный
+// запрос ради них сбрасывал бы текущий зум
+const QUERY_CONTROL_IDS = ['game', 'smoothing', 'sensitivity', 'minWeight'];
+const VIEW_CONTROL_IDS = ['mode', 'showPlatform'];
+const CONTROL_IDS = [...QUERY_CONTROL_IDS, ...VIEW_CONTROL_IDS];
 
 function setControlsDisabled(disabled) {
   CONTROL_IDS.forEach(id => { document.getElementById(id).disabled = disabled; });
@@ -581,7 +586,10 @@ async function loadSafe() {
   }
 }
 
-CONTROL_IDS.forEach(id => document.getElementById(id).addEventListener('change', loadSafe));
+QUERY_CONTROL_IDS.forEach(id =>
+  document.getElementById(id).addEventListener('change', loadSafe));
+VIEW_CONTROL_IDS.forEach(id =>
+  document.getElementById(id).addEventListener('change', () => renderChart(lastRenderedRange)));
 document.getElementById('gameFilter').addEventListener('input', () => renderGameOptions());
 loadSafe();
 
