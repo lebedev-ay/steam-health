@@ -138,6 +138,14 @@ function mainEventLabel(c) {
   return '—';
 }
 
+// границы оси Plotly пишет в своём формате и со временем, поэтому
+// сравнение строк ловило бы различия записи, а не диапазона
+function sameRange(a, b) {
+  if (!a || !b) return a === b;
+  return Date.parse(a[0]) === Date.parse(b[0])
+      && Date.parse(a[1]) === Date.parse(b[1]);
+}
+
 // Plotly отдаёт границу оси то с временем, то без - сравниваем
 // по первым 10 символам, ISO-дата сравнивается как строка
 function dayInRange(day, range) {
@@ -508,7 +516,7 @@ function renderChart(range) {
         const gd = document.getElementById('sentiment');
         const xr = gd.layout.xaxis.range;
         const newRange = xr ? [xr[0], xr[1]] : null;
-        if (JSON.stringify(newRange) === JSON.stringify(lastRenderedRange)) return;
+        if (sameRange(newRange, lastRenderedRange)) return;
         renderChart(newRange);
       }, 120);
     });
