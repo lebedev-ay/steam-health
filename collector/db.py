@@ -16,17 +16,6 @@ DSN = (
 )
 
 
-def find_game_sk(conn, app_id, moment):
-    row = conn.execute(
-        """
-        select game_sk from core.dim_game
-        where app_id = %s and %s >= valid_from and %s < valid_to
-        """,
-        (app_id, moment, moment),
-    ).fetchone()
-    return row["game_sk"] if row else -1
-
-
 def read_games(app_id=None):
     # состав игр - те, по которым уже есть сырьё в raw.appdetails.
     # Имя берётся из ядра; пока игра туда не загружена, вместо имени
