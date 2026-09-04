@@ -11,10 +11,6 @@ const TYPES = {
   unknown:      { color: '#6b7684', label: 'прочее' }
 };
 
-// те же типы, что SIGNIFICANT_TYPES в web/app.py - крупные
-// независимо от веса при адаптивной плотности (ниже)
-const MAJOR_TYPES = new Set(['patch', 'season_start', 'expansion']);
-
 // события платформы не привязаны к игре: bandColor - приглушённая
 // полоса-фон, markerColor - тот же оттенок для маркера, насыщеннее
 const PLATFORM_TYPES = {
@@ -75,21 +71,14 @@ function densityThreshold(days) {
 function densityFilter(days) {
   const limit = densityThreshold(days);
   if (!limit) return () => true;
-  return e => (e.weight ?? 0) >= limit || MAJOR_TYPES.has(e.type);
+  return e => (e.weight ?? 0) >= limit;
 }
 
-// фильтров два, и подпись обязана описывать оба: порог из формы
-// сервер применяет ко всем событиям без исключений, порог плотности
-// применяется на клиенте, и патчи, сезоны и дополнения его обходят
+// фильтров два - порог из формы на сервере и порог плотности здесь.
+// Оба меряют вес, поэтому видно то, что прошло больший из них
 function eventFilterLabel(days, minWeight) {
-  const limit = densityThreshold(days);
-  if (!minWeight && !limit) return 'показаны все события';
-  if (!minWeight) return `показаны события с весом ≥ ${limit} или патч/сезон/дополнение`;
-  if (limit > minWeight) {
-    return `показаны события с весом ≥ ${limit}, ` +
-           `патчи, сезоны и дополнения - от ${minWeight}`;
-  }
-  return `показаны события с весом ≥ ${minWeight}`;
+  const limit = Math.max(minWeight, densityThreshold(days));
+  return limit ? `показаны события с весом ≥ ${limit}` : 'показаны все события';
 }
 
 let lastData = null;

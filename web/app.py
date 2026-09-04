@@ -78,9 +78,9 @@ def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
     return sorted(chosen), None
 
 
-# см. decisions.md, запись 022 - почему перелом бывает необъяснимым
+# значимость меряется одним весом: тип события ничего не говорит
+# о его величине, и хотфикс весом 0.1 проходил как крупный патч
 SIGNIFICANT_WEIGHT = 2
-SIGNIFICANT_TYPES = {"patch", "season_start", "expansion"}
 
 # защита /api/collect от случайного запроса, не от целенаправленного:
 # токен уезжает в html страницы. Настоящая защита - basic auth в nginx
@@ -88,8 +88,7 @@ COLLECT_TOKEN = os.getenv("COLLECT_TOKEN", "")
 
 
 def is_significant_event(e):
-    return (e["weight"] is not None and e["weight"] >= SIGNIFICANT_WEIGHT) \
-        or e["event_type"] in SIGNIFICANT_TYPES
+    return (e["weight"] or 0) >= SIGNIFICANT_WEIGHT
 
 
 def list_games():
