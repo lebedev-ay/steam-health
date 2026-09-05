@@ -3,7 +3,7 @@ target/
 *.log
 .idea/
 .vscode/
-sql/adhoc/*.json
+api/*.json
 .venv/
 __pycache__/
 *.pyc
