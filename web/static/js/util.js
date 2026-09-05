@@ -30,3 +30,12 @@ export function dayInRange(day, range) {
   const hi = String(range[1]).slice(0, 10);
   return day >= lo && day <= hi;
 }
+
+export function plural(n, one, few, many) {
+  const tail = Math.abs(n) % 100;
+  if (tail > 10 && tail < 20) return many;
+  const last = tail % 10;
+  if (last === 1) return one;
+  if (last > 1 && last < 5) return few;
+  return many;
+}

@@ -1,4 +1,4 @@
-import { shiftDay, esc, sameRange, dayInRange } from './util.js';
+import { shiftDay, esc, sameRange, dayInRange, plural } from './util.js';
 import { TYPES, PLATFORM_TYPES, platformEventLabel, densityFilter,
          eventFilterLabel } from './events.js';
 import { renderChangePointList } from './cplist.js';
@@ -61,10 +61,12 @@ export function renderChart(range) {
   const visibleCpCount = cps.filter(c => dayInRange(c.day, effectiveRange)).length;
   const cpCountText = visibleCpCount === cps.length
     ? `переломов: ${cps.length}`
-    : `переломов: ${visibleCpCount} из ${cps.length}`;
+    : `${plural(visibleCpCount, 'показан', 'показано', 'показано')} ${visibleCpCount} ` +
+      `${plural(visibleCpCount, 'перелом', 'перелома', 'переломов')} из ${cps.length}`;
 
   document.getElementById('info').textContent =
-    `окно ${data.window} дн., медиана ${data.median_volume} отзывов/день, ` +
+    `окно ${data.window} дн., медиана ${data.median_volume} ` +
+    `${plural(data.median_volume, 'отзыв', 'отзыва', 'отзывов')} в день, ` +
     `${cpCountText}; ${eventFilterLabel(windowDays, minWeight)}`;
 
   renderChangePointList(cps, effectiveRange, {
