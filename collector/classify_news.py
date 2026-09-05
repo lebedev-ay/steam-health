@@ -36,8 +36,13 @@ PATTERNS = [
     (r'\b(maintenance|delay|delist|survey)\b',                          "service"),
 
     # --- события ---
-    (r'\bseason \d+.*\b(now live|is here|is now live|begins)\b',        "season_start"),
     (r'\bmidseason\b',                                                  "patch"),
+    # три формы названия сезона: с номером и двоеточием, с номером
+    # и триггером, и "season of <название>" - у части игр номера нет
+    (r'(?<!mid[- ])\bseason \d+\s*[:–—-]',                             "season_start"),
+    (r'(?<!mid[- ])\bseason \d+\b.*'
+     r'\b(now live|is here|live now|begins?|available now|out now)\b',   "season_start"),
+    (r'\bseason of \w',                                                 "season_start"),
     (r'\bexpansion\b.*\b(available|out now|live)\b',                    "expansion"),
     (r'\b(patch|release|update|hotfix) notes?\b',                       "patch"),
     (r'\b(hotfix|changelog)\b',                                         "patch"),
@@ -48,6 +53,9 @@ VERSION_RE = re.compile(r'(?:^|\s|[vV#])(\d+\.\d+(?:\.\d+)*)')
 BETA_RE = re.compile(r'\b(public test|experimental|exp|beta|test branch|b\d+)\b', re.IGNORECASE)
 STABLE_RE = re.compile(r'\b(stable|public branch)\b', re.IGNORECASE)
 FALSE_VERSION_RE = re.compile(r'\d+[\.,]?\d*\s*(million|k\+|m\+|%|years?|players|sold)', re.IGNORECASE)
+# про сезон, но не про его начало: пропуск, поиск продолжается дальше
+NOT_SEASON_RE = re.compile(r'\b(season|battle) pass\b|\bteaser\b|\bcomes to a close\b'
+                           r"|\bdev corner\b|\bepisode \d+\b|\bstreamers?\b", re.IGNORECASE)
 
 COMPILED = [(re.compile(p, re.IGNORECASE), kind) for p, kind in PATTERNS]
 
@@ -72,6 +80,8 @@ def classify(title):
 
     for pattern, kind in COMPILED:
         if pattern.search(title):
+            if kind == "season_start" and NOT_SEASON_RE.search(title):
+                continue
             return version, kind
 
     if version:
