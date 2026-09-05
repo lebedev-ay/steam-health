@@ -635,7 +635,9 @@ async function refreshGamesList(appId) {
 const PENDING_TRIES = 30;
 const POLL_INTERVAL_MS = 2000;
 
-function pollTask(taskId) {
+// own = false, когда следим за чужим сбором после 409: список игр
+// обновить надо, а выбор в селекте и график - не наши, не трогаем
+function pollTask(taskId, own = true) {
   setCollectRunning(true);
   let pendingLeft = PENDING_TRIES;
 
@@ -659,15 +661,23 @@ function pollTask(taskId) {
     }
 
     if (body.state === 'SUCCESS') {
-      showCollectProgress(`готово: ${body.result?.name || 'игра собрана'}`, 'ok');
       setCollectRunning(false);
       localStorage.removeItem(COLLECT_STORAGE_KEY);
-      refreshGamesList(body.result?.app_id);
+      if (own) {
+        showCollectProgress(`готово: ${body.result?.name || 'игра собрана'}`, 'ok');
+        refreshGamesList(body.result?.app_id);
+      } else {
+        showCollectProgress(`чужой сбор закончен (${body.result?.name || 'игра собрана'}), ` +
+          'запустите свой заново', 'ok');
+        refreshGamesList();
+      }
       return;
     }
 
     if (body.state === 'FAILURE') {
-      showCollectProgress(`ошибка: ${body.error || 'сбор не удался'}`, 'error');
+      showCollectProgress(own
+        ? `ошибка: ${body.error || 'сбор не удался'}`
+        : 'чужой сбор упал, запустите свой заново', 'error');
       setCollectRunning(false);
       localStorage.removeItem(COLLECT_STORAGE_KEY);
       return;
@@ -709,9 +719,10 @@ document.getElementById('collectBtn').addEventListener('click', async () => {
 
     if (res.status === 409) {
       // сбор уже идёт у другой игры - подписываемся на её прогресс
-      // тем же pollTask, чтобы видеть реальный ход
+      // тем же pollTask, чтобы видеть реальный ход. Запрошенная игра
+      // при этом в очередь не попала, о чём говорим по окончании
       showCollectProgress('сейчас идёт сбор другой игры, слежу за прогрессом…', 'busy');
-      pollTask(body.busy_task_id);
+      pollTask(body.busy_task_id, false);
       return;
     }
 

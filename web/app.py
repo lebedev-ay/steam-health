@@ -83,7 +83,8 @@ def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
 SIGNIFICANT_WEIGHT = 2
 
 # защита /api/collect от случайного запроса, не от целенаправленного:
-# токен уезжает в html страницы. Настоящая защита - basic auth в nginx
+# токен уезжает в html страницы. Настоящая защита - basic auth
+# на обратном прокси (Caddy), decisions.md, запись 033
 COLLECT_TOKEN = os.getenv("COLLECT_TOKEN", "")
 
 

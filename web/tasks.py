@@ -44,6 +44,16 @@ else
 end
 """
 
+# продление - с той же проверкой владельца: голый expire у задачи,
+# чей замок уже истёк и достался другой, продлевал бы чужой замок
+_EXTEND_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("expire", KEYS[1], ARGV[2])
+else
+    return 0
+end
+"""
+
 
 @celery_app.task(bind=True)
 def collect_game(self, app_id, mode="incremental"):
@@ -51,6 +61,10 @@ def collect_game(self, app_id, mode="incremental"):
         meta = {"step": step, "total": TOTAL_STEPS, "message": message}
         meta.update(extra)
         self.update_state(state="PROGRESS", meta=meta)
+
+    def extend_lock():
+        redis_client.eval(_EXTEND_LOCK_SCRIPT, 1, LOCK_KEY,
+                          self.request.id, LOCK_TTL)
 
     try:
         progress(1, "проверка игры в Steam")
@@ -95,7 +109,7 @@ def collect_game(self, app_id, mode="incremental"):
             def on_page(page, total):
                 # продлеваем на каждой странице: дёшево, а замок
                 # не должен истечь посреди реальной работы
-                redis_client.expire(LOCK_KEY, LOCK_TTL)
+                extend_lock()
                 progress(5, f"{name}: качаю отзывы ({mode})", progress=f"{page} стр., {total} отзывов")
 
             _, completed = fetch_reviews.collect(conn, app_id, name,
@@ -117,7 +131,7 @@ def collect_game(self, app_id, mode="incremental"):
         # без --select: модели связаны, выборочная сборка рассогласует
         # витрины с ядром, а экономии почти нет - decisions.md, запись 026
         # heartbeat из on_page сюда не доходит - продлеваем замок явно
-        redis_client.expire(LOCK_KEY, LOCK_TTL)
+        extend_lock()
         result = subprocess.run(
             ["dbt", "run"],
             cwd=DBT_PROJECT_DIR,
