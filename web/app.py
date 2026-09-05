@@ -9,6 +9,7 @@ from flask import Flask, render_template, jsonify, request
 from celery.result import AsyncResult
 
 from db import DSN
+from text import plural
 from tasks import (celery_app, collect_game, redis_client,
                    LOCK_KEY, LOCK_TTL, COLLECT_REVIEW_PAGES)
 
@@ -53,7 +54,8 @@ def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
 
     clean = [abs(s) for s in scores if s is not None]
     if len(clean) < MIN_SCORED_DAYS:
-        return [], (f"мало данных: сдвиг посчитан для {len(clean)} дней из {n}, "
+        return [], (f"мало данных: сдвиг посчитан для {len(clean)} "
+                    f"{plural(len(clean), 'день', 'дня', 'дней')} из {n}, "
                     f"детектору нужно не меньше {MIN_SCORED_DAYS}")
 
     mean = sum(clean) / len(clean)

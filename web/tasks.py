@@ -14,6 +14,7 @@ import fetch_reviews
 import load_fct_review
 import load_fct_patch
 from db import DSN
+from text import plural
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
@@ -105,7 +106,7 @@ def collect_game(self, app_id, mode="incremental"):
             def on_page(page, total):
                 # продлеваем на каждой странице: дёшево, а замок не должен истечь посреди реальной работы
                 extend_lock()
-                progress(5, f"{name}: качаю отзывы ({mode})", progress=f"{page} стр., {total} отзывов")
+                progress(5, f"{name}: качаю отзывы ({mode})", progress=f"{page} стр., {total} {plural(total, 'отзыв', 'отзыва', 'отзывов')}")
 
             _, completed = fetch_reviews.collect(conn, app_id, name,
                                                  COLLECT_REVIEW_PAGES, mode,

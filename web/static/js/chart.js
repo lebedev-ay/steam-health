@@ -200,7 +200,9 @@ export function renderChart(range) {
 
     if (kinds.length === 0) {
       body = c.events_minor.length
-        ? `${c.events_minor.length} фоновых событий рядом`
+        ? `${c.events_minor.length} ` +
+          `${plural(c.events_minor.length, 'фоновое событие', 'фоновых события', 'фоновых событий')}` +
+          ' рядом'
         : 'событий рядом нет';
     } else {
       const strongest = c.events.reduce(

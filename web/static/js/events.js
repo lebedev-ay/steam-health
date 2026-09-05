@@ -1,4 +1,4 @@
-import { truncate } from './util.js';
+import { truncate, plural } from './util.js';
 
 export const TYPES = {
   patch:        { color: '#ff6b5b', label: 'патчи' },
@@ -76,7 +76,8 @@ export function mainEventLabel(c) {
     return `платформа: ${platformEventLabel(c.platform_event)}`;
   }
   if (c.events_minor.length) {
-    return `${c.events_minor.length} фоновых событий`;
+    return `${c.events_minor.length} ` +
+      `${plural(c.events_minor.length, 'фоновое событие', 'фоновых события', 'фоновых событий')}`;
   }
   return '—';
 }
