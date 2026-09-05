@@ -25,8 +25,7 @@ services:
     mem_limit: 128m
     restart: unless-stopped
 
-  # разовый прогон миграций перед стартом web/worker: образ тот же,
-  # но db/migration/ в него не копируется - домонтируем отдельно
+  # разовый прогон миграций перед стартом web/worker: образ тот же, но db/migration/ в него не копируется - домонтируем отдельно
   migrate:
     build:
       context: .
