@@ -265,18 +265,12 @@ export function renderChart(range) {
     ...(showPlatform ? [platformMarkerTrace] : []),
     changePoints
   ], {
-    title: {
-      text: isDelta
-        ? 'Отклонение настроения от обычного уровня'
-        : 'Настроение и объём отзывов',
-      font: { size: 17 }
-    },
     shapes: shapes,
     height: 640,
     paper_bgcolor: '#262b33',
     plot_bgcolor: '#1e232a',
     font: { color: '#c7d0d9' },
-    margin: { t: 110, r: 60, b: 60, l: 60 },
+    margin: { t: 70, r: 60, b: 60, l: 60 },
     yaxis: {
       title: isDelta ? 'Отклонение, п.п.' : 'Позитивных, %',
       gridcolor: '#333a44',
@@ -308,7 +302,7 @@ export function renderChart(range) {
       range: effectiveRange
     },
     hovermode: 'closest',
-    legend: { orientation: 'h', y: 1.10, bgcolor: 'rgba(0,0,0,0)' }
+    legend: { orientation: 'h', y: 1.06, bgcolor: 'rgba(0,0,0,0)' }
   }, { responsive: true });
 
   // копия обязательна: переданный массив Plotly держит как свой xaxis.range и меняет на месте, так что ссылка на него всегда сравнивалась бы сама с собой
