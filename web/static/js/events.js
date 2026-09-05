@@ -41,20 +41,31 @@ export function platformEventLabel(e) {
 }
 
 // на широком диапазоне мелкие события прячем, иначе сливаются в сплошную полосу; на узком (< 60 дней) показываем всё
-function densityFilterActive(days) {
-  return days >= 60;
+function densityThreshold(days) {
+  if (days > 365) return 5;
+  if (days >= 180) return 2;
+  if (days >= 60) return 1;
+  return 0;
 }
 
 export function densityFilter(days) {
-  if (!densityFilterActive(days)) return () => true;
-  return e => e.significant;
+  const limit = densityThreshold(days);
+  if (!limit) return () => true;
+  return e => e.always_show || (e.weight ?? 0) >= limit;
 }
 
 // фильтров два - порог из формы на сервере и порог плотности здесь. Оба меряют вес, поэтому видно то, что прошло больший из них
-export function eventFilterLabel(days, minWeight) {
-  const byWeight = minWeight ? `с весом ≥ ${minWeight}` : '';
-  if (!densityFilterActive(days)) return byWeight ? `показаны события ${byWeight}` : 'показаны все события';
-  return byWeight ? `показаны значимые события ${byWeight}` : 'показаны значимые события';
+export function eventFilterLabel(days, minWeight, events) {
+  const limit = Math.max(minWeight, densityThreshold(days));
+  if (!limit) return 'показаны все события';
+
+  // типы, которым пороги не писаны, берём из самих данных: правило живёт на сервере, здесь только его результат
+  const kept = [...new Set(events.filter(e => e.always_show).map(e => e.type))]
+    .map(t => TYPES[t]?.label || t);
+  const byWeight = `события с весом ≥ ${limit}`;
+  return kept.length
+    ? `показаны ${kept.join(' и ')}, а также ${byWeight}`
+    : `показаны ${byWeight}`;
 }
 
 export function mainEventLabel(c) {

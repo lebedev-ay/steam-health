@@ -95,6 +95,11 @@ def is_significant_event(e):
     return (e["weight"] or 0) >= SIGNIFICANT_WEIGHT
 
 
+# для этих типов вес не мера, поэтому пороги - и из формы, и по плотности на клиенте - к ним не применяются
+def always_shown(e):
+    return e["event_type"] in ALWAYS_SIGNIFICANT
+
+
 def list_games():
     return query("""
         select app_id, game_name, collection_status
@@ -299,7 +304,8 @@ def data():
 
     # маркеры - подмножество cp_events, второй запрос не нужен.
     # Пустой вес считается нулём: иначе событие без веса проходило бы любой порог
-    events = [e for e in cp_events if (e["weight"] or 0) >= min_weight]
+    events = [e for e in cp_events
+              if always_shown(e) or (e["weight"] or 0) >= min_weight]
 
     # общие для всех игр, не зависят от app_id. Дата приблизительная (по публикации заметки)
     platform_events = query("""
@@ -360,7 +366,7 @@ def data():
             {"day": r["day"].isoformat(), "type": r["event_type"],
              "title": r["title"],
              "weight": float(r["weight"]) if r["weight"] is not None else None,
-             "significant": is_significant_event(r)}
+             "always_show": always_shown(r)}
             for r in events
         ],
         "platform_events": [

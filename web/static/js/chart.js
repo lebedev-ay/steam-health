@@ -67,7 +67,7 @@ export function renderChart(range) {
   document.getElementById('info').textContent =
     `окно ${data.window} дн., медиана ${data.median_volume} ` +
     `${plural(data.median_volume, 'отзыв', 'отзыва', 'отзывов')} в день, ` +
-    `${cpCountText}; ${eventFilterLabel(windowDays, minWeight)}`;
+    `${cpCountText}; ${eventFilterLabel(windowDays, minWeight, data.events)}`;
 
   renderChangePointList(cps, effectiveRange, {
     note: data.change_points_note,
