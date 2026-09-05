@@ -12,10 +12,8 @@ def load_all(conn, app_id=None):
     app_filter = "and n.app_id = %s" if app_id is not None else ""
     params = (PLATFORM_APP_ID, app_id) if app_id is not None else (PLATFORM_APP_ID,)
 
-    # зерно - пара «событие - игра»: одну заметку про несколько игр
-    # берём по разу на каждую (см. миграцию V34).
-    # Версия ищется одним join; задвоить события могло бы только
-    # пересечение интервалов SCD2, запрещённое ограничением из V30
+    # зерно - пара "событие - игра": одну заметку про несколько игр берём по разу на каждую.
+    # Версия ищется одним join; задвоить события могло бы только пересечение интервалов SCD2, запрещённое ограничением из V30
     rows = conn.execute(f"""
         select d.*, coalesce(g.game_sk, -1) as game_sk
         from (
@@ -79,9 +77,7 @@ def load_all(conn, app_id=None):
     weight_filter = "and g.app_id = %s" if app_id is not None else ""
     weight_params = (app_id,) if app_id is not None else ()
 
-    # вес снимается перед пересчётом и в более широкой области, чем сам
-    # пересчёт: медиана могла исчезнуть вместе с последним патчем игры,
-    # и тогда update до такой игры не доходит, а старое число остаётся
+    # вес снимается перед пересчётом и в более широкой области, чем сам пересчёт: медиана могла исчезнуть вместе с последним патчем игры
     conn.execute(f"""
         update core.fct_patch p
         set weight = null
@@ -92,9 +88,7 @@ def load_all(conn, app_id=None):
     """, weight_params)
 
     conn.execute(f"""
-        -- медиана по app_id, а не по game_sk: иначе у игры
-        -- с несколькими версиями SCD2 веса внутри одной игры
-        -- переставали быть сравнимыми - decisions.md, запись 027
+        -- медиана по app_id, а не по game_sk: иначе у игры с несколькими версиями SCD2 веса внутри одной игры переставали быть сравнимыми
         with patch_medians as (
             select g.app_id,
                    (percentile_cont(0.5)
@@ -104,9 +98,7 @@ def load_all(conn, app_id=None):
             where p.body_length > 0 and p.event_type = 'patch'
             group by g.app_id
         ),
-        -- запасная база на случай, когда классификатор не распознал
-        -- у игры ни одного патча: без неё шкала веса обнуляется целиком.
-        -- Заглушка Unknown сюда не идёт - это не игра
+        -- запасная база на случай, когда классификатор не распознал у игры ни одного патча: без неё шкала веса обнуляется целиком. Заглушка Unknown сюда не идёт - это не игра
         all_medians as (
             select g.app_id,
                    (percentile_cont(0.5)
@@ -116,8 +108,7 @@ def load_all(conn, app_id=None):
             where p.body_length > 0 and g.app_id > 0
             group by g.app_id
         ),
-        -- базы не смешиваются: есть хоть один патч - медиана только
-        -- по патчам, иначе веса внутри игры перестанут быть сравнимыми
+        -- базы не смешиваются: есть хоть один патч - медиана только по патчам, иначе веса внутри игры перестанут быть сравнимыми
         medians as (
             select a.app_id, coalesce(pm.med, a.med) as med
             from all_medians a

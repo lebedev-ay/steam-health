@@ -1,10 +1,5 @@
-# Черновые запросы к Steam API: ими разведывались форматы ответов
-# и проверялись параметры, которые потом попали в collector/.
-# Не часть пайплайна, запускать руками из VS Code (REST Client)
-# или любого клиента, понимающего .http.
-#
-# Параметры здесь те же, что шлют коллекторы. User-Agent тоже:
-# steam_api.get ставит его на каждый запрос.
+# Черновые запросы к Steam API: ими разведывались форматы ответов и проверялись параметры, которые потом попали в collector/.
+# "Ручная проверка"
 
 @app_id = 1245620
 @ua = steam-health/0.1
@@ -33,8 +28,7 @@ GET https://store.steampowered.com/appreviews/{{app_id}}?json=1&filter=recent&la
 User-Agent: {{ua}}
 
 ### appreviews: без purchase_type=all в выдаче только купившие в Steam
-# страница всё равно придёт полной, разница в общем объёме: у free-to-play
-# Overwatch это было 275 отзывов против 20 260 (decisions.md, запись 007)
+# страница всё равно придёт полной, разница в общем объёме: у free-to-play Overwatch это было 275 отзывов против 20 260 
 GET https://store.steampowered.com/appreviews/2357570?json=1&filter=recent&language=all&num_per_page=100&cursor=*
 User-Agent: {{ua}}
 

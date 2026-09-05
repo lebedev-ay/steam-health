@@ -3,8 +3,7 @@ version: 2
 sources:
   - name: core
     description: >
-      Ядро хранилища. Наполняется загрузчиками из collector/,
-      схема — миграциями в db/migration/. dbt только читает.
+      Ядро хранилища. Наполняется загрузчиками из collector/, схема — миграциями в db/migration/. dbt только читает.
     schema: core
     tables:
       - name: dim_game

@@ -1,7 +1,5 @@
--- distinct в reviews был нужен, пока review_flat разворачивала
--- raw.reviews с дублями (запись 017). После V21 источником стала
--- core.fct_review с уникальным recommendation_id, дедупликация
--- происходит на загрузке. Остальное определение - как в V23.
+-- distinct в reviews был нужен, пока review_flat разворачивала raw.reviews с дублями (запись 017). После V21 источником стала core.fct_review с уникальным recommendation_id,
+-- дедупликация происходит на загрузке. Остальное определение - как в V23.
 
 drop materialized view marts.patch_impact;
 

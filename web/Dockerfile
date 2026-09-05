@@ -2,8 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# git нужен не сборке, а dbt: он ищет его в PATH независимо
-# от того, использует ли проект пакеты dbt
+# git нужен не сборке, а dbt: он ищет его в PATH независимо от того, использует ли проект пакеты dbt
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
@@ -14,8 +13,7 @@ COPY web/ .
 COPY collector/ collector/
 COPY dbt/ dbt/
 
-# в образе web/ распакован в корень /app, а collector/ и dbt/ лежат
-# внутри него - не так, как в репозитории, где они соседи web/
+# в образе web/ распакован в корень /app, а collector/ и dbt/ лежат внутри него - не так, как в репозитории, где они соседи web/
 ENV PYTHONPATH=/app/collector:/app/dbt
 ENV DBT_PROJECT_DIR=/app/dbt
 

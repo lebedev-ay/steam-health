@@ -49,8 +49,7 @@ def collect(conn, app_id, name, max_pages, mode, on_page=None):
             break
 
         if mode == "incremental":
-            # filter=recent сортирует по дате создания: вся страница
-            # известна - дальше только старее (decisions.md, 019)
+            # filter=recent сортирует по дате создания: вся страница известна - дальше только старее
             batch_ids = [int(r["recommendationid"]) for r in reviews]
             known = known_recommendation_ids(conn, batch_ids)
             if len(known) == len(batch_ids):

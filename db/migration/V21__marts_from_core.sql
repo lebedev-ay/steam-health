@@ -1,7 +1,5 @@
--- Витрины переключаются с raw.reviews на core.fct_review: демо-дамп
--- пойдёт без raw, плюс не нужно разворачивать JSON на каждый запрос.
--- Колонки и типы review_flat не меняются, поэтому create or replace
--- не ломает marts.patch_impact, построенный поверх неё.
+-- Витрины переключаются с raw.reviews на core.fct_review: демо-дамп пойдёт без raw, плюс не нужно разворачивать JSON на каждый запрос.
+-- Колонки и типы review_flat не меняются, поэтому create or replace не ломает marts.patch_impact, построенный поверх неё.
 
 create or replace view marts.review_flat as
 select

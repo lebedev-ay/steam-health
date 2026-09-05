@@ -12,8 +12,7 @@ URL = "https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/"
 PLATFORM_APP_ID = 753  # служебный appid Steam, не игра
 
 # сезон/праздник + sale, "steam" встречается в обоих порядках.
-# Голый "steam sale" не ловим: под него попадают издательские
-# распродажи вида "Capcom Steam sale" - промо, не событие платформы
+# Голый "steam sale" не ловим: под него попадают издательские распродажи вида "Capcom Steam sale" - промо, не событие платформы
 SALE_RE = re.compile(
     r'\b(summer|winter|spring|autumn|fall|holiday|black\s+friday|'
     r'halloween|lunar new year|chinese new year|christmas)'
@@ -21,12 +20,10 @@ SALE_RE = re.compile(
     re.IGNORECASE,
 )
 
-# "game of the year" отдельно не проверяем: слишком много чужих
-# премий, а у Steam Awards он всегда идёт вместе с "steam awards"
+# "game of the year" отдельно не проверяем: слишком много чужих премий, а у Steam Awards он всегда идёт вместе с "steam awards"
 AWARDS_RE = re.compile(r'\bsteam\s+awards\b', re.IGNORECASE)
 
-# next fest - частный случай \w+\s+fest\b. Сюда же попадают
-# Replayability и Digital Tabletop Fest, тоже платформенные
+# next fest - частный случай \w+\s+fest\b. Сюда же попадают Replayability и Digital Tabletop Fest, тоже платформенные
 FEST_RE = re.compile(r'\b\w+\s+fest\b', re.IGNORECASE)
 
 
@@ -52,8 +49,7 @@ def fetch_page():
 
 
 def fetch(conn):
-    # один вызов с count=500 покрывает весь фид с 2014 года:
-    # постраничный обход назад по времени здесь не нужен
+    # один вызов с count=500 покрывает весь фид с 2014 года: постраничный обход назад по времени здесь не нужен
     data = fetch_page()
     news = (data.get("appnews") or {}).get("newsitems") or []
 
@@ -108,8 +104,7 @@ def load_all(conn):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    # разобрать заново уже скачанное, не трогая Steam: паттерны
-    # калибруются по одному и тому же фиду - decisions.md, запись 023
+    # разобрать заново уже скачанное, не трогая Steam: паттерны калибруются по одному и тому же фиду - decisions.md, запись 023
     parser.add_argument("--load-only", action="store_true")
     return parser.parse_args()
 

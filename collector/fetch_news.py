@@ -24,10 +24,8 @@ def fetch_page(app_id, enddate=None):
 
 
 def known_gids(conn, app_id):
-    # по raw.news, а не по core.fct_patch: загрузчик отбрасывает
-    # SteamDB, и его gid всегда выглядели бы неизвестными.
-    # Один запрос на прогон: разворачивать jsonb всех сохранённых
-    # страниц заново на каждую новую - работа, растущая квадратично
+    # по raw.news, а не по core.fct_patch: загрузчик отбрасывает SteamDB, и его gid всегда выглядели бы неизвестными.
+    # Один запрос на прогон: разворачивать jsonb всех сохранённых страниц заново на каждую новую - работа, растущая квадратично
     rows = conn.execute("""
         select distinct item ->> 'gid' as gid
         from raw.news n,
@@ -38,8 +36,7 @@ def known_gids(conn, app_id):
 
 
 def collect(conn, app_id, name, max_pages, mode):
-    # enddate у Steam - курсор "раньше этой даты", не фильтр "новее"
-    # (см. decisions.md, запись 024): листаем от свежих к старым
+    # enddate у Steam - курсор "раньше этой даты", не фильтр "новее": листаем от свежих к старым
     enddate = None
     prev_min_date = None
     total = 0
@@ -56,8 +53,7 @@ def collect(conn, app_id, name, max_pages, mode):
 
         page_min_date = min(item["date"] for item in news)
 
-        # защита от зацикливания: просили строго раньше prev_min_date,
-        # а получили не раньше - Steam вернул то же самое или новее
+        # защита от зацикливания: просили строго раньше prev_min_date, а получили не раньше - Steam вернул то же самое или новее
         if prev_min_date is not None and page_min_date >= prev_min_date:
             break
 
@@ -72,8 +68,7 @@ def collect(conn, app_id, name, max_pages, mode):
             known.update(gids)
             total += len(news)
         elif mode == "incremental":
-            # всё уже известно, дальше будет только старее -
-            # инкремент своё дело сделал, full идёт до конца
+            # всё уже известно, дальше будет только старее - инкремент своё дело сделал, full идёт до конца
             break
 
         prev_min_date = page_min_date

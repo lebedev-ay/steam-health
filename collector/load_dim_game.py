@@ -80,8 +80,7 @@ def find_company_sk(conn, company_name):
 
 
 def load_links(conn, game_sk, links):
-    # мосты переписываются целиком под этот game_sk: у новой версии SCD2
-    # они свои, у закрытых остаются те, что были на их момент
+    # мосты переписываются целиком под этот game_sk: у новой версии SCD2 они свои, у закрытых остаются те, что были на их момент
     conn.execute("delete from core.bridge_game_company where game_sk = %s", (game_sk,))
     conn.execute("delete from core.bridge_game_genre where game_sk = %s", (game_sk,))
     conn.execute("delete from core.bridge_game_category where game_sk = %s", (game_sk,))

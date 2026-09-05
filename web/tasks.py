@@ -21,8 +21,7 @@ DBT_PROJECT_DIR = Path(
     os.getenv("DBT_PROJECT_DIR", Path(__file__).parent.parent / "dbt")
 )
 
-# сколько страниц берёт сбор из дашборда: отзывы по 100 на страницу,
-# новости по 500. Для более глубокой выкачки - коллекторы напрямую
+# сколько страниц берёт сбор из дашборда: отзывы по 100 на страницу, новости по 500. Для более глубокой выкачки - коллекторы напрямую
 COLLECT_REVIEW_PAGES = int(os.getenv("COLLECT_REVIEW_PAGES", 30))
 COLLECT_NEWS_PAGES = int(os.getenv("COLLECT_NEWS_PAGES", 10))
 
@@ -34,8 +33,7 @@ TOTAL_STEPS = 8
 LOCK_KEY = "collect:lock"
 LOCK_TTL = 15 * 60
 
-# снимаем замок, только если в нём всё ещё id этой задачи: иначе
-# после истечения TTL finally снёс бы чужой, уже активный замок
+# снимаем замок, только если в нём всё ещё id этой задачи: иначе после истечения TTL finally снёс бы чужой, уже активный замок
 _RELEASE_LOCK_SCRIPT = """
 if redis.call("get", KEYS[1]) == ARGV[1] then
     return redis.call("del", KEYS[1])
@@ -44,8 +42,7 @@ else
 end
 """
 
-# продление - с той же проверкой владельца: голый expire у задачи,
-# чей замок уже истёк и достался другой, продлевал бы чужой замок
+# продление - с той же проверкой владельца: голый expire у задачи, чей замок уже истёк и достался другой, продлевал бы чужой замок
 _EXTEND_LOCK_SCRIPT = """
 if redis.call("get", KEYS[1]) == ARGV[1] then
     return redis.call("expire", KEYS[1], ARGV[2])
@@ -88,8 +85,7 @@ def collect_game(self, app_id, mode="incremental"):
 
             progress(3, f"{name}: обновляю dim_game")
             load_dim_game.load_one(conn, app_id, name)
-            # с этого момента в dim_game есть строка на эту игру:
-            # если что-то дальше упадёт, статус останется 'partial'
+            # с этого момента в dim_game есть строка на эту игру: если что-то дальше упадёт, статус останется 'partial'
             conn.execute(
                 "update core.dim_game set collection_status = 'partial' "
                 "where app_id = %s and is_current",
@@ -107,8 +103,7 @@ def collect_game(self, app_id, mode="incremental"):
         progress(5, f"{name}: качаю отзывы ({mode})")
         with psycopg.connect(DSN) as conn:
             def on_page(page, total):
-                # продлеваем на каждой странице: дёшево, а замок
-                # не должен истечь посреди реальной работы
+                # продлеваем на каждой странице: дёшево, а замок не должен истечь посреди реальной работы
                 extend_lock()
                 progress(5, f"{name}: качаю отзывы ({mode})", progress=f"{page} стр., {total} отзывов")
 
@@ -128,8 +123,7 @@ def collect_game(self, app_id, mode="incremental"):
             conn.commit()
 
         progress(8, f"{name}: пересобираю витрины (dbt run)")
-        # без --select: модели связаны, выборочная сборка рассогласует
-        # витрины с ядром, а экономии почти нет - decisions.md, запись 026
+        # без --select: модели связаны, выборочная сборка рассогласует витрины с ядром, а экономии почти нет
         # heartbeat из on_page сюда не доходит - продлеваем замок явно
         extend_lock()
         result = subprocess.run(
@@ -155,6 +149,5 @@ def collect_game(self, app_id, mode="incremental"):
 
         return {"app_id": app_id, "name": name, "mode": mode}
     finally:
-        # замок снимается всегда - и при успехе, и при падении на любом
-        # шаге, иначе следующий сбор будет ждать LOCK_TTL впустую
+        # замок снимается всегда - и при успехе, и при падении на любом шаге, иначе следующий сбор будет ждать LOCK_TTL впустую
         redis_client.eval(_RELEASE_LOCK_SCRIPT, 1, LOCK_KEY, self.request.id)

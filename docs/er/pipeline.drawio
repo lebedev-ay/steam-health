@@ -1,23 +1,23 @@
 <mxfile host="65bd71144e">
     <diagram id="pipeline1" name="Page-1">
-        <mxGraphModel dx="1846" dy="713" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1450" pageHeight="1300" math="0" shadow="0">
+        <mxGraphModel dx="1429" dy="835" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1450" pageHeight="1300" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
                 <mxCell id="11" value="store.steampowered.com/appreviews/{app_id}" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="40" y="40" width="220" height="60" as="geometry"/>
+                    <mxGeometry x="10" y="40" width="280" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="12" value="api.steampowered.com/ISteamNews/GetNewsForApp" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="360" y="40" width="220" height="60" as="geometry"/>
+                    <mxGeometry x="320" y="40" width="340" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="13" value="store.steampowered.com/api/appdetails" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="690" y="40" width="220" height="60" as="geometry"/>
+                    <mxGeometry x="670" y="40" width="260" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="14" value="fetch_reviews.py" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;" parent="1" vertex="1">
                     <mxGeometry x="60" y="160" width="180" height="44" as="geometry"/>
                 </mxCell>
                 <mxCell id="15" value="fetch_news.py" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="380" y="160" width="180" height="44" as="geometry"/>
+                    <mxGeometry x="300" y="160" width="180" height="44" as="geometry"/>
                 </mxCell>
                 <mxCell id="16" value="fetch_appdetails.py" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;" parent="1" vertex="1">
                     <mxGeometry x="710" y="160" width="180" height="44" as="geometry"/>
@@ -32,7 +32,7 @@
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="20" value="raw" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=14;fontStyle=1;" parent="1" vertex="1">
-                    <mxGeometry x="30" y="250" width="940" height="160" as="geometry"/>
+                    <mxGeometry x="30" y="250" width="900" height="160" as="geometry"/>
                 </mxCell>
                 <mxCell id="21" value="raw.reviews" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=12;fillColor=#ffffff;strokeColor=#666666;" parent="1" vertex="1">
                     <mxGeometry x="65" y="300" width="170" height="80" as="geometry"/>
@@ -71,7 +71,7 @@
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="33" value="classify_news.py&lt;br&gt;(модуль, не скрипт)" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;fontColor=#666666;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="900" y="480" width="120" height="44" as="geometry"/>
+                    <mxGeometry x="940" y="524" width="180" height="44" as="geometry"/>
                 </mxCell>
                 <mxCell id="34" value="вызывает classify()" style="html=1;endArrow=open;dashed=1;dashPattern=4 3;rounded=0;fontSize=11;strokeColor=#666666;fontColor=#666666;" parent="1" source="28" target="33" edge="1">
                     <mxGeometry relative="1" as="geometry">
@@ -98,7 +98,7 @@
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="37" value="core" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=14;fontStyle=1;" parent="1" vertex="1">
-                    <mxGeometry x="30" y="570" width="940" height="230" as="geometry"/>
+                    <mxGeometry x="30" y="570" width="900" height="230" as="geometry"/>
                 </mxCell>
                 <mxCell id="38" value="core.fct_review" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=12;fillColor=#ffffff;strokeColor=#666666;" parent="1" vertex="1">
                     <mxGeometry x="65" y="615" width="170" height="70" as="geometry"/>
@@ -125,7 +125,7 @@
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="46" value="marts" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=14;fontStyle=1;" parent="1" vertex="1">
-                    <mxGeometry x="30" y="880" width="940" height="200" as="geometry"/>
+                    <mxGeometry x="30" y="880" width="900" height="200" as="geometry"/>
                 </mxCell>
                 <mxCell id="47" value="review_flat&lt;br&gt;(table)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=12;fillColor=#ffffff;strokeColor=#666666;" parent="1" vertex="1">
                     <mxGeometry x="65" y="925" width="170" height="70" as="geometry"/>
@@ -167,24 +167,23 @@
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="60" value="web/tasks.py — фоновая задача (Celery)" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=none;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=14;fontStyle=1;" parent="1" vertex="1">
-                    <mxGeometry x="1140" y="565" width="340" height="200" as="geometry"/>
+                    <mxGeometry x="1050" y="150" width="340" height="200" as="geometry"/>
                 </mxCell>
                 <mxCell id="61" value="collect_game(app_id, mode) — одна игра, по шагам:&lt;br&gt;1. fetch_appdetails.fetch + validate&lt;br&gt;2. fetch_appdetails.save&lt;br&gt;3. load_dim_game.load_one&lt;br&gt;4. fetch_news.collect(mode)&lt;br&gt;5. fetch_reviews.collect(mode)&lt;br&gt;6. load_fct_review.load_all&lt;br&gt;7. load_fct_patch.load_all&lt;br&gt;8. dbt run" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="1150" y="600" width="300" height="220" as="geometry"/>
+                    <mxGeometry x="1060" y="180" width="300" height="220" as="geometry"/>
                 </mxCell>
                 <mxCell id="62" value="вызывает те же load_*/fetch_*" style="html=1;endArrow=open;dashed=1;dashPattern=4 3;rounded=0;fontSize=11;strokeColor=#666666;fontColor=#666666;" parent="1" source="60" target="29" edge="1">
-                    <mxGeometry x="-0.1125" y="-9" relative="1" as="geometry">
+                    <mxGeometry x="-0.4088" y="23" relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="1140" y="480"/>
+                            <mxPoint x="1070" y="400"/>
                             <mxPoint x="1020" y="440"/>
                             <mxPoint x="910" y="460"/>
                         </Array>
-                        <mxPoint as="offset"/>
+                        <mxPoint y="1" as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                
                 <mxCell id="300" value="fetch_platform_events.py&lt;br&gt;fetch()" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="565" y="160" width="140" height="44" as="geometry"/>
+                    <mxGeometry x="490" y="160" width="180" height="44" as="geometry"/>
                 </mxCell>
                 <mxCell id="301" value="fetch_platform_events.py&lt;br&gt;load_all()" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" parent="1" vertex="1">
                     <mxGeometry x="565" y="480" width="140" height="44" as="geometry"/>
@@ -205,7 +204,13 @@
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="314" value="напрямую, мимо marts" style="html=1;endArrow=open;dashed=1;dashPattern=4 3;rounded=0;fontSize=11;strokeColor=#666666;fontColor=#666666;" parent="1" source="302" target="56" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
+                    <mxGeometry x="-0.5745" relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="590" y="860"/>
+                            <mxPoint x="590" y="1030"/>
+                        </Array>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
                 </mxCell>
             </root>
         </mxGraphModel>

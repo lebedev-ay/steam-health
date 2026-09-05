@@ -11,16 +11,14 @@ const TYPES = {
   unknown:      { color: '#6b7684', label: 'прочее' }
 };
 
-// события платформы не привязаны к игре: bandColor - приглушённая
-// полоса-фон, markerColor - тот же оттенок для маркера, насыщеннее
+// события платформы не привязаны к игре: bandColor - приглушённая полоса-фон, markerColor - тот же оттенок для маркера, насыщеннее
 const PLATFORM_TYPES = {
   sale:   { bandColor: '#9c916f', markerColor: '#d4b106', label: 'распродажа Steam' },
   awards: { bandColor: '#8b8298', markerColor: '#9b6fd6', label: 'Steam Awards' },
   fest:   { bandColor: '#6f8f96', markerColor: '#4fc3d9', label: 'Steam Fest' }
 };
 
-// в тултипе показывается короткое имя вроде "Steam Summer Sale"
-// вместо всего пресс-заголовка
+// в тултипе показывается короткое имя вроде "Steam Summer Sale" вместо всего пресс-заголовка
 function platformEventLabel(e) {
   if (e.type === 'awards') return 'Steam Awards';
 
@@ -50,17 +48,15 @@ function truncate(s, n) {
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
 }
 
-// заголовки новостей и имена игр приходят из Steam, то есть их пишет
-// кто угодно. Экранируем всё, что подставляется в разметку, которую
-// собираем строкой - тултипы Plotly
+// заголовки новостей и имена игр приходят из Steam, то есть их пишет кто угодно.
+//  Экранируем всё, что подставляется в разметку, которую собираем строкой - тултипы Plotly
 function esc(s) {
   return String(s).replace(/[&<>"']/g, ch => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[ch]));
 }
 
-// на широком диапазоне мелкие события прячем, иначе сливаются
-// в сплошную полосу; на узком (< 60 дней) показываем всё
+// на широком диапазоне мелкие события прячем, иначе сливаются в сплошную полосу; на узком (< 60 дней) показываем всё
 function densityThreshold(days) {
   if (days > 365) return 5;
   if (days >= 180) return 2;
@@ -74,8 +70,7 @@ function densityFilter(days) {
   return e => (e.weight ?? 0) >= limit;
 }
 
-// фильтров два - порог из формы на сервере и порог плотности здесь.
-// Оба меряют вес, поэтому видно то, что прошло больший из них
+// фильтров два - порог из формы на сервере и порог плотности здесь. Оба меряют вес, поэтому видно то, что прошло больший из них
 function eventFilterLabel(days, minWeight) {
   const limit = Math.max(minWeight, densityThreshold(days));
   return limit ? `показаны события с весом ≥ ${limit}` : 'показаны все события';
@@ -92,8 +87,7 @@ function cpTraceIndex() {
   return document.getElementById('sentiment').data.findIndex(t => t.name === 'Переломы');
 }
 
-// подсветка по наведению на строку таблицы: restyle нужных точек
-// вместо перерисовки всего графика
+// подсветка по наведению на строку таблицы: restyle нужных точек вместо перерисовки всего графика
 function highlightChangePoint(cpIdx) {
   if (!cpBaseMarker) return;
   const idxs = cpMarkerIndices[cpIdx] || [];
@@ -127,16 +121,14 @@ function mainEventLabel(c) {
   return '—';
 }
 
-// границы оси Plotly пишет в своём формате и со временем, поэтому
-// сравнение строк ловило бы различия записи вместо различий диапазона
+// границы оси Plotly пишет в своём формате и со временем, поэтому сравнение строк ловило бы различия записи вместо различий диапазона
 function sameRange(a, b) {
   if (!a || !b) return a === b;
   return Date.parse(a[0]) === Date.parse(b[0])
       && Date.parse(a[1]) === Date.parse(b[1]);
 }
 
-// Plotly отдаёт границу оси то с временем, то без - сравниваем
-// по первым 10 символам, ISO-дата сравнивается как строка
+// Plotly отдаёт границу оси то с временем, то без - сравниваем по первым 10 символам, ISO-дата сравнивается как строка
 function dayInRange(day, range) {
   if (!range) return true;
   const lo = String(range[0]).slice(0, 10);
@@ -144,8 +136,7 @@ function dayInRange(day, range) {
   return day >= lo && day <= hi;
 }
 
-// cps приходит полным списком: data-idx строки обязан остаться
-// индексом в нём же, по нему ищется ромб на графике
+// cps приходит полным списком: data-idx строки обязан остаться индексом в нём же, по нему ищется ромб на графике
 function renderChangePointList(cps, range) {
   const el = document.getElementById('cpList');
 
@@ -211,8 +202,7 @@ function renderChangePointList(cps, range) {
   });
 }
 
-// перерисовка по уже загруженным данным (range = null - вся история):
-// зум и панорамирование пересчитывают слои событий без похода на сервер
+// перерисовка по уже загруженным данным (range = null - вся история): зум и панорамирование пересчитывают слои событий без похода на сервер
 function renderChart(range) {
   const data = lastData;
   if (!data) return;
@@ -266,8 +256,7 @@ function renderChart(range) {
     layer: 'below'
   }));
 
-  // полоса шириной в окно поиска (±3 дня), дата приблизительная.
-  // Плотностью не фильтруем: их 80 на 12 лет, в кашу не сливаются
+  // полоса шириной в окно поиска (±3 дня), дата приблизительная. Плотностью не фильтруем: их 80 на 12 лет, в кашу не сливаются
   const platformEvents = data.platform_events || [];
   const showPlatform = document.getElementById('showPlatform').checked;
 
@@ -281,8 +270,7 @@ function renderChart(range) {
     layer: 'below'  // под данными - фон, не поверх линии
   })) : [];
 
-  // shapes в Plotly не дают тултип, поэтому дата рядом ещё и точкой:
-  // квадрат ниже треугольников игровых событий
+  // shapes в Plotly не дают тултип, поэтому дата рядом ещё и точкой: квадрат ниже треугольников игровых событий
   const platformMarkerY = topY - Math.max((topY - floorY) * 0.10, 1);
 
   const platformMarkerTrace = {
@@ -326,8 +314,7 @@ function renderChart(range) {
     mode: 'markers',
     name: TYPES[type]?.label || type,
     legendgroup: type,
-    // размер общий с миниатюрой rangeslider (Plotly не различает) -
-    // уменьшен, чтобы в ней не было каши
+    // размер общий с миниатюрой rangeslider (Plotly не различает) - уменьшен, чтобы в ней не было каши
     marker: {
       size: 7, symbol: 'triangle-down',
       color: TYPES[type]?.color || '#6b7684',
@@ -339,9 +326,8 @@ function renderChart(range) {
     hovertemplate: '%{x}<br>%{text}<extra></extra>'
   }));
 
-  // один ромб на перелом: разрешение внутри суток данными не
-  // подкреплено, зерно дневное. Цвет - по событию с наибольшим весом,
-  // остальные типы перечисляются в тултипе цветными строками
+  // один ромб на перелом: разрешение внутри суток данными не подкреплено, зерно дневное. 
+  // Цвет - по событию с наибольшим весом, остальные типы перечисляются в тултипе цветными строками
   const cpX = [], cpY = [], cpColor = [], cpSize = [], cpLine = [], cpText = [];
   cpMarkerIndices = [];
 
@@ -378,8 +364,7 @@ function renderChart(range) {
         (a, e) => (e.weight ?? 0) > (a.weight ?? 0) ? e : a, c.events[0]);
       color = TYPES[strongest.type]?.color || '#6b7684';
 
-      // цвет строки в тултипе Plotly задаётся только через span:
-      // фон и рамки он игнорирует, поэтому маркер типа - символом
+      // цвет строки в тултипе Plotly задаётся только через span: фон и рамки он игнорирует, поэтому маркер типа - символом
       body = kinds.map(k => {
         const titles = c.events.filter(e => e.type === k)
           .map(e => esc(e.title)).join('<br>');
@@ -429,8 +414,7 @@ function renderChart(range) {
     {
       x: days, y: values, mode: 'lines',
       name: isDelta ? 'Отклонение, п.п.' : 'Позитивных, %',
-      // толще и контрастнее, чтобы читалась поверх маркеров
-      // в миниатюре rangeslider (см. комментарий у него ниже)
+      // толще и контрастнее, чтобы читалась поверх маркеров в миниатюре rangeslider (см. комментарий у него ниже)
       line: { color: '#f0f4f8', width: 3.5, shape: 'spline', smoothing: 0.4 },
       customdata: totals,
       hovertemplate: isDelta
@@ -466,8 +450,7 @@ function renderChart(range) {
     },
     xaxis: {
       gridcolor: '#333a44',
-      // rangeslider зеркалит все трейсы общей оси, исключить трейс
-      // точечно Plotly не даёт - отсюда размеры маркеров и линии выше
+      // rangeslider зеркалит все трейсы общей оси, исключить трейс точечно Plotly не даёт - отсюда размеры маркеров и линии выше
       rangeslider: { visible: true, bgcolor: '#1e232a', bordercolor: '#333a44' },
       rangeselector: {
         buttons: [
@@ -488,13 +471,10 @@ function renderChart(range) {
     legend: { orientation: 'h', y: 1.10, bgcolor: 'rgba(0,0,0,0)' }
   }, { responsive: true });
 
-  // копия обязательна: переданный массив Plotly держит как свой
-  // xaxis.range и меняет на месте, так что ссылка на него всегда
-  // сравнивалась бы сама с собой
+  // копия обязательна: переданный массив Plotly держит как свой xaxis.range и меняет на месте, так что ссылка на него всегда сравнивалась бы сама с собой
   lastRenderedRange = effectiveRange ? effectiveRange.slice() : null;
 
-  // zoom, pan, rangeslider и кнопки периода приходят сюда одним
-  // plotly_relayout - перерисовываем только клиентские слои
+  // zoom, pan, rangeslider и кнопки периода приходят сюда одним plotly_relayout - перерисовываем только клиентские слои
   if (!relayoutBound) {
     relayoutBound = true;
     document.getElementById('sentiment').on('plotly_relayout', () => {
@@ -520,8 +500,7 @@ async function load() {
     `&min_weight=${minWeight}&sensitivity=${sensitivity}`);
   const body = await res.json().catch(() => null);
 
-  // на 400 и 500 в теле лежит {error}: рисовать нечего, и текст
-  // сервера полезнее падения на data.daily
+  // на 400 и 500 в теле лежит {error}: рисовать нечего, и текст сервера полезнее падения на data.daily
   if (!res.ok || !body || !body.daily) {
     throw new Error((body && body.error) || `сервер ответил ${res.status}`);
   }
@@ -530,8 +509,7 @@ async function load() {
   renderChart(null);
 }
 
-// полный список игр держим отдельно от select: фильтр перерисовывает
-// его содержимое, и выбранная игра выпадать из него не должна
+// полный список игр держим отдельно от select: фильтр перерисовывает его содержимое, и выбранная игра выпадать из него не должна
 let gameOptions = [...document.getElementById('game').options]
   .map(o => ({ value: o.value, label: o.textContent }));
 
@@ -549,8 +527,7 @@ function renderGameOptions(preferred) {
 }
 
 // перезапрашивают данные только те элементы, что входят в /api/data.
-// Режим показа и полосы платформы меняют одну отрисовку, и полный
-// запрос ради них сбрасывал бы текущий зум
+// Режим показа и полосы платформы меняют одну отрисовку, и полный запрос ради них сбрасывал бы текущий зум
 const QUERY_CONTROL_IDS = ['game', 'smoothing', 'sensitivity', 'minWeight'];
 const VIEW_CONTROL_IDS = ['mode', 'showPlatform'];
 const CONTROL_IDS = [...QUERY_CONTROL_IDS, ...VIEW_CONTROL_IDS];
@@ -592,8 +569,7 @@ loadSafe();
 
 const COLLECT_STORAGE_KEY = 'steamHealthCollectTask';
 
-// токен есть, только если задан в окружении сервера - без него
-// форма работает как раньше, заголовок не отправляется
+// токен есть, только если задан в окружении сервера - без него форма работает как раньше, заголовок не отправляется
 const COLLECT_TOKEN =
   document.querySelector('meta[name="collect-token"]')?.content || '';
 
@@ -625,18 +601,15 @@ async function refreshGamesList(appId) {
   }));
   renderGameOptions(appId);
 
-  // зовётся только после успешного сбора: данные собранной игры
-  // изменились, поэтому график перерисовываем всегда
+  // зовётся только после успешного сбора: данные собранной игры изменились, поэтому график перерисовываем всегда
   if (document.getElementById('game').options.length) loadSafe();
 }
 
-// Celery отдаёт PENDING и для задачи в очереди, и для неизвестного id -
-// различить их нельзя, поэтому ожидание ограничено по времени
+// Celery отдаёт PENDING и для задачи в очереди, и для неизвестного id - различить их нельзя, поэтому ожидание ограничено по времени
 const PENDING_TRIES = 30;
 const POLL_INTERVAL_MS = 2000;
 
-// own = false, когда следим за чужим сбором после 409: список игр
-// обновить надо, а выбор в селекте и график - не наши, не трогаем
+// own = false, когда следим за чужим сбором после 409: список игр обновить надо, а выбор в селекте и график - не наши, не трогаем
 function pollTask(taskId, own = true) {
   setCollectRunning(true);
   let pendingLeft = PENDING_TRIES;
@@ -718,9 +691,8 @@ document.getElementById('collectBtn').addEventListener('click', async () => {
     const body = await res.json();
 
     if (res.status === 409) {
-      // сбор уже идёт у другой игры - подписываемся на её прогресс
-      // тем же pollTask, чтобы видеть реальный ход. Запрошенная игра
-      // при этом в очередь не попала, о чём говорим по окончании
+      // сбор уже идёт у другой игры - подписываемся на её прогресс тем же pollTask, чтобы видеть реальный ход.
+      // Запрошенная игра при этом в очередь не попала, о чём говорим по окончании
       showCollectProgress('сейчас идёт сбор другой игры, слежу за прогрессом…', 'busy');
       pollTask(body.busy_task_id, false);
       return;
