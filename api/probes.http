@@ -1,0 +1,65 @@
+# Черновые запросы к Steam API: ими разведывались форматы ответов
+# и проверялись параметры, которые потом попали в collector/.
+# Не часть пайплайна, запускать руками из VS Code (REST Client)
+# или любого клиента, понимающего .http.
+#
+# Параметры здесь те же, что шлют коллекторы. User-Agent тоже:
+# steam_api.get ставит его на каждый запрос.
+
+@app_id = 1245620
+@ua = steam-health/0.1
+
+
+### appdetails: карточка игры, как её берёт fetch_appdetails.py
+GET https://store.steampowered.com/api/appdetails?appids={{app_id}}&cc=us&l=english
+User-Agent: {{ua}}
+
+### appdetails: filters=basic отдаёт укороченную карточку, 20 полей вместо 39
+GET https://store.steampowered.com/api/appdetails?appids={{app_id}}&filters=basic
+User-Agent: {{ua}}
+
+### appdetails: поля, из которых load_dim_game.py берёт версию игры и мосты
+GET https://store.steampowered.com/api/appdetails?appids={{app_id}}&filters=genres,categories,release_date,developers,publishers,metacritic
+User-Agent: {{ua}}
+
+### appdetails: несуществующий appid отвечает 200 и success=false, а не 404
+GET https://store.steampowered.com/api/appdetails?appids=999999999&cc=us&l=english
+User-Agent: {{ua}}
+
+
+### appreviews: первая страница, как её берёт fetch_reviews.py
+# cursor=* - начало выдачи, следующий курсор приходит в поле cursor ответа
+GET https://store.steampowered.com/appreviews/{{app_id}}?json=1&filter=recent&language=all&purchase_type=all&num_per_page=100&cursor=*
+User-Agent: {{ua}}
+
+### appreviews: без purchase_type=all в выдаче только купившие в Steam
+# страница всё равно придёт полной, разница в общем объёме: у free-to-play
+# Overwatch это было 275 отзывов против 20 260 (decisions.md, запись 007)
+GET https://store.steampowered.com/appreviews/2357570?json=1&filter=recent&language=all&num_per_page=100&cursor=*
+User-Agent: {{ua}}
+
+### appreviews: следующая страница по курсору из поля cursor предыдущего ответа
+# курсор ниже устаревший и отдаёт пустую страницу, а не ошибку;
+# подставить свежий, он URL-кодированный
+GET https://store.steampowered.com/appreviews/{{app_id}}?json=1&filter=recent&language=all&purchase_type=all&num_per_page=100&cursor=AoJwzs7wzvYCcMDcvgI%3D
+User-Agent: {{ua}}
+
+
+### GetNewsForApp: первая страница, как её берёт fetch_news.py
+# maxlength=0 отдаёт тело новости целиком, из него считается body_length
+GET https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={{app_id}}&count=500&maxlength=0
+User-Agent: {{ua}}
+
+### GetNewsForApp: enddate - курсор "раньше этой даты", а не фильтр "новее"
+# подставить unix-время минимальной даты предыдущей страницы минус секунда
+GET https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={{app_id}}&count=500&maxlength=0&enddate=1700000000
+User-Agent: {{ua}}
+
+### GetNewsForApp: фид платформы, appid 753 - служебный, не игра
+# отсюда fetch_platform_events.py берёт распродажи, Steam Awards и фесты
+GET https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid=753&count=500&maxlength=0
+User-Agent: {{ua}}
+
+### GetNewsForApp: у игры с частыми новостями видно, где кончается выдача
+GET https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid=252490&count=500&maxlength=0
+User-Agent: {{ua}}

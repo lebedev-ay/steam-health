@@ -149,8 +149,8 @@ basic auth в nginx при деплое.
 - `db/migration/` — миграции схемы core
 - `dbt/` — модели витрин marts
 - `web/` — дашборд на Flask + Plotly
-- `sql/adhoc/` — черновые запросы к Steam API для разведки,
-  не часть пайплайна
+- `api/` — черновые запросы к Steam API в формате `.http`,
+  которыми разведывались форматы ответов; не часть пайплайна
 - [docs/model.md](docs/model.md) — модель данных: слои, схема core,
   витрины
 - [docs/decisions.md](docs/decisions.md) — журнал решений: что решил
