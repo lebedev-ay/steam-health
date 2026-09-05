@@ -186,7 +186,8 @@ export function renderChart(range) {
     const size = Math.min(7 + Math.abs(c.score) * 0.15, 11);
 
     const minorLine = c.events_minor.length
-      ? `<br>и ещё ${c.events_minor.length} событий`
+      ? `<br>и ещё ${c.events_minor.length} ` +
+        `${plural(c.events_minor.length, 'событие', 'события', 'событий')}`
       : '';
     const platformLine = c.platform_event
       ? `<br><b>платформа:</b> ${esc(platformEventLabel(c.platform_event))}`
@@ -220,7 +221,7 @@ export function renderChart(range) {
     cpX.push(c.day); cpY.push(baseY);
     cpColor.push(color); cpSize.push(size); cpLine.push(edge);
     myIndices.push(cpX.length - 1);
-    cpText.push(`<b>${dir} ${c.score} п.п.</b><br>${body}${platformLine}`);
+    cpText.push(`<b>${dir} ${Math.abs(c.score)} п.п.</b><br>${body}${platformLine}`);
   });
 
   const cpLineWidth = cpX.map(() => 2.5);
