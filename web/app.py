@@ -76,14 +76,22 @@ def find_change_points(smoothed, half_window=7, min_gap=7, sensitivity=1.5):
     return sorted(chosen), None
 
 
-# значимость меряется одним весом: тип события ничего не говорит о его величине, и хотфикс весом 0.1 проходил как крупный патч
+# значимость патча меряется весом: тип события ничего не говорит о его величине, и хотфикс весом 0.1 проходил как крупный патч
 SIGNIFICANT_WEIGHT = 2
+
+# вес - длина патчноута относительно медианы патчей игры, и сезон с дополнением им не измеряются: они редки, и редкость их и делает заметными. Маркетинг, блоги и служебное - фон при любом весе
+ALWAYS_SIGNIFICANT = ("season_start", "expansion")
+NEVER_SIGNIFICANT = ("marketing", "blog", "service")
 
 # защита /api/collect от случайного запроса, не от целенаправленного: токен уезжает в html страницы. Настоящая защита - basic auth на обратном прокси (Caddy)
 COLLECT_TOKEN = os.getenv("COLLECT_TOKEN", "")
 
 
 def is_significant_event(e):
+    if e["event_type"] in ALWAYS_SIGNIFICANT:
+        return True
+    if e["event_type"] in NEVER_SIGNIFICANT:
+        return False
     return (e["weight"] or 0) >= SIGNIFICANT_WEIGHT
 
 
@@ -290,7 +298,7 @@ def data():
     """, (app_id,))
 
     # маркеры - подмножество cp_events, второй запрос не нужен.
-    # Пустой вес считается нулём, как и на клиенте: иначе событие без веса проходило бы любой порог
+    # Пустой вес считается нулём: иначе событие без веса проходило бы любой порог
     events = [e for e in cp_events if (e["weight"] or 0) >= min_weight]
 
     # общие для всех игр, не зависят от app_id. Дата приблизительная (по публикации заметки)
@@ -351,7 +359,8 @@ def data():
         "events": [
             {"day": r["day"].isoformat(), "type": r["event_type"],
              "title": r["title"],
-             "weight": float(r["weight"]) if r["weight"] is not None else None}
+             "weight": float(r["weight"]) if r["weight"] is not None else None,
+             "significant": is_significant_event(r)}
             for r in events
         ],
         "platform_events": [

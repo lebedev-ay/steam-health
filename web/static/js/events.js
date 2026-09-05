@@ -41,23 +41,20 @@ export function platformEventLabel(e) {
 }
 
 // на широком диапазоне мелкие события прячем, иначе сливаются в сплошную полосу; на узком (< 60 дней) показываем всё
-function densityThreshold(days) {
-  if (days > 365) return 5;
-  if (days >= 180) return 2;
-  if (days >= 60) return 1;
-  return 0;
+function densityFilterActive(days) {
+  return days >= 60;
 }
 
 export function densityFilter(days) {
-  const limit = densityThreshold(days);
-  if (!limit) return () => true;
-  return e => (e.weight ?? 0) >= limit;
+  if (!densityFilterActive(days)) return () => true;
+  return e => e.significant;
 }
 
 // фильтров два - порог из формы на сервере и порог плотности здесь. Оба меряют вес, поэтому видно то, что прошло больший из них
 export function eventFilterLabel(days, minWeight) {
-  const limit = Math.max(minWeight, densityThreshold(days));
-  return limit ? `показаны события с весом ≥ ${limit}` : 'показаны все события';
+  const byWeight = minWeight ? `с весом ≥ ${minWeight}` : '';
+  if (!densityFilterActive(days)) return byWeight ? `показаны события ${byWeight}` : 'показаны все события';
+  return byWeight ? `показаны значимые события ${byWeight}` : 'показаны значимые события';
 }
 
 export function mainEventLabel(c) {
