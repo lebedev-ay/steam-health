@@ -1,5 +1,6 @@
 import json
 import re
+import argparse
 
 import requests
 import psycopg
@@ -105,9 +106,20 @@ def load_all(conn):
     return inserted
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    # разобрать заново уже скачанное, не трогая Steam: паттерны
+    # калибруются по одному и тому же фиду - decisions.md, запись 023
+    parser.add_argument("--load-only", action="store_true")
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
-        fetch(conn)
+        if not args.load_only:
+            fetch(conn)
         inserted = load_all(conn)
 
     print(f"платформенных событий: {inserted}")
