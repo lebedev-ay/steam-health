@@ -88,6 +88,9 @@ NEVER_SIGNIFICANT = ("marketing", "blog", "service")
 # защита /api/collect от случайного запроса, не от целенаправленного: токен уезжает в html страницы. Настоящая защита - basic auth на обратном прокси (Caddy)
 COLLECT_TOKEN = os.getenv("COLLECT_TOKEN", "")
 
+# какую игру открывать при заходе на дашборд; пусто - первая по алфавиту. Существование не проверяется: чужой id просто не совпадёт ни с одним вариантом
+DEFAULT_APP_ID = os.getenv("DEFAULT_APP_ID", "")
+
 
 def is_significant_event(e):
     if e["event_type"] in ALWAYS_SIGNIFICANT:
@@ -127,6 +130,7 @@ def parse_app_id(raw):
 def index():
     return render_template("index.html", games=list_games(),
                            collect_token=COLLECT_TOKEN,
+                           default_app_id=DEFAULT_APP_ID,
                            review_pages=COLLECT_REVIEW_PAGES)
 
 

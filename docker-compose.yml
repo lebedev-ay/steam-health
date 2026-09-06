@@ -76,6 +76,7 @@ services:
       DB_PORT: 5432
       REDIS_URL: redis://redis:6379/0
       COLLECT_TOKEN: ${COLLECT_TOKEN:-}
+      DEFAULT_APP_ID: ${DEFAULT_APP_ID:-}
     volumes:
       - ./web:/app
       - ./collector:/app/collector

@@ -27,7 +27,7 @@
     <input type="text" id="gameFilter" placeholder="фильтр" style="width:90px">
     <select id="game">
       {% for g in games %}
-      <option value="{{ g.app_id }}">{{ g.game_name }}{% if g.collection_status == 'partial' %} (данные неполные){% endif %}</option>
+      <option value="{{ g.app_id }}"{% if g.app_id|string == default_app_id %} selected{% endif %}>{{ g.game_name }}{% if g.collection_status == 'partial' %} (данные неполные){% endif %}</option>
       {% endfor %}
     </select>
   </label>
