@@ -26,7 +26,7 @@ DBT_PROJECT_DIR = Path(
 # or, а не второй аргумент getenv: compose подставляет пустую строку, когда переменной нет в .env
 COLLECT_REVIEW_DAYS = int(os.getenv("COLLECT_REVIEW_DAYS") or 365)
 COLLECT_REVIEW_PAGES = int(os.getenv("COLLECT_REVIEW_PAGES") or 200)
-COLLECT_NEWS_PAGES = int(os.getenv("COLLECT_NEWS_PAGES", 10))
+COLLECT_NEWS_PAGES = int(os.getenv("COLLECT_NEWS_PAGES") or 10)
 
 celery_app = Celery("tasks", broker=REDIS_URL, backend=REDIS_URL)
 redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)

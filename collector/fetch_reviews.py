@@ -97,6 +97,7 @@ def parse_args():
     parser.add_argument("max_pages", type=int, nargs="?", default=30)
     parser.add_argument("--app-id", type=int)
     parser.add_argument("--mode", choices=["incremental", "full"], default="incremental")
+    parser.add_argument("--days", type=int)
     return parser.parse_args()
 
 
@@ -109,7 +110,8 @@ def main():
 
     with psycopg.connect(DSN) as conn:
         for app_id, name in games:
-            total, completed, _ = collect(conn, app_id, name, args.max_pages, args.mode)
+            total, completed, _ = collect(conn, app_id, name, args.max_pages,
+                                          args.mode, max_days=args.days)
             grand_total += total
             if not completed:
                 incomplete.append(name)

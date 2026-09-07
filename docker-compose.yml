@@ -79,6 +79,7 @@ services:
       DEFAULT_APP_ID: ${DEFAULT_APP_ID:-}
       COLLECT_REVIEW_DAYS: ${COLLECT_REVIEW_DAYS:-}
       COLLECT_REVIEW_PAGES: ${COLLECT_REVIEW_PAGES:-}
+      COLLECT_NEWS_PAGES: ${COLLECT_NEWS_PAGES:-}
     volumes:
       - ./web:/app
       - ./collector:/app/collector
@@ -108,6 +109,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       COLLECT_REVIEW_DAYS: ${COLLECT_REVIEW_DAYS:-}
       COLLECT_REVIEW_PAGES: ${COLLECT_REVIEW_PAGES:-}
+      COLLECT_NEWS_PAGES: ${COLLECT_NEWS_PAGES:-}
     volumes:
       - ./web:/app
       - ./collector:/app/collector
