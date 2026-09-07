@@ -125,7 +125,7 @@ export function renderChart(range) {
     mode: 'markers',
     name: 'события Steam',
     marker: {
-      size: 10,
+      size: 8,
       symbol: 'square',
       color: platformEvents.map(e => PLATFORM_TYPES[e.type]?.markerColor || '#6b7684'),
       line: { color: '#14161a', width: 1 }
