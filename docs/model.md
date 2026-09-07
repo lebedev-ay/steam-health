@@ -143,13 +143,13 @@ erDiagram
 
 ## Что заполняется
 
-Снимок на 2026-09-05. Числа устареют, порядок величины - нет.
+Снимок на 2026-09-07. Числа устареют, порядок величины - нет.
 
 | Таблица | Чем заполняется | Строк |
 |---|---|---|
-| `raw.reviews` | `fetch_reviews.py` | 21 446 |
-| `raw.news` | `fetch_news.py`, `fetch_platform_events.py` | 86 |
-| `raw.appdetails` | `fetch_appdetails.py` | 29 |
+| `raw.reviews` | `fetch_reviews.py` | 21 709 |
+| `raw.news` | `fetch_news.py`, `fetch_platform_events.py` | 87 |
+| `raw.appdetails` | `fetch_appdetails.py` | 32 |
 | `core.dim_game` | `load_dim_game.py` + заглушка из V4 | 23 версии на 21 игру |
 | `core.dim_date` | миграция V2 | 10 227 |
 | `core.dim_time` | миграция V3 | 24 |
@@ -160,17 +160,17 @@ erDiagram
 | `core.bridge_game_company` | `load_dim_game.py` | 43 |
 | `core.bridge_game_genre` | `load_dim_game.py` | 67 |
 | `core.bridge_game_category` | `load_dim_game.py` | 396 |
-| `core.fct_review` | `load_fct_review.py` | 1 439 966 |
-| `core.review_text` | `load_fct_review.py` | 1 439 966 |
-| `core.fct_patch` | `load_fct_patch.py` | 13 418 |
+| `core.fct_review` | `load_fct_review.py` | 1 441 824 |
+| `core.review_text` | `load_fct_review.py` | 1 441 824 |
+| `core.fct_patch` | `load_fct_patch.py` | 13 419 |
 | `core.dim_platform_event` | `fetch_platform_events.py` | 80 |
-| `marts.review_flat` | dbt | 1 439 966 |
-| `marts.review_daily` | dbt | 10 578 |
+| `marts.review_flat` | dbt | 1 441 824 |
+| `marts.review_daily` | dbt | 10 592 |
 | `marts.dim_game_current` | dbt | 21 |
 
 ## Известные особенности
 
-- **Собирается не вся история отзывов, а свежий хвост: не меньше 50 тыс. на игру.** Разброс по 21 игре - от 50 044 до 161 565, медиана 50 564. Задаче нужна плотность отзывов рядом с патчем, а не полный архив с релиза.
+- **Собирается не вся история отзывов, а свежий хвост.** Глубина задаётся днями - `COLLECT_REVIEW_DAYS`, по умолчанию 365, - при пределе `COLLECT_REVIEW_PAGES` в 200 страниц по 100 отзывов, и у популярных игр предел срабатывает раньше даты (запись 036). Разброс собранного по 21 игре - от 50 099 до 161 565 отзывов, медиана 50 564. Задаче нужна плотность отзывов рядом с патчем, а не полный архив с релиза.
 - **Связь патча и отзыва вычисляется по времени, а не через FK** (запись 010): игрок мог написать через год после десяти патчей подряд.
 - **Доли не хранятся, только числитель и знаменатель** (запись 008): среднее от долей по дням искажает картину, когда дни отличаются по объёму на порядки.
 - **`web/app.py` читает `core.dim_platform_event` напрямую, минуя marts** - единственное исключение из «витрины для дашборда»: витрина агрегировала бы то, что и так готово к чтению.
