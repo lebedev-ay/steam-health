@@ -131,18 +131,7 @@ export function renderChart(range) {
     hovertemplate: '%{x|%d.%m.%Y}<br>%{text}<extra></extra>'
   };
 
-  // стебель до оси помогает точнее прочесть дату перелома
-  const cpStems = cps
-    .filter(c => values[cpIndex[c.day]] !== undefined && values[cpIndex[c.day]] !== null)
-    .map(c => ({
-      type: 'line',
-      xref: 'x', x0: c.day, x1: c.day,
-      yref: 'y', y0: floorY, y1: values[cpIndex[c.day]],
-      line: { color: '#5a6472', width: 1, dash: 'dot' },
-      layer: 'above'
-    }));
-
-  const shapes = [...eventShapes, ...platformShapes, ...cpStems];
+  const shapes = [...eventShapes, ...platformShapes];
 
   // отдельная серия на каждый тип - даёт кликабельную легенду
   const byType = {};
