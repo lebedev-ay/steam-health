@@ -51,6 +51,10 @@ export function renderChart(range) {
   const topY = clean.length ? Math.max(...clean) : 100;
   const floorY = clean.length ? Math.min(0, ...clean) : 0;
 
+  // маркеры событий - полосой над данными: на уровне максимума кривой они сливались с её пиками
+  const span = Math.max(topY - floorY, 1);
+  const eventMarkerY = topY + span * 0.09;
+
   const effectiveRange = range || (days.length ? [days[0], days[days.length - 1]] : undefined);
   const windowDays = effectiveRange
     ? Math.abs(new Date(effectiveRange[1]) - new Date(effectiveRange[0])) / 86400000
@@ -113,7 +117,7 @@ export function renderChart(range) {
   })) : [];
 
   // shapes в Plotly не дают тултип, поэтому дата рядом ещё и точкой: квадрат ниже треугольников игровых событий
-  const platformMarkerY = topY - Math.max((topY - floorY) * 0.10, 1);
+  const platformMarkerY = topY + span * 0.03;
 
   const platformMarkerTrace = {
     x: platformEvents.map(e => e.date),
@@ -121,7 +125,7 @@ export function renderChart(range) {
     mode: 'markers',
     name: 'события Steam',
     marker: {
-      size: 8,
+      size: 10,
       symbol: 'square',
       color: platformEvents.map(e => PLATFORM_TYPES[e.type]?.markerColor || '#6b7684'),
       line: { color: '#14161a', width: 1 }
@@ -141,13 +145,13 @@ export function renderChart(range) {
 
   const eventTraces = Object.entries(byType).map(([type, items]) => ({
     x: items.map(e => e.day),
-    y: items.map(() => topY),
+    y: items.map(() => eventMarkerY),
     mode: 'markers',
     name: TYPES[type]?.label || type,
     legendgroup: type,
     // размер общий с миниатюрой rangeslider (Plotly не различает) - уменьшен, чтобы в ней не было каши
     marker: {
-      size: 7, symbol: 'triangle-down',
+      size: 9, symbol: 'triangle-down',
       color: TYPES[type]?.color || '#6b7684',
       line: { color: '#14161a', width: 1 }
     },
