@@ -22,7 +22,7 @@ export function renderChangePointList(cps, range,
     const note = document.createElement('div');
     note.className = 'cp-empty';
     note.textContent = 'в видимом диапазоне переломов нет - ' +
-      'расширьте диапазон или сбросьте зум двойным кликом';
+      'расширьте диапазон или нажмите «всё» над графиком';
     el.replaceChildren(note);
     return;
   }
