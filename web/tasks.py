@@ -22,8 +22,10 @@ DBT_PROJECT_DIR = Path(
     os.getenv("DBT_PROJECT_DIR", Path(__file__).parent.parent / "dbt")
 )
 
-# сколько страниц берёт сбор из дашборда: отзывы по 100 на страницу, новости по 500. Для более глубокой выкачки - коллекторы напрямую
-COLLECT_REVIEW_PAGES = int(os.getenv("COLLECT_REVIEW_PAGES", 30))
+# глубина сбора из дашборда меряется днями: страницы ничего не говорят о том, сколько это истории - у тихой игры 3000 отзывов это годы, у шумной недели. Страницы остались страховкой от бесконечного обхода
+# or, а не второй аргумент getenv: compose подставляет пустую строку, когда переменной нет в .env
+COLLECT_REVIEW_DAYS = int(os.getenv("COLLECT_REVIEW_DAYS") or 365)
+COLLECT_REVIEW_PAGES = int(os.getenv("COLLECT_REVIEW_PAGES") or 200)
 COLLECT_NEWS_PAGES = int(os.getenv("COLLECT_NEWS_PAGES", 10))
 
 celery_app = Celery("tasks", broker=REDIS_URL, backend=REDIS_URL)
@@ -108,11 +110,12 @@ def collect_game(self, app_id, mode="incremental"):
                 extend_lock()
                 progress(5, f"{name}: качаю отзывы ({mode})", progress=f"{page} стр., {total} {plural(total, 'отзыв', 'отзыва', 'отзывов')}")
 
-            _, completed = fetch_reviews.collect(conn, app_id, name,
-                                                 COLLECT_REVIEW_PAGES, mode,
-                                                 on_page=on_page)
+            _, completed, reviews_stop = fetch_reviews.collect(
+                conn, app_id, name, COLLECT_REVIEW_PAGES, mode,
+                max_days=COLLECT_REVIEW_DAYS, on_page=on_page)
         if not completed:
             raise RuntimeError(f"{name}: не удалось докачать отзывы (шаг 5) - статус остаётся partial")
+        progress(5, f"{name}: отзывы - {reviews_stop}")
 
         progress(6, f"{name}: загружаю отзывы в core")
         with psycopg.connect(DSN, row_factory=dict_row) as conn:
@@ -148,7 +151,7 @@ def collect_game(self, app_id, mode="incremental"):
             )
             conn.commit()
 
-        return {"app_id": app_id, "name": name, "mode": mode}
+        return {"app_id": app_id, "name": name, "mode": mode, "reviews": reviews_stop}
     finally:
         # замок снимается всегда - и при успехе, и при падении на любом шаге, иначе следующий сбор будет ждать LOCK_TTL впустую
         redis_client.eval(_RELEASE_LOCK_SCRIPT, 1, LOCK_KEY, self.request.id)

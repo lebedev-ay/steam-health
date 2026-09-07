@@ -35,17 +35,25 @@ def known_recommendation_ids(conn, ids):
     return {r[0] for r in rows}
 
 
-def collect(conn, app_id, name, max_pages, mode, on_page=None):
+def oldest_created(reviews):
+    return min(int(r.get("timestamp_created") or 0) for r in reviews)
+
+
+def collect(conn, app_id, name, max_pages, mode, max_days=None, on_page=None):
     cursor = "*"
     total = 0
+    cutoff = time.time() - max_days * 86400 if max_days else None
+    # переопределяется на любом досрочном выходе; остаётся, если цикл дошёл до конца
+    stop = "упёрлись в предел страниц, история короче запрошенной"
 
     for page in range(max_pages):
         data = fetch_page(app_id, cursor)
         if data is None:
-            return total, False
+            return total, False, "Steam не ответил"
 
         reviews = data.get("reviews") or []
         if not reviews:
+            stop = "собрана вся история"
             break
 
         if mode == "incremental":
@@ -53,6 +61,7 @@ def collect(conn, app_id, name, max_pages, mode, on_page=None):
             batch_ids = [int(r["recommendationid"]) for r in reviews]
             known = known_recommendation_ids(conn, batch_ids)
             if len(known) == len(batch_ids):
+                stop = "новых отзывов нет"
                 break
 
         conn.execute(
@@ -66,15 +75,21 @@ def collect(conn, app_id, name, max_pages, mode, on_page=None):
         if on_page:
             on_page(page + 1, total)
 
+        # страницу, пересёкшую границу, сохраняем целиком: raw только дописывается, и лишние старые отзывы никому не мешают
+        if cutoff and oldest_created(reviews) < cutoff:
+            stop = f"собрано за {max_days} дн."
+            break
+
         next_cursor = data.get("cursor")
         if not next_cursor or next_cursor == cursor:
+            stop = "собрана вся история"
             break
         cursor = next_cursor
 
         time.sleep(REQUEST_PAUSE)
 
-    print(f"{name}: {total}")
-    return total, True
+    print(f"{name}: {total} - {stop}")
+    return total, True, stop
 
 
 def parse_args():
@@ -94,7 +109,7 @@ def main():
 
     with psycopg.connect(DSN) as conn:
         for app_id, name in games:
-            total, completed = collect(conn, app_id, name, args.max_pages, args.mode)
+            total, completed, _ = collect(conn, app_id, name, args.max_pages, args.mode)
             grand_total += total
             if not completed:
                 incomplete.append(name)

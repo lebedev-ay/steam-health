@@ -77,6 +77,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       COLLECT_TOKEN: ${COLLECT_TOKEN:-}
       DEFAULT_APP_ID: ${DEFAULT_APP_ID:-}
+      COLLECT_REVIEW_DAYS: ${COLLECT_REVIEW_DAYS:-}
+      COLLECT_REVIEW_PAGES: ${COLLECT_REVIEW_PAGES:-}
     volumes:
       - ./web:/app
       - ./collector:/app/collector
@@ -104,6 +106,8 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       REDIS_URL: redis://redis:6379/0
+      COLLECT_REVIEW_DAYS: ${COLLECT_REVIEW_DAYS:-}
+      COLLECT_REVIEW_PAGES: ${COLLECT_REVIEW_PAGES:-}
     volumes:
       - ./web:/app
       - ./collector:/app/collector

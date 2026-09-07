@@ -11,7 +11,8 @@ from celery.result import AsyncResult
 from db import DSN
 from text import plural
 from tasks import (celery_app, collect_game, redis_client,
-                   LOCK_KEY, LOCK_TTL, COLLECT_REVIEW_PAGES)
+                   LOCK_KEY, LOCK_TTL, COLLECT_REVIEW_PAGES,
+                   COLLECT_REVIEW_DAYS)
 
 app = Flask(__name__)
 
@@ -131,7 +132,8 @@ def index():
     return render_template("index.html", games=list_games(),
                            collect_token=COLLECT_TOKEN,
                            default_app_id=DEFAULT_APP_ID,
-                           review_pages=COLLECT_REVIEW_PAGES)
+                           review_pages=COLLECT_REVIEW_PAGES,
+                           review_days=COLLECT_REVIEW_DAYS)
 
 
 @app.route("/api/games")

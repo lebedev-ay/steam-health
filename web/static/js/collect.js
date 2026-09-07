@@ -55,7 +55,8 @@ function pollTask(taskId, own = true) {
       setCollectRunning(false);
       localStorage.removeItem(COLLECT_STORAGE_KEY);
       if (own) {
-        showCollectProgress(`готово: ${body.result?.name || 'игра собрана'}`, 'ok');
+        showCollectProgress(`готово: ${body.result?.name || 'игра собрана'}` +
+          `${body.result?.reviews ? ' - ' + body.result.reviews : ''}`, 'ok');
         onCollected(body.result?.app_id);
       } else {
         showCollectProgress(`чужой сбор закончен (${body.result?.name || 'игра собрана'}), ` +
