@@ -308,7 +308,11 @@ export function renderChart(range) {
     },
     hovermode: 'closest',
     legend: { orientation: 'h', y: 1.06, bgcolor: 'rgba(0,0,0,0)' }
-  }, { responsive: true });
+  // двойной клик выключен: на ряде в несколько лет случайное попадание выбрасывало
+  // из выбранного окна. 'reset' здесь не помогает - при autorange: false Plotly не хранит
+  // _rangeInitial и откатывается к автомасштабу. Полный сброс остался кнопкой «всё».
+  // Колесо зумит; страница листается мимо графика, свободной высоты хватает
+  }, { responsive: true, doubleClick: false, scrollZoom: true });
 
   // копия обязательна: переданный массив Plotly держит как свой xaxis.range и меняет на месте, так что ссылка на него всегда сравнивалась бы сама с собой
   lastRenderedRange = effectiveRange ? effectiveRange.slice() : null;
