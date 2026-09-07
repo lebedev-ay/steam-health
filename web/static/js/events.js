@@ -55,17 +55,10 @@ export function densityFilter(days) {
 }
 
 // фильтров два - порог из формы на сервере и порог плотности здесь. Оба меряют вес, поэтому видно то, что прошло больший из них
-export function eventFilterLabel(days, minWeight, events) {
+export function eventFilterLabel(days, minWeight) {
   const limit = Math.max(minWeight, densityThreshold(days));
   if (!limit) return 'показаны все события';
-
-  // типы, которым пороги не писаны, берём из самих данных: правило живёт на сервере, здесь только его результат
-  const kept = [...new Set(events.filter(e => e.always_show).map(e => e.type))]
-    .map(t => TYPES[t]?.label || t);
-  const byWeight = `события с весом ≥ ${limit}`;
-  return kept.length
-    ? `показаны ${kept.join(' и ')}, а также ${byWeight}`
-    : `показаны ${byWeight}`;
+  return `показаны сезоны, дополнения, события с откликом в данных и всё с весом ≥ ${limit}`;
 }
 
 export function mainEventLabel(c) {

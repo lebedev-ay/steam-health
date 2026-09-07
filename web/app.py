@@ -86,6 +86,12 @@ SIGNIFICANT_WEIGHT = 2
 ALWAYS_SIGNIFICANT = ("season_start", "expansion")
 NEVER_SIGNIFICANT = ("marketing", "blog", "service")
 
+# отклик данных на событие: объём отзывов и доля позитива в окне +-3 дня. Доля считается суммами, а не средним дневных долей - запись 008. Пороги взяты по 90-му перцентилю обеих величин на всех играх
+RESPONSE_WINDOW = 3
+RESPONSE_VOLUME_RATIO = 2.0
+RESPONSE_SHIFT_PP = 12
+RESPONSE_MIN_REVIEWS = 30
+
 # защита /api/collect от случайного запроса, не от целенаправленного: токен уезжает в html страницы. Настоящая защита - basic auth на обратном прокси (Caddy)
 COLLECT_TOKEN = os.getenv("COLLECT_TOKEN", "")
 
@@ -101,9 +107,29 @@ def is_significant_event(e):
     return (e["weight"] or 0) >= SIGNIFICANT_WEIGHT
 
 
-# для этих типов вес не мера, поэтому пороги - и из формы, и по плотности на клиенте - к ним не применяются
-def always_shown(e):
-    return e["event_type"] in ALWAYS_SIGNIFICANT
+def has_response(day_index, totals, positives, day):
+    i = day_index.get(day)
+    if i is None:
+        return False
+    lo = max(0, i - RESPONSE_WINDOW)
+    before, after = totals[lo:i], totals[i:i + RESPONSE_WINDOW]
+    if not before or not after:
+        return False
+
+    bt, at = sum(before), sum(after)
+    if bt and (at / len(after)) / (bt / len(before)) >= RESPONSE_VOLUME_RATIO:
+        return True
+
+    # на десятке отзывов доля скачет сама по себе, сдвиг такого окна ничего не значит
+    if min(bt, at) < RESPONSE_MIN_REVIEWS:
+        return False
+    bp, ap = sum(positives[lo:i]), sum(positives[i:i + RESPONSE_WINDOW])
+    return abs(100 * ap / at - 100 * bp / bt) >= RESPONSE_SHIFT_PP
+
+
+# что показывать независимо от веса: сезон и дополнение - по типу, остальное - если рядом данные повели себя необычно. Совпадение по времени причиной не является: всплеск объёма бывает от чего угодно, включая распродажу. Это правило показа, а не утверждение о влиянии
+def always_shown(e, responsive_days):
+    return e["event_type"] in ALWAYS_SIGNIFICANT or e["day"] in responsive_days
 
 
 def list_games():
@@ -312,8 +338,14 @@ def data():
 
     # маркеры - подмножество cp_events, второй запрос не нужен.
     # Пустой вес считается нулём: иначе событие без веса проходило бы любой порог
+    day_index = {r["day"]: i for i, r in enumerate(raw_daily)}
+    totals = [r["total"] for r in raw_daily]
+    positives = [r["positive"] for r in raw_daily]
+    responsive_days = {e["day"] for e in cp_events
+                       if has_response(day_index, totals, positives, e["day"])}
+
     events = [e for e in cp_events
-              if always_shown(e) or (e["weight"] or 0) >= min_weight]
+              if always_shown(e, responsive_days) or (e["weight"] or 0) >= min_weight]
 
     # общие для всех игр, не зависят от app_id. Дата приблизительная (по публикации заметки)
     platform_events = query("""
@@ -374,7 +406,7 @@ def data():
             {"day": r["day"].isoformat(), "type": r["event_type"],
              "title": r["title"],
              "weight": float(r["weight"]) if r["weight"] is not None else None,
-             "always_show": always_shown(r)}
+             "always_show": always_shown(r, responsive_days)}
             for r in events
         ],
         "platform_events": [
