@@ -207,7 +207,7 @@ export function renderChart(range) {
         const titles = c.events.filter(e => e.type === k)
           .map(e => esc(e.title)).join('<br>');
         const kc = TYPES[k]?.color || BACKGROUND_COLOR;
-        return `<span style="color:${kc}">◆ ${TYPES[k]?.label || k}:</span>` +
+        return `<span style="color:${kc}">◆</span> ${TYPES[k]?.label || k}:` +
                `<br>${titles}`;
       }).join('<br>');
       body += minorLine;
@@ -233,6 +233,8 @@ export function renderChart(range) {
       line: { color: cpLine, width: cpLineWidth }
     },
     text: cpText,
+    // фон тултипа Plotly берёт из цвета маркера, и цветные строки внутри оказывались на цветном: коралловый на коралловом читался как пустая строка. Фон фиксирован, цвет типа остался в глифе
+    hoverlabel: { bgcolor: '#262b33', bordercolor: '#3a4048', font: { color: '#c7d0d9' } },
     hovertemplate: '%{x|%d.%m.%Y}<br>%{text}<extra></extra>'
   };
 
