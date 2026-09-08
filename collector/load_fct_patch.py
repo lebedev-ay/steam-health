@@ -29,8 +29,7 @@ def load_all(conn, app_id=None):
             from raw.news n,
                  jsonb_array_elements(n.payload -> 'appnews' -> 'newsitems') as item
             where item ->> 'feedname' not in ('SteamDB')
-              -- фид платформы живёт в core.dim_platform_event, игры для
-              -- него в dim_game нет - в fct_patch он давал только заглушки
+              -- фид платформы живёт в core.dim_platform_event, игры для него в dim_game нет - в fct_patch он давал только заглушки
               and n.app_id <> %s
             {app_filter}
             order by item ->> 'gid', n.app_id, n.fetched_at desc

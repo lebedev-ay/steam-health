@@ -3,8 +3,7 @@ version: 2
 models:
   - name: dim_game_current
     description: >
-      Текущая версия каждой игры, одна строка на app_id — срез
-      dim_game без SCD2-истории и без заглушки Unknown.
+      Текущая версия каждой игры, одна строка на app_id — срез dim_game без SCD2-истории и без заглушки Unknown.
     columns:
       - name: game_sk
         data_tests:
