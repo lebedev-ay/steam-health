@@ -316,6 +316,8 @@ export function renderChart(range) {
       autorange: false,
       range: effectiveRange
     },
+    // левой кнопкой окно едет по датам, сохраняя ширину. Зум остался колесом, кнопками периода и rangeslider, а выделение рамкой - кнопкой Zoom в панели Plotly
+    dragmode: 'pan',
     hovermode: 'closest',
     legend: { orientation: 'h', y: 1.06, bgcolor: 'rgba(0,0,0,0)' }
   // двойной клик выключен: на ряде в несколько лет случайное попадание выбрасывало
