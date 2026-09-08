@@ -209,40 +209,43 @@ def task_status(task_id):
     return jsonify(response)
 
 
-@app.route("/api/data")
-def data():
+def parse_params(args):
     try:
-        app_id = int(request.args.get("app_id"))
+        app_id = int(args.get("app_id"))
     except (TypeError, ValueError):
-        return jsonify({"error": "app_id должен быть числом"}), 400
+        return None, {"error": "app_id должен быть числом"}
 
-    smoothing = request.args.get("smoothing", "auto")
+    smoothing = args.get("smoothing", "auto")
     if smoothing not in ("off", "auto"):
         try:
             days = int(smoothing)
         except ValueError:
             days = None
         if days is None or not 1 <= days <= SMOOTHING_MAX_DAYS:
-            return jsonify({
+            return None, {
                 "error": f"smoothing - off, auto или целое от 1 до {SMOOTHING_MAX_DAYS}"
-            }), 400
+            }
 
     try:
-        min_weight = float(request.args.get("min_weight", 0))
+        min_weight = float(args.get("min_weight", 0))
     except ValueError:
         min_weight = None
     if min_weight is None or not 0 <= min_weight <= MIN_WEIGHT_MAX:
-        return jsonify({"error": f"min_weight - число от 0 до {MIN_WEIGHT_MAX}"}), 400
+        return None, {"error": f"min_weight - число от 0 до {MIN_WEIGHT_MAX}"}
 
     try:
-        sensitivity = float(request.args.get("sensitivity", 1.5))
+        sensitivity = float(args.get("sensitivity", 1.5))
     except ValueError:
         sensitivity = None
     if sensitivity is None or not SENSITIVITY_MIN <= sensitivity <= SENSITIVITY_MAX:
-        return jsonify({
+        return None, {
             "error": f"sensitivity - число от {SENSITIVITY_MIN} до {SENSITIVITY_MAX}"
-        }), 400
+        }
 
+    return (app_id, smoothing, min_weight, sensitivity), None
+
+
+def build_series(app_id, smoothing):
     # дневной агрегат уже посчитан витриной; календарь нужен, чтобы дни без отзывов попадали в ряд нулями
     raw_daily = query("""
         with bounds as (
@@ -264,11 +267,7 @@ def data():
     """, (app_id, app_id))
 
     if not raw_daily:
-        return jsonify({
-            "daily": [], "events": [], "change_points": [],
-            "change_points_note": "по этой игре ещё нет собранных отзывов",
-            "platform_events": [], "window": 0, "median_volume": 0
-        })
+        return [], [], 0, 0
 
     # ширина окна: обратно пропорциональна медианному объёму
     volumes = sorted(r["total"] for r in raw_daily)
@@ -322,6 +321,10 @@ def data():
             row["base"] = base
             row["delta"] = round(row["pct"] - base, 1)
 
+    return smoothed, raw_daily, half, median
+
+
+def build_events(app_id, raw_daily, min_weight):
     # без фильтров по типу и весу: скрытый на графике тип и слабый патч тоже могут оказаться причиной перелома.
     # distinct нужен потому, что Steam выпускает один анонс под несколькими gid, а маркер ему положен один
     cp_events = query("""
@@ -355,8 +358,10 @@ def data():
         order by event_date
     """, (raw_daily[0]["day"], raw_daily[-1]["day"]))
 
-    change_points, cp_note = find_change_points(smoothed, sensitivity=sensitivity)
+    return cp_events, events, platform_events, responsive_days
 
+
+def attach_events(change_points, smoothed, cp_events, platform_events):
     cp_out = []
     for idx, score in change_points:
         day = smoothed[idx]["day"]
@@ -398,6 +403,29 @@ def data():
             "platform_event": platform_event,
         })
 
+    return cp_out
+
+
+@app.route("/api/data")
+def data():
+    params, error = parse_params(request.args)
+    if error:
+        return jsonify(error), 400
+    app_id, smoothing, min_weight, sensitivity = params
+
+    smoothed, raw_daily, half, median = build_series(app_id, smoothing)
+    if not raw_daily:
+        return jsonify({
+            "daily": [], "events": [], "change_points": [],
+            "change_points_note": "по этой игре ещё нет собранных отзывов",
+            "platform_events": [], "window": 0, "median_volume": 0
+        })
+
+    cp_events, events, platform_events, responsive_days = build_events(
+        app_id, raw_daily, min_weight)
+
+    change_points, cp_note = find_change_points(smoothed, sensitivity=sensitivity)
+
     return jsonify({
         "daily": smoothed,
         "window": half * 2 + 1,
@@ -414,10 +442,9 @@ def data():
              "title": e["title"]}
             for e in platform_events
         ],
-        "change_points": cp_out,
+        "change_points": attach_events(change_points, smoothed,
+                                       cp_events, platform_events),
         "change_points_note": cp_note,
     })
-
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
