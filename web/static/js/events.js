@@ -19,7 +19,7 @@ export const TYPES = {
 // события платформы не привязаны к игре: bandColor - приглушённая полоса-фон, markerColor - тот же оттенок для маркера, насыщеннее
 export const PLATFORM_TYPES = {
   sale:   { bandColor: '#9c916f', markerColor: '#d4b106', label: 'распродажа Steam' },
-  awards: { bandColor: '#8b8298', markerColor: '#9b6fd6', label: 'Steam Awards' },
+  awards: { bandColor: '#9f7a8f', markerColor: '#e879b8', label: 'Steam Awards' },
   fest:   { bandColor: '#6f8f96', markerColor: '#4fc3d9', label: 'Steam Fest' }
 };
 
