@@ -11,7 +11,9 @@ let relayoutBound = false;
 let relayoutTimer = null;
 
 function cpTraceIndex() {
-  return document.getElementById('sentiment').data.findIndex(t => t.name === 'Переломы');
+  // трасс с этим именем две: одна ради свотча легенды, вторая с точками
+  return document.getElementById('sentiment').data
+    .findIndex(t => t.name === 'Переломы' && t.showlegend === false);
 }
 
 // подсветка по наведению на строку таблицы: restyle нужных точек вместо перерисовки всего графика
@@ -218,10 +220,26 @@ export function renderChart(range) {
   const cpLineWidth = cpX.map(() => 2.5);
   cpBaseMarker = { size: cpSize.slice(), lineWidth: cpLineWidth.slice() };
 
+  // свотч легенды Plotly берёт из первой точки, а цвет ромба означает направление: в легенде оказывалось направление первого попавшегося перелома. Пустая трасса даёт нейтральный свотч, обе в одной группе - клик по строке по-прежнему прячет ромбы
+  const changePointsLegend = {
+    // точка из null: трассу совсем без точек Plotly считает невидимой и строки в легенде не рисует
+    x: [null], y: [null],
+    mode: 'markers',
+    name: 'Переломы',
+    legendgroup: 'cp',
+    marker: {
+      size: 9, symbol: 'diamond', color: '#c7d0d9',
+      line: { color: '#14161a', width: 1 }
+    },
+    hoverinfo: 'skip'
+  };
+
   const changePoints = {
     x: cpX, y: cpY,
     mode: 'markers',
     name: 'Переломы',
+    legendgroup: 'cp',
+    showlegend: false,
     marker: {
       size: cpSize,
       symbol: 'diamond',
@@ -259,6 +277,7 @@ export function renderChart(range) {
     },
     ...eventTraces,
     ...(showPlatform ? [platformMarkerTrace] : []),
+    changePointsLegend,
     changePoints
   ], {
     shapes: shapes,
