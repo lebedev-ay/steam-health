@@ -1,16 +1,19 @@
 import { truncate, plural } from './util.js';
 
+// один цвет на четыре типа, которые правило значимости и так держит фоном: четыре почти неразличимых серых различать было нечем. В легенде они остаются отдельными строками - клик по типу это фильтр
+export const BACKGROUND_COLOR = '#a0adbb';
+
 export const TYPES = {
   patch:        { color: '#ff6b5b', label: 'патчи' },
   season_start: { color: '#b07de8', label: 'сезоны' },
   expansion:    { color: '#ffb03a', label: 'дополнения' },
   beta:         { color: '#4aa3e0', label: 'бета' },
-  marketing:    { color: '#8a95a3', label: 'маркетинг' },
+  marketing:    { color: BACKGROUND_COLOR, label: 'маркетинг' },
   press:        { color: '#2dbd9e', label: 'пресса' },
-  blog:         { color: '#7d8a99', label: 'блоги' },
-  service:      { color: '#5a6472', label: 'служебное' },
-  announce:     { color: '#c9a227', label: 'анонсы' },
-  unknown:      { color: '#6b7684', label: 'прочее' }
+  blog:         { color: BACKGROUND_COLOR, label: 'блоги' },
+  service:      { color: BACKGROUND_COLOR, label: 'служебное' },
+  announce:     { color: '#f2d857', label: 'анонсы' },
+  unknown:      { color: BACKGROUND_COLOR, label: 'прочее' }
 };
 
 // события платформы не привязаны к игре: bandColor - приглушённая полоса-фон, markerColor - тот же оттенок для маркера, насыщеннее

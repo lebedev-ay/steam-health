@@ -1,6 +1,6 @@
 import { shiftDay, esc, sameRange, dayInRange, plural } from './util.js';
-import { TYPES, PLATFORM_TYPES, platformEventLabel, densityFilter,
-         eventFilterLabel } from './events.js';
+import { TYPES, PLATFORM_TYPES, BACKGROUND_COLOR, platformEventLabel,
+         densityFilter, eventFilterLabel } from './events.js';
 import { renderChangePointList } from './cplist.js';
 
 let lastData = null;
@@ -96,7 +96,7 @@ export function renderChart(range) {
     type: 'rect',
     x0: day, x1: shiftDay(day, 1),
     yref: 'paper', y0: 0, y1: 1,
-    fillcolor: TYPES[items[0].type]?.color || '#6b7684',
+    fillcolor: TYPES[items[0].type]?.color || BACKGROUND_COLOR,
     opacity: 0.14,
     line: { width: 0 },
     layer: 'below'
@@ -110,7 +110,7 @@ export function renderChart(range) {
     type: 'rect',
     x0: shiftDay(e.date, -3), x1: shiftDay(e.date, 4),
     yref: 'paper', y0: 0, y1: 1,
-    fillcolor: PLATFORM_TYPES[e.type]?.bandColor || '#6b7684',
+    fillcolor: PLATFORM_TYPES[e.type]?.bandColor || BACKGROUND_COLOR,
     opacity: 0.05,
     line: { width: 0 },
     layer: 'below'  // под данными - фон, не поверх линии
@@ -127,7 +127,7 @@ export function renderChart(range) {
     marker: {
       size: 8,
       symbol: 'square',
-      color: platformEvents.map(e => PLATFORM_TYPES[e.type]?.markerColor || '#6b7684'),
+      color: platformEvents.map(e => PLATFORM_TYPES[e.type]?.markerColor || BACKGROUND_COLOR),
       line: { color: '#14161a', width: 1 }
     },
     text: platformEvents.map(e =>
@@ -152,7 +152,7 @@ export function renderChart(range) {
     // размер общий с миниатюрой rangeslider (Plotly не различает) - уменьшен, чтобы в ней не было каши
     marker: {
       size: 9, symbol: 'triangle-down',
-      color: TYPES[type]?.color || '#6b7684',
+      color: TYPES[type]?.color || BACKGROUND_COLOR,
       line: { color: '#14161a', width: 1 }
     },
     text: items.map(e => e.weight
@@ -200,13 +200,13 @@ export function renderChart(range) {
     } else {
       const strongest = c.events.reduce(
         (a, e) => (e.weight ?? 0) > (a.weight ?? 0) ? e : a, c.events[0]);
-      color = TYPES[strongest.type]?.color || '#6b7684';
+      color = TYPES[strongest.type]?.color || BACKGROUND_COLOR;
 
       // цвет строки в тултипе Plotly задаётся только через span: фон и рамки он игнорирует, поэтому маркер типа - символом
       body = kinds.map(k => {
         const titles = c.events.filter(e => e.type === k)
           .map(e => esc(e.title)).join('<br>');
-        const kc = TYPES[k]?.color || '#6b7684';
+        const kc = TYPES[k]?.color || BACKGROUND_COLOR;
         return `<span style="color:${kc}">◆ ${TYPES[k]?.label || k}:</span>` +
                `<br>${titles}`;
       }).join('<br>');
