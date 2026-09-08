@@ -173,7 +173,8 @@ export function renderChart(range) {
     if (baseY === undefined || baseY === null) return;
 
     const dir = c.score < 0 ? 'спад' : 'рост';
-    const edge = c.score < 0 ? '#ff4d3d' : '#3ddc84';
+    // ромб - точка на данных, и его собственное свойство это знак и величина сдвига. Тип причины виден по маркерам сверху и в тултипе, поэтому цвет здесь кодирует только направление и совпадает с таблицей
+    const dirColor = c.score < 0 ? '#ff4d3d' : '#3ddc84';
     // уменьшен по той же причине, что треугольники выше -
     // общий размер с миниатюрой rangeslider
     const size = Math.min(7 + Math.abs(c.score) * 0.15, 11);
@@ -188,7 +189,6 @@ export function renderChart(range) {
 
     const kinds = [...new Set(c.events.map(e => e.type))];
 
-    let color = '#3a4048';
     let body;
 
     if (kinds.length === 0) {
@@ -198,10 +198,6 @@ export function renderChart(range) {
           ' рядом'
         : 'событий рядом нет';
     } else {
-      const strongest = c.events.reduce(
-        (a, e) => (e.weight ?? 0) > (a.weight ?? 0) ? e : a, c.events[0]);
-      color = TYPES[strongest.type]?.color || BACKGROUND_COLOR;
-
       // цвет строки в тултипе Plotly задаётся только через span: фон и рамки он игнорирует, поэтому маркер типа - символом
       body = kinds.map(k => {
         const titles = c.events.filter(e => e.type === k)
@@ -214,7 +210,7 @@ export function renderChart(range) {
     }
 
     cpX.push(c.day); cpY.push(baseY);
-    cpColor.push(color); cpSize.push(size); cpLine.push(edge);
+    cpColor.push(dirColor); cpSize.push(size); cpLine.push('#14161a');
     myIndices.push(cpX.length - 1);
     cpText.push(`<b>${dir} ${Math.abs(c.score)} п.п.</b><br>${body}${platformLine}`);
   });
