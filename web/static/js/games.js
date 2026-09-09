@@ -16,6 +16,16 @@ export function renderGameOptions(preferred) {
   select.replaceChildren(...visible.map(o => new Option(o.label, o.value)));
 
   if (visible.some(o => o.value === wanted)) select.value = wanted;
+
+  updateSteamLink();
+}
+
+// ссылка лежит рядом с селектом, а не внутри него: renderGameOptions пересобирает только option'ы, и фильтр по имени её не задевает
+export function updateSteamLink() {
+  const appId = document.getElementById('game').value;
+  const link = document.getElementById('steamLink');
+  link.href = `https://store.steampowered.com/app/${appId}/`;
+  link.hidden = !appId;
 }
 
 // перезапрашивают данные только те элементы, что входят в /api/data.

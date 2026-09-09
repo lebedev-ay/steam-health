@@ -30,6 +30,8 @@
       <option value="{{ g.app_id }}"{% if g.app_id|string == default_app_id %} selected{% endif %}>{{ g.game_name }}{% if g.collection_status == 'partial' %} (данные неполные){% endif %}</option>
       {% endfor %}
     </select>
+    <a id="steamLink" class="steam-link" target="_blank" rel="noopener"
+       title="Страница игры в Steam">Steam</a>
   </label>
 
   <label>Сглаживание:
