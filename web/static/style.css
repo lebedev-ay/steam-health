@@ -20,6 +20,7 @@ select, input {
 }
 #info { color: #8a95a3; font-size: 13px; }
 .hint { color: #6b7684; font-size: 12px; margin-top: 8px; }
+.legal { color: #5f6a78; font-size: 11px; margin-top: 6px; }
 
 .chart-wrap { position: relative; }
 select:disabled, input:disabled { opacity: 0.5; cursor: not-allowed; }
