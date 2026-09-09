@@ -4,7 +4,7 @@ import { truncate, plural } from './util.js';
 export const BACKGROUND_COLOR = '#a0adbb';
 
 export const TYPES = {
-  patch:        { color: '#ff6b5b', label: 'патчи' },
+  patch:        { color: '#f651f6', label: 'патчи' },
   season_start: { color: '#b07de8', label: 'сезоны' },
   expansion:    { color: '#ffb03a', label: 'дополнения' },
   beta:         { color: '#4aa3e0', label: 'бета' },
