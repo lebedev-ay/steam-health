@@ -22,9 +22,9 @@ select, input {
 .hint { color: #778391; font-size: 12px; margin-top: 8px; }
 .legal { color: #5f6a78; font-size: 11px; margin-top: 6px; }
 
-/* иконка красится через currentColor, поэтому цвет задаётся здесь, а не в разметке */
-.steam-link { color: #c7d0d9; display: inline-flex; align-items: center; margin-left: 8px; }
-.steam-link:hover { color: #f0f4f8; }
+/* логотип цветной, currentColor к нему не применить: заметность даёт яркость */
+.steam-link { display: inline-flex; align-items: center; margin-left: 8px; }
+.steam-link:hover { filter: brightness(1.25); }
 
 .chart-wrap { position: relative; }
 select:disabled, input:disabled { opacity: 0.5; cursor: not-allowed; }
