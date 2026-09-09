@@ -59,4 +59,5 @@ docker compose up -d --build
 - [docs/TODO.md](docs/TODO.md) - что не сделано и что отложено осознанно
 
 Проект написан с Claude Code.
+
 Данные получены через публичный Steam Web API и принадлежат Valve; проект к Valve отношения не имеет.
