@@ -19,7 +19,7 @@ select, input {
   border-radius: 6px;
 }
 #info { color: #8a95a3; font-size: 13px; }
-.hint { color: #6b7684; font-size: 12px; margin-top: 8px; }
+.hint { color: #778391; font-size: 12px; margin-top: 8px; }
 .legal { color: #5f6a78; font-size: 11px; margin-top: 6px; }
 
 .steam-link { color: #8a95a3; font-size: 12px; text-decoration: none; margin-left: 6px; }
