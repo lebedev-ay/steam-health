@@ -1,3 +1,25 @@
+# общий блок для всех сервисов Airflow; x- - поле-расширение, compose не считает его сервисом
+x-airflow-common: &airflow-common
+  image: apache/airflow:3.3.1-python3.12
+  profiles: ["airflow"]
+  user: "${AIRFLOW_UID}:0"
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET}
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    TZ: UTC
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+  depends_on: &airflow-common-depends-on
+    airflow-postgres:
+      condition: service_healthy
+
 
 services:
   postgres:
@@ -144,7 +166,27 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # разовая подготовка: миграция метабазы, пользователь, права на папки
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    user: "0:0"
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        set -e
+        /entrypoint airflow version
+        mkdir -p /opt/airflow/logs /opt/airflow/dags
+        chown -R "${AIRFLOW_UID}:0" /opt/airflow/logs /opt/airflow/dags
+        ls -ln /opt/airflow
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+
 volumes:
   pgdata:
   airflow-pgdata:
-  
