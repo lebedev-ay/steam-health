@@ -125,5 +125,26 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+ # метабаза Airflow: отдельный инстанс, чтобы падение steam-postgres не роняло сам Airflow
+  airflow-postgres:
+    image: postgres:16
+    container_name: airflow-postgres
+    profiles: ["airflow"]
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - airflow-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  airflow-pgdata:
+  
