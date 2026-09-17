@@ -15,3 +15,5 @@ dbt/logs/
 dbt/dbt_packages/
 dbt/.user.yml
 *.dump
+visits_clean.txt
+airflow/logs/
