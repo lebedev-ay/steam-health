@@ -1,6 +1,9 @@
 # общий блок для всех сервисов Airflow; x- - поле-расширение, compose не считает его сервисом
 x-airflow-common: &airflow-common
-  image: apache/airflow:3.3.1-python3.12
+  build:
+    context: .
+    dockerfile: airflow/Dockerfile
+  image: steam-health-airflow:3.3.1
   profiles: ["airflow"]
   user: "${AIRFLOW_UID}:0"
   environment: &airflow-common-env
@@ -12,14 +15,16 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    PYTHONPATH: /opt/project/collector
     TZ: UTC
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
+    - ./collector:/opt/project/collector:ro
+    - ./dbt:/opt/project/dbt
   depends_on: &airflow-common-depends-on
     airflow-postgres:
       condition: service_healthy
-
 
 services:
   postgres:
@@ -147,7 +152,7 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
- # метабаза Airflow: отдельный инстанс, чтобы падение steam-postgres не роняло сам Airflow
+  # метабаза Airflow: отдельный инстанс, чтобы падение steam-postgres не роняло сам Airflow
   airflow-postgres:
     image: postgres:16
     container_name: airflow-postgres
@@ -187,8 +192,7 @@ services:
       _AIRFLOW_WWW_USER_USERNAME: admin
       _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
 
-
-        # интерфейс, REST API и приём статусов от задач
+  # интерфейс, REST API и приём статусов от задач
   airflow-apiserver:
     <<: *airflow-common
     container_name: airflow-apiserver
@@ -210,8 +214,7 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
-
-          # планировщик: решает, что запускать, и сам запускает задачи (LocalExecutor)
+  # планировщик: решает, что запускать, и сам запускает задачи (LocalExecutor)
   airflow-scheduler:
     <<: *airflow-common
     container_name: airflow-scheduler
@@ -220,6 +223,12 @@ services:
       <<: *airflow-common-env
       AIRFLOW__CORE__PARALLELISM: "4"
       AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "4"
+      # доступы к базе steam нужны только здесь: задачи выполняются в scheduler
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: 5432
     healthcheck:
       test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
       interval: 30s
@@ -234,11 +243,11 @@ services:
       airflow-apiserver:
         condition: service_healthy
 
-          # читает файлы DAG и складывает разобранные графы в метабазу
+  # читает файлы DAG и складывает разобранные графы в метабазу
   airflow-dag-processor:
     <<: *airflow-common
-    container_name: airflow-dag-processor
     command: dag-processor
+    container_name: airflow-dag-processor
     environment:
       <<: *airflow-common-env
       AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "60"
