@@ -1,56 +1,35 @@
 import argparse
-from datetime import datetime, timezone
 
 import psycopg
 from psycopg.rows import dict_row
 
 from db import DSN
 
-BATCH_SIZE = 1000
+BATCH_SIZE = 20000
 
 
-def find_language_sk(conn, language_code):
-    if not language_code:
-        return -1
-
-    conn.execute(
-        """
+def load_languages(conn):
+    # коды языков заводятся разом по всему срезу: иначе на каждый отзыв уходил отдельный запрос.
+    # Пустой код словарной строки не получает, в фактах ему отвечает -1
+    conn.execute("""
         insert into core.dim_language (language_code)
-        values (%s)
+        select distinct item ->> 'language'
+        from tmp_review
+        where nullif(item ->> 'language', '') is not null
         on conflict (language_code) do nothing
-        """,
-        (language_code,),
-    )
-    row = conn.execute(
-        "select language_sk from core.dim_language where language_code = %s",
-        (language_code,),
-    ).fetchone()
-    return row["language_sk"]
+    """)
 
 
-def load_review(conn, game_sk, item, language_cache):
-    author = item.get("author") or {}
-
-    created_at = datetime.fromtimestamp(int(item["timestamp_created"]), tz=timezone.utc)
-
-    updated_ts = item.get("timestamp_updated")
-    updated_at = datetime.fromtimestamp(int(updated_ts), tz=timezone.utc) if updated_ts else None
-
-    dev_ts = item.get("timestamp_dev_responded")
-    dev_responded_at = datetime.fromtimestamp(int(dev_ts), tz=timezone.utc) if dev_ts else None
-
-    language_code = item.get("language")
-    if language_code not in language_cache:
-        language_cache[language_code] = find_language_sk(conn, language_code)
-    language_sk = language_cache[language_code]
-
-    date_sk = int(created_at.strftime("%Y%m%d"))
-    time_sk = created_at.hour
-
-    steamid = author.get("steamid")
-
-    row = conn.execute(
-        """
+def load_reviews(conn, first_rn, last_rn):
+    cur = conn.execute("""
+        with src as (
+            select t.game_sk,
+                   t.item,
+                   (t.item ->> 'recommendationid')::bigint                as recommendation_id,
+                   to_timestamp((t.item ->> 'timestamp_created')::bigint) as created_at
+            from tmp_review t
+            where t.rn > %s and t.rn <= %s
+        )
         insert into core.fct_review (
             recommendation_id, game_sk, date_sk, time_sk, language_sk,
             author_steam_id, created_at, updated_at, dev_responded_at,
@@ -58,7 +37,31 @@ def load_review(conn, game_sk, item, language_cache):
             playtime_at_review_min, playtime_forever_min, playtime_last_two_weeks_min,
             steam_purchase, received_for_free, written_during_early_access
         )
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        select
+            s.recommendation_id,
+            s.game_sk,
+            to_char(s.created_at at time zone 'utc', 'YYYYMMDD')::int,
+            extract(hour from s.created_at at time zone 'utc')::smallint,
+            coalesce(l.language_sk, -1),
+            nullif(s.item -> 'author' ->> 'steamid', '')::bigint,
+            s.created_at,
+            -- ноль у Steam значит "не было": ни обновления, ни ответа разработчика
+            to_timestamp(nullif((s.item ->> 'timestamp_updated')::bigint, 0)),
+            to_timestamp(nullif((s.item ->> 'timestamp_dev_responded')::bigint, 0)),
+            (s.item ->> 'voted_up')::boolean,
+            coalesce((s.item ->> 'votes_up')::int, 0),
+            coalesce((s.item ->> 'votes_funny')::int, 0),
+            coalesce((s.item ->> 'comment_count')::int, 0),
+            (s.item ->> 'weighted_vote_score')::numeric,
+            (s.item -> 'author' ->> 'playtime_at_review')::int,
+            (s.item -> 'author' ->> 'playtime_forever')::int,
+            (s.item -> 'author' ->> 'playtime_last_two_weeks')::int,
+            (s.item ->> 'steam_purchase')::boolean,
+            (s.item ->> 'received_for_free')::boolean,
+            (s.item ->> 'written_during_early_access')::boolean
+        from src s
+        left join core.dim_language l
+               on l.language_code = nullif(s.item ->> 'language', '')
         on conflict (recommendation_id) do update set
             votes_up = excluded.votes_up,
             votes_funny = excluded.votes_funny,
@@ -67,30 +70,20 @@ def load_review(conn, game_sk, item, language_cache):
             updated_at = excluded.updated_at,
             dev_responded_at = excluded.dev_responded_at,
             is_voted_up = excluded.is_voted_up
-        returning review_sk
-        """,
-        (
-            int(item["recommendationid"]), game_sk, date_sk, time_sk, language_sk,
-            int(steamid) if steamid else None, created_at, updated_at, dev_responded_at,
-            item["voted_up"], item.get("votes_up", 0), item.get("votes_funny", 0),
-            item.get("comment_count", 0), item.get("weighted_vote_score"),
-            author.get("playtime_at_review"), author.get("playtime_forever"),
-            author.get("playtime_last_two_weeks"),
-            item.get("steam_purchase"), item.get("received_for_free"),
-            item.get("written_during_early_access"),
-        ),
-    ).fetchone()
+    """, (first_rn, last_rn))
 
-    review_sk = row["review_sk"]
-
-    conn.execute(
-        """
+    # review_sk выдаёт последовательность, поэтому тексты идут вторым проходом - по уже вставленным фактам
+    conn.execute("""
         insert into core.review_text (review_sk, review_body)
-        values (%s, %s)
+        select f.review_sk, t.item ->> 'review'
+        from tmp_review t
+        join core.fct_review f
+          on f.recommendation_id = (t.item ->> 'recommendationid')::bigint
+        where t.rn > %s and t.rn <= %s
         on conflict (review_sk) do update set review_body = excluded.review_body
-        """,
-        (review_sk, item.get("review")),
-    )
+    """, (first_rn, last_rn))
+
+    return cur.rowcount
 
 
 def load_all(conn, app_id=None):
@@ -118,35 +111,24 @@ def load_all(conn, app_id=None):
               and d.created_at >= g.valid_from
               and d.created_at <  g.valid_to
     """, params)
+
+    # без индекса каждая пачка читала бы временную таблицу целиком.
+    # Статистика по ней намеренно не собирается: с ней планировщик берёт для текстов hash join по всей core.fct_review (1.6 с против 0.1 с на пачку)
+    conn.execute("create index on tmp_review (rn)")
     conn.commit()
 
     total = conn.execute("select count(*) as n from tmp_review").fetchone()["n"]
     print(f"всего отзывов: {total}")
 
-    language_cache = {}
+    load_languages(conn)
+
     loaded = 0
-    last_rn = 0
+    first_rn = 0
 
-    while True:
-        rows = conn.execute(
-            """
-            select rn, game_sk, item from tmp_review
-            where rn > %s
-            order by rn
-            limit %s
-            """,
-            (last_rn, BATCH_SIZE),
-        ).fetchall()
-
-        if not rows:
-            break
-
-        for r in rows:
-            load_review(conn, r["game_sk"], r["item"], language_cache)
-            last_rn = r["rn"]
-
+    while first_rn < total:
+        loaded += load_reviews(conn, first_rn, first_rn + BATCH_SIZE)
         conn.commit()
-        loaded += len(rows)
+        first_rn += BATCH_SIZE
         print(f"{loaded}/{total}")
 
     return loaded
