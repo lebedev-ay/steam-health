@@ -150,34 +150,53 @@ def load_reviews(conn, first_rn, last_rn):
     return cur.rowcount
 
 
+def batch_end(conn, first_rn, total):
+    # граница пачки сдвигается до конца страницы: разрезав её, обрыв оставил бы знак на середине, и хвост страницы не перечитался бы
+    target = first_rn + BATCH_SIZE
+    if target >= total:
+        return total
+
+    return conn.execute(
+        "select page_end from tmp_review where rn = %s", (target,)
+    ).fetchone()["page_end"]
+
+
 def load_all(conn, app_id=None, since=None, until=None, full=False):
     explicit = full or since is not None or until is not None
     marks = {} if explicit else watermarks(conn, app_id)
     join, where, params, mode = build_source(app_id, since, until, full, marks)
     print(f"режим: {mode}")
 
-    # версия игры на момент отзыва ищется одним join. Задвоить строки могло бы только пересечение интервалов SCD2
+    # версия игры на момент отзыва ищется одним join. Задвоить строки могло бы только пересечение интервалов SCD2.
+    # Нумерация идёт по fetched_at, потому что пачки фиксируются по очереди: при обрыве зафиксированной окажется самая старая часть окна, и водяной знак не перешагнёт через недочитанное
     conn.execute(f"""
         create temporary table tmp_review as
-        select row_number() over () as rn,
-               coalesce(g.game_sk, -1) as game_sk,
-               d.item,
-               d.fetched_at
+        select n.rn,
+               max(n.rn) over (partition by n.fetched_at) as page_end,
+               n.game_sk,
+               n.item,
+               n.fetched_at
         from (
-            select distinct on (item ->> 'recommendationid')
-                r.app_id,
-                item,
-                r.fetched_at,
-                to_timestamp((item ->> 'timestamp_created')::bigint) as created_at
-            from raw.reviews r {join},
-                 jsonb_array_elements(r.payload -> 'reviews') as item
-            {where}
-            order by item ->> 'recommendationid', r.fetched_at desc
-        ) d
-        left join core.dim_game g
-               on g.app_id = d.app_id
-              and d.created_at >= g.valid_from
-              and d.created_at <  g.valid_to
+            select row_number() over (order by d.fetched_at, d.item ->> 'recommendationid') as rn,
+                   coalesce(g.game_sk, -1) as game_sk,
+                   d.item,
+                   d.fetched_at
+            from (
+                select distinct on (item ->> 'recommendationid')
+                    r.app_id,
+                    item,
+                    r.fetched_at,
+                    to_timestamp((item ->> 'timestamp_created')::bigint) as created_at
+                from raw.reviews r {join},
+                     jsonb_array_elements(r.payload -> 'reviews') as item
+                {where}
+                order by item ->> 'recommendationid', r.fetched_at desc
+            ) d
+            left join core.dim_game g
+                   on g.app_id = d.app_id
+                  and d.created_at >= g.valid_from
+                  and d.created_at <  g.valid_to
+        ) n
     """, params)
 
     # без индекса каждая пачка читала бы временную таблицу целиком
@@ -197,9 +216,10 @@ def load_all(conn, app_id=None, since=None, until=None, full=False):
     first_rn = 0
 
     while first_rn < total:
-        loaded += load_reviews(conn, first_rn, first_rn + BATCH_SIZE)
+        last_rn = batch_end(conn, first_rn, total)
+        loaded += load_reviews(conn, first_rn, last_rn)
         conn.commit()
-        first_rn += BATCH_SIZE
+        first_rn = last_rn
         print(f"{loaded}/{total}")
 
     return loaded
