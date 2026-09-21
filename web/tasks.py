@@ -14,6 +14,7 @@ import fetch_reviews
 import load_fct_review
 import load_fct_patch
 from db import DSN
+from locks import core_lock
 from text import plural
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -117,31 +118,38 @@ def collect_game(self, app_id, mode="incremental"):
             raise RuntimeError(f"{name}: не удалось докачать отзывы (шаг 5) - статус остаётся partial")
         progress(5, f"{name}: отзывы - {reviews_stop}")
 
-        progress(6, f"{name}: загружаю отзывы в core")
-        with psycopg.connect(DSN, row_factory=dict_row) as conn:
-            load_fct_review.load_all(conn, app_id)
+        def waiting_for_core():
+            # ожидание advisory-замка может длиться дольше TTL редисового, поэтому продлеваем его и здесь
+            extend_lock()
+            progress(6, f"{name}: жду, пока освободится ядро")
 
-        progress(7, f"{name}: загружаю патчи")
-        with psycopg.connect(DSN, row_factory=dict_row) as conn:
-            load_fct_patch.load_all(conn, app_id)
-            conn.commit()
+        # сбор из Steam остался снаружи: он долгий и никому не мешает. Под замком только запись в ядро и пересборка витрин - там сталкиваются кнопка и ночной прогон
+        with core_lock(on_wait=waiting_for_core):
+            progress(6, f"{name}: загружаю отзывы в core")
+            with psycopg.connect(DSN, row_factory=dict_row) as conn:
+                load_fct_review.load_all(conn, app_id)
 
-        progress(8, f"{name}: пересобираю витрины (dbt run)")
-        # без --select: модели связаны, выборочная сборка рассогласует витрины с ядром, а экономии почти нет
-        # heartbeat из on_page сюда не доходит - продлеваем замок явно
-        extend_lock()
-        result = subprocess.run(
-            ["dbt", "run"],
-            cwd=DBT_PROJECT_DIR,
-            capture_output=True,
-            text=True,
-            timeout=900,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"dbt run упал (код {result.returncode}):\n"
-                f"{result.stdout}\n{result.stderr}"
+            progress(7, f"{name}: загружаю патчи")
+            with psycopg.connect(DSN, row_factory=dict_row) as conn:
+                load_fct_patch.load_all(conn, app_id)
+                conn.commit()
+
+            progress(8, f"{name}: пересобираю витрины (dbt run)")
+            # без --select: модели связаны, выборочная сборка рассогласует витрины с ядром, а экономии почти нет
+            # heartbeat из on_page сюда не доходит - продлеваем замок явно
+            extend_lock()
+            result = subprocess.run(
+                ["dbt", "run"],
+                cwd=DBT_PROJECT_DIR,
+                capture_output=True,
+                text=True,
+                timeout=900,
             )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"dbt run упал (код {result.returncode}):\n"
+                    f"{result.stdout}\n{result.stderr}"
+                )
 
         with psycopg.connect(DSN) as conn:
             conn.execute(

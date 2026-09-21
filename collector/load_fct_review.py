@@ -5,6 +5,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from db import DSN
+from locks import core_lock
 
 BATCH_SIZE = 20000
 
@@ -246,8 +247,10 @@ def parse_args():
 
 def main():
     args = parse_args()
-    with psycopg.connect(DSN, row_factory=dict_row) as conn:
-        loaded = load_all(conn, args.app_id, args.since, args.until, args.full)
+    # замок берётся только здесь, на пути CLI: Celery зовёт load_all напрямую и держит замок сам
+    with core_lock():
+        with psycopg.connect(DSN, row_factory=dict_row) as conn:
+            loaded = load_all(conn, args.app_id, args.since, args.until, args.full)
 
     print(f"загружено: {loaded}")
 

@@ -6,6 +6,7 @@ from psycopg.rows import dict_row
 from classify_news import classify
 from db import DSN
 from fetch_platform_events import PLATFORM_APP_ID
+from locks import core_lock
 
 
 def load_all(conn, app_id=None):
@@ -134,9 +135,11 @@ def parse_args():
 def main():
     args = parse_args()
 
-    with psycopg.connect(DSN, row_factory=dict_row) as conn:
-        inserted = load_all(conn, args.app_id)
-        conn.commit()
+    # замок берётся только здесь, на пути CLI: Celery зовёт load_all напрямую и держит замок сам
+    with core_lock():
+        with psycopg.connect(DSN, row_factory=dict_row) as conn:
+            inserted = load_all(conn, args.app_id)
+            conn.commit()
 
     print(f"загружено: {inserted}")
     print("витрины (marts) не пересобраны - запустите dbt run в dbt/")
