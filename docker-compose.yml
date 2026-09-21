@@ -60,6 +60,7 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile
+    image: steam-health:latest
     command: python collector/migrate.py
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -79,6 +80,7 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile
+    image: steam-health:latest
     command: dbt run --project-dir dbt --profiles-dir dbt
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -96,6 +98,7 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile
+    image: steam-health:latest
     ports:
       - "127.0.0.1:5000:5000"
     environment:
@@ -129,6 +132,7 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile
+    image: steam-health:latest
     command: celery -A tasks worker --loglevel=info --concurrency=1
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
