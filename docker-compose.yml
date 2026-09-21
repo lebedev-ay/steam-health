@@ -77,9 +77,6 @@ services:
 
   # разовая сборка витрин: после migrate и до web/worker
   dbt:
-    build:
-      context: .
-      dockerfile: web/Dockerfile
     image: steam-health:latest
     command: dbt run --project-dir dbt --profiles-dir dbt
     environment:
@@ -95,9 +92,6 @@ services:
         condition: service_completed_successfully
 
   web:
-    build:
-      context: .
-      dockerfile: web/Dockerfile
     image: steam-health:latest
     ports:
       - "127.0.0.1:5000:5000"
@@ -129,9 +123,6 @@ services:
     restart: unless-stopped
 
   worker:
-    build:
-      context: .
-      dockerfile: web/Dockerfile
     image: steam-health:latest
     command: celery -A tasks worker --loglevel=info --concurrency=1
     environment:
@@ -163,6 +154,7 @@ services:
   airflow-postgres:
     image: postgres:16
     container_name: airflow-postgres
+    mem_limit: 128m
     command: >
       postgres
       -c shared_buffers=32MB
@@ -209,6 +201,7 @@ services:
   airflow-apiserver:
     <<: *airflow-common
     container_name: airflow-apiserver
+    mem_limit: 350m
     command: api-server
     ports:
       - "127.0.0.1:8080:8080"
@@ -231,6 +224,7 @@ services:
   airflow-scheduler:
     <<: *airflow-common
     container_name: airflow-scheduler
+    mem_limit: 500m
     command: scheduler
     environment:
       <<: *airflow-common-env
@@ -259,8 +253,9 @@ services:
   # читает файлы DAG и складывает разобранные графы в метабазу
   airflow-dag-processor:
     <<: *airflow-common
-    command: dag-processor
     container_name: airflow-dag-processor
+    mem_limit: 250m
+    command: dag-processor
     environment:
       <<: *airflow-common-env
       AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "60"
