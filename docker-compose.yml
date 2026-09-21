@@ -17,6 +17,9 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
     PYTHONPATH: /opt/project/collector
     TZ: UTC
+    MALLOC_ARENA_MAX: "2"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_SIZE: "3"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_MAX_OVERFLOW: "3"
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
@@ -156,6 +159,12 @@ services:
   airflow-postgres:
     image: postgres:16
     container_name: airflow-postgres
+    command: >
+      postgres
+      -c shared_buffers=32MB
+      -c max_connections=30
+      -c work_mem=2MB
+      -c maintenance_work_mem=32MB
     profiles: ["airflow"]
     environment:
       POSTGRES_DB: airflow
