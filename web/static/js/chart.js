@@ -24,6 +24,10 @@ const LEGEND_DBLCLICK_MS = 300;
 // промежуток между событиями внутри одного жеста доходит до 185 мс (замер на перетаскивании ползунка), поэтому порог взят с запасом
 const RELAYOUT_DEBOUNCE_MS = 250;
 
+// ниже этой ширины строки легенды переносятся и налезают на кнопки периода: замер дал перенос на второй ряд при 974 px и одну строку при 1230.
+// Там раскладку верхней полосы отдаём Plotly - он сам отводит легенде место и сдвигает кнопки под неё
+const LEGEND_AUTO_PX = 1100;
+
 // фон подсказки Plotly берёт из цвета маркера, и светлый текст на жёлтом анонсе или на бледно-сером фоне не читается. Цвет типа остаётся в самом маркере
 const MARKER_HOVER = { bgcolor: '#262b33', bordercolor: '#3a4048', font: { color: '#c7d0d9' } };
 
@@ -51,8 +55,14 @@ function rangeDays(range) {
 
 // от диапазона фигура зависит только через порог плотности: сам набор событий, покраска и трассы от границ окна не меняются.
 // Всё, что вошло сюда, требует полной перерисовки; при совпадении подписи хватает строки состояния и таблицы
+function isNarrow() {
+  const w = document.getElementById('sentiment').clientWidth;
+  return w > 0 && w < LEGEND_AUTO_PX;
+}
+
 function figureSignature(windowDays) {
   return [densityThreshold(windowDays),
+          isNarrow(),
           document.getElementById('mode').value,
           document.getElementById('showPlatform').checked,
           isolatedGroup,
@@ -92,6 +102,7 @@ export function renderChart(range) {
   if (!data) return;
 
   const isDelta = document.getElementById('mode').value === 'delta';
+  const narrow = isNarrow();
   const cps = data.change_points || [];
 
   const days = data.daily.map(d => d.day);
@@ -357,7 +368,8 @@ export function renderChart(range) {
     paper_bgcolor: '#262b33',
     plot_bgcolor: '#1e232a',
     font: { color: '#c7d0d9' },
-    margin: { t: 70, r: 60, b: 60, l: 60 },
+    // на широком экране верхняя полоса размечена вручную; на узком её считает Plotly, иначе легенда ложится на кнопки и на сам график
+    margin: narrow ? { r: 60, b: 60, l: 60 } : { t: 70, r: 60, b: 60, l: 60 },
     yaxis: {
       title: isDelta ? 'Отклонение, п.п.' : 'Позитивных, %',
       gridcolor: '#333a44',
@@ -380,7 +392,7 @@ export function renderChart(range) {
           { count: 1, label: 'год', step: 'year', stepmode: 'backward' },
           { step: 'all', label: 'всё' }
         ],
-        x: 0, xanchor: 'left', y: 1.20, yanchor: 'bottom',
+        ...(narrow ? {} : { x: 0, xanchor: 'left', y: 1.20, yanchor: 'bottom' }),
         bgcolor: '#262b33', activecolor: '#3a4048', bordercolor: '#3a4048',
         borderwidth: 1,
         font: { color: '#c7d0d9', size: 12 }
@@ -391,7 +403,9 @@ export function renderChart(range) {
     // левой кнопкой окно едет по датам, сохраняя ширину. Зум остался колесом, кнопками периода и rangeslider, а выделение рамкой - кнопкой Zoom в панели Plotly
     dragmode: 'pan',
     hovermode: 'closest',
-    legend: { orientation: 'h', y: 1.06, bgcolor: 'rgba(0,0,0,0)' }
+    legend: narrow
+      ? { orientation: 'h', bgcolor: 'rgba(0,0,0,0)' }
+      : { orientation: 'h', y: 1.06, bgcolor: 'rgba(0,0,0,0)' }
   // двойной клик выключен: на ряде в несколько лет случайное попадание выбрасывало
   // из выбранного окна. 'reset' здесь не помогает - при autorange: false Plotly не хранит
   // _rangeInitial и откатывается к автомасштабу. Полный сброс остался кнопкой «всё».
@@ -436,12 +450,13 @@ export function renderChart(range) {
       const gd = document.getElementById('sentiment');
       const xr = gd.layout.xaxis.range;
       const newRange = xr ? [xr[0], xr[1]] : null;
+      // сюда же приходит изменение размера окна: диапазон тот же, но подпись могла смениться шириной
       const sameFigure = newRange && figureSignature(rangeDays(newRange)) === lastFigure;
       if (sameFigure && sameRange(newRange, lastRenderedRange)) return;
 
       clearTimeout(relayoutTimer);
       // пока фигура прежняя, обновить нужно только строку состояния и таблицу - это доли миллисекунды, ждать нечего.
-      // Смена порога плотности перестраивает её целиком, и это лучше отложить до конца жеста
+      // Смена порога плотности или ширины перестраивает её целиком, и это лучше отложить до конца жеста
       if (sameFigure) renderChart(newRange);
       else relayoutTimer = setTimeout(() => renderChart(newRange), RELAYOUT_DEBOUNCE_MS);
     });
