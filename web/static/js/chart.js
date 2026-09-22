@@ -8,7 +8,15 @@ let cpMarkerIndices = [];
 let cpBaseMarker = null;
 let lastRenderedRange = null;
 let relayoutBound = false;
+let legendBound = false;
 let relayoutTimer = null;
+
+// группа платформы в легенде: у полос Steam та же пара слоёв, что у игровых событий - маркер и покраска
+const PLATFORM_GROUP = 'platform';
+
+// покраска колонок и треугольники - два слоя одного события, и прятаться они обязаны вместе.
+// Plotly переключает только трассу, до shapes ему дела нет, а его собственный visible к тому же сбрасывается на каждой перерисовке
+let hiddenGroups = new Set();
 
 function cpTraceIndex() {
   // трасс с этим именем две: одна ради свотча легенды, вторая с точками
@@ -88,9 +96,10 @@ export function renderChart(range) {
   days.forEach((d, i) => cpIndex[d] = i);
 
   const visibleEvents = data.events.filter(keepEvent);
+  const shadedEvents = visibleEvents.filter(e => !hiddenGroups.has(e.type));
 
   const byDay = {};
-  visibleEvents.forEach(e => {
+  shadedEvents.forEach(e => {
     (byDay[e.day] = byDay[e.day] || []).push(e);
   });
 
@@ -107,8 +116,10 @@ export function renderChart(range) {
   // полоса шириной в окно поиска (±3 дня), дата приблизительная. Плотностью не фильтруем: их 80 на 12 лет, в кашу не сливаются
   const platformEvents = data.platform_events || [];
   const showPlatform = document.getElementById('showPlatform').checked;
+  // галочка убирает слой целиком, легенда - только прячет, оставляя строку для возврата
+  const platformHidden = hiddenGroups.has(PLATFORM_GROUP);
 
-  const platformShapes = showPlatform ? platformEvents.map(e => ({
+  const platformShapes = showPlatform && !platformHidden ? platformEvents.map(e => ({
     type: 'rect',
     x0: shiftDay(e.date, -3), x1: shiftDay(e.date, 4),
     yref: 'paper', y0: 0, y1: 1,
@@ -126,6 +137,8 @@ export function renderChart(range) {
     y: platformEvents.map(() => platformMarkerY),
     mode: 'markers',
     name: 'события Steam',
+    legendgroup: PLATFORM_GROUP,
+    visible: platformHidden ? 'legendonly' : true,
     marker: {
       size: 8,
       symbol: 'square',
@@ -151,6 +164,7 @@ export function renderChart(range) {
     mode: 'markers',
     name: TYPES[type]?.label || type,
     legendgroup: type,
+    visible: hiddenGroups.has(type) ? 'legendonly' : true,
     // размер общий с миниатюрой rangeslider (Plotly не различает) - уменьшен, чтобы в ней не было каши
     marker: {
       size: 9, symbol: 'triangle-down',
@@ -328,6 +342,23 @@ export function renderChart(range) {
 
   // копия обязательна: переданный массив Plotly держит как свой xaxis.range и меняет на месте, так что ссылка на него всегда сравнивалась бы сама с собой
   lastRenderedRange = effectiveRange ? effectiveRange.slice() : null;
+
+  if (!legendBound) {
+    legendBound = true;
+    document.getElementById('sentiment').on('plotly_legendclick', ev => {
+      const group = ev.data[ev.curveNumber].legendgroup;
+      // у линий и переломов парной покраски нет - их Plotly переключает сам
+      if (!group || group === 'cp') return true;
+
+      if (hiddenGroups.has(group)) hiddenGroups.delete(group);
+      else hiddenGroups.add(group);
+
+      renderChart(lastRenderedRange);
+      return false;
+    });
+    // изоляция по двойному клику правит visible мимо hiddenGroups и снова развела бы слои
+    document.getElementById('sentiment').on('plotly_legenddoubleclick', () => false);
+  }
 
   // zoom, pan, rangeslider и кнопки периода приходят сюда одним plotly_relayout - перерисовываем только клиентские слои
   if (!relayoutBound) {
