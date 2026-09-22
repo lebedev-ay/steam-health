@@ -146,6 +146,7 @@ def collect_game(self, app_id, mode="incremental"):
             result = subprocess.run(
                 [sys.executable, RUN_DBT, "run"],
                 cwd=DBT_PROJECT_DIR,
+                # замок ядра уже взят выше по стеку, обёртке брать его повторно не нужно
                 env={**os.environ, "CORE_LOCK_HELD": "1"},
                 capture_output=True,
                 text=True,
