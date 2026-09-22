@@ -28,6 +28,12 @@ const RELAYOUT_DEBOUNCE_MS = 250;
 // Там раскладку верхней полосы отдаём Plotly - он сам отводит легенде место и сдвигает кнопки под неё
 const LEGEND_AUTO_PX = 1100;
 
+// Plotly и сам откладывает настоящую перерисовку: до неё он показывает быстрый предпросмотр, а полную сборку ставит на таймер в 50 мс после последнего колеса (REDRAWDELAY в его исходнике).
+// Щелчки медленнее этого в окно не попадают, и каждый тянет свою перерисовку - десять щелчков давали десять. Холостое событие колеса продлевает окно, ничего не сдвигая: множитель у Plotly это exp(-deltaY/200), при нуле он равен единице.
+// Окно 150 мс взято замером: щелчки с шагом 60 и 120 мс сливаются в одну перерисовку, а одиночный щелчок от двух-трёх холостых событий не дорожает
+const WHEEL_HOLD_MS = 150;
+const WHEEL_PUMP_MS = 40;
+
 // фон подсказки Plotly берёт из цвета маркера, и светлый текст на жёлтом анонсе или на бледно-сером фоне не читается. Цвет типа остаётся в самом маркере
 const MARKER_HOVER = { bgcolor: '#262b33', bordercolor: '#3a4048', font: { color: '#c7d0d9' } };
 
@@ -47,6 +53,35 @@ function groupVisible(group) {
 function toggleGroup(group) {
   if (hiddenGroups.has(group)) hiddenGroups.delete(group);
   else hiddenGroups.add(group);
+}
+
+// предпросмотр во время жеста остаётся родной: настоящие события колеса не перехватываются и доходят до Plotly как раньше - те же шаги, та же точка отсчёта под курсором
+function holdWheelRedraw() {
+  const chart = document.getElementById('sentiment');
+  let timer = null, until = 0, at = null;
+
+  chart.addEventListener('wheel', e => {
+    // холостые события приходят сюда же всплытием, отвечать на них нечем
+    if (!e.isTrusted) return;
+
+    at = { clientX: e.clientX, clientY: e.clientY };
+    until = performance.now() + WHEEL_HOLD_MS;
+    if (timer) return;
+
+    timer = setInterval(() => {
+      // слой перетаскивания Plotly пересоздаёт на каждой полной сборке, поэтому ищем его каждый раз
+      const drag = chart.querySelector('.nsewdrag');
+      if (!drag || performance.now() > until) {
+        clearInterval(timer);
+        timer = null;
+        return;
+      }
+      drag.dispatchEvent(new WheelEvent('wheel', {
+        deltaY: 0, clientX: at.clientX, clientY: at.clientY,
+        bubbles: true, cancelable: true
+      }));
+    }, WHEEL_PUMP_MS);
+  }, true);
 }
 
 function rangeDays(range) {
@@ -446,6 +481,7 @@ export function renderChart(range) {
   // zoom, pan, rangeslider и кнопки периода приходят сюда одним plotly_relayout - перерисовываем только клиентские слои
   if (!relayoutBound) {
     relayoutBound = true;
+    holdWheelRedraw();
     document.getElementById('sentiment').on('plotly_relayout', () => {
       const gd = document.getElementById('sentiment');
       const xr = gd.layout.xaxis.range;
