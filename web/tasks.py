@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import psycopg
@@ -13,6 +14,7 @@ import fetch_news
 import fetch_reviews
 import load_fct_review
 import load_fct_patch
+import run_dbt
 from db import DSN
 from locks import core_lock
 from text import plural
@@ -22,6 +24,8 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 DBT_PROJECT_DIR = Path(
     os.getenv("DBT_PROJECT_DIR", Path(__file__).parent.parent / "dbt")
 )
+# путь берётся у самого модуля: в образе collector лежит внутри /app, в репозитории - рядом с web
+RUN_DBT = Path(run_dbt.__file__)
 
 # глубина сбора из дашборда меряется днями: страницы ничего не говорят о том, сколько это истории - у тихой игры 3000 отзывов это годы, у шумной недели. Страницы остались страховкой от бесконечного обхода
 # or, а не второй аргумент getenv: compose подставляет пустую строку, когда переменной нет в .env
@@ -138,9 +142,11 @@ def collect_game(self, app_id, mode="incremental"):
             # без --select: модели связаны, выборочная сборка рассогласует витрины с ядром, а экономии почти нет
             # heartbeat из on_page сюда не доходит - продлеваем замок явно
             extend_lock()
+            # тот же вход, что и у ночного прогона. Замок уже взят снаружи, о чём обёртке говорит CORE_LOCK_HELD
             result = subprocess.run(
-                ["dbt", "run"],
+                [sys.executable, RUN_DBT, "run"],
                 cwd=DBT_PROJECT_DIR,
+                env={**os.environ, "CORE_LOCK_HELD": "1"},
                 capture_output=True,
                 text=True,
                 timeout=900,
