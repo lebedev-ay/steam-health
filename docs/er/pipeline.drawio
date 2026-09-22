@@ -61,8 +61,10 @@
                 <mxCell id="29" value="load_dim_game.py" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" parent="1" vertex="1">
                     <mxGeometry x="740" y="480" width="180" height="44" as="geometry"/>
                 </mxCell>
-                <mxCell id="30" value="" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;" parent="1" source="21" target="27" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
+                <mxCell id="30" value="по водяному знаку:&lt;br&gt;fetched_at &amp;gt; max(loaded_from)&lt;br&gt;--full - весь raw" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;labelBackgroundColor=#ffffff;" parent="1" source="21" target="27" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="0" y="10" as="offset"/>
+                    </mxGeometry>
                 </mxCell>
                 <mxCell id="31" value="" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;" parent="1" source="22" target="28" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
@@ -100,7 +102,7 @@
                 <mxCell id="37" value="core" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=14;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="30" y="570" width="900" height="230" as="geometry"/>
                 </mxCell>
-                <mxCell id="38" value="core.fct_review" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=12;fillColor=#ffffff;strokeColor=#666666;" parent="1" vertex="1">
+                <mxCell id="38" value="core.fct_review&lt;br&gt;loaded_from (V36)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=12;fillColor=#ffffff;strokeColor=#666666;" parent="1" vertex="1">
                     <mxGeometry x="65" y="615" width="170" height="70" as="geometry"/>
                 </mxCell>
                 <mxCell id="39" value="core.review_text" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=12;fillColor=#ffffff;strokeColor=#666666;" parent="1" vertex="1">
@@ -211,6 +213,21 @@
                         </Array>
                         <mxPoint as="offset"/>
                     </mxGeometry>
+                </mxCell>
+                <mxCell id="70" value="collector/run_dbt.py&lt;br&gt;CLI и DAG запускают dbt только через неё:&lt;br&gt;берёт замок ядра" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="960" y="810" width="250" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="71" value="dbt run" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="930" width="170" height="44" as="geometry"/>
+                </mxCell>
+                <mxCell id="72" value="subprocess, DBT_BIN" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;" parent="1" source="70" target="71" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="73" value="после загрузки в core" style="html=1;endArrow=open;dashed=1;dashPattern=4 3;rounded=0;fontSize=11;strokeColor=#666666;fontColor=#666666;" parent="1" source="37" target="70" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="74" value="пересобирает витрины" style="html=1;endArrow=open;dashed=1;dashPattern=4 3;rounded=0;fontSize=11;strokeColor=#666666;fontColor=#666666;" parent="1" source="71" target="46" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>
