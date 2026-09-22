@@ -14,9 +14,29 @@ let relayoutTimer = null;
 // группа платформы в легенде: у полос Steam та же пара слоёв, что у игровых событий - маркер и покраска
 const PLATFORM_GROUP = 'platform';
 
+// кривые и ромбы переломов - это сами данные. Изоляция их не касается: спрятать «всё остальное» по клику на событии значило бы убрать с экрана то, ради чего график открыт
+const DATA_GROUPS = new Set(['totals', 'base', 'value', 'cp']);
+
+// задержка та же, что у Plotly по умолчанию: одиночное действие ждёт, не придёт ли второй щелчок
+const LEGEND_DBLCLICK_MS = 300;
+
 // покраска колонок и треугольники - два слоя одного события, и прятаться они обязаны вместе.
 // Plotly переключает только трассу, до shapes ему дела нет, а его собственный visible к тому же сбрасывается на каждой перерисовке
 let hiddenGroups = new Set();
+// тип, изолированный двойным кликом; hiddenGroups при этом не трогается и возвращается при снятии изоляции
+let isolatedGroup = null;
+let legendClickTimer = null;
+
+function groupVisible(group) {
+  if (DATA_GROUPS.has(group)) return !hiddenGroups.has(group);
+  if (isolatedGroup) return group === isolatedGroup;
+  return !hiddenGroups.has(group);
+}
+
+function toggleGroup(group) {
+  if (hiddenGroups.has(group)) hiddenGroups.delete(group);
+  else hiddenGroups.add(group);
+}
 
 function cpTraceIndex() {
   // трасс с этим именем две: одна ради свотча легенды, вторая с точками
@@ -96,7 +116,7 @@ export function renderChart(range) {
   days.forEach((d, i) => cpIndex[d] = i);
 
   const visibleEvents = data.events.filter(keepEvent);
-  const shadedEvents = visibleEvents.filter(e => !hiddenGroups.has(e.type));
+  const shadedEvents = visibleEvents.filter(e => groupVisible(e.type));
 
   const byDay = {};
   shadedEvents.forEach(e => {
@@ -117,7 +137,7 @@ export function renderChart(range) {
   const platformEvents = data.platform_events || [];
   const showPlatform = document.getElementById('showPlatform').checked;
   // галочка убирает слой целиком, легенда - только прячет, оставляя строку для возврата
-  const platformHidden = hiddenGroups.has(PLATFORM_GROUP);
+  const platformHidden = !groupVisible(PLATFORM_GROUP);
 
   const platformShapes = showPlatform && !platformHidden ? platformEvents.map(e => ({
     type: 'rect',
@@ -164,7 +184,7 @@ export function renderChart(range) {
     mode: 'markers',
     name: TYPES[type]?.label || type,
     legendgroup: type,
-    visible: hiddenGroups.has(type) ? 'legendonly' : true,
+    visible: groupVisible(type) ? true : 'legendonly',
     // размер общий с миниатюрой rangeslider (Plotly не различает) - уменьшен, чтобы в ней не было каши
     marker: {
       size: 9, symbol: 'triangle-down',
@@ -241,6 +261,7 @@ export function renderChart(range) {
     mode: 'markers',
     name: 'Переломы',
     legendgroup: 'cp',
+    visible: groupVisible('cp') ? true : 'legendonly',
     marker: {
       size: 9, symbol: 'diamond', color: '#c7d0d9',
       line: { color: '#14161a', width: 1 }
@@ -253,6 +274,7 @@ export function renderChart(range) {
     mode: 'markers',
     name: 'Переломы',
     legendgroup: 'cp',
+    visible: groupVisible('cp') ? true : 'legendonly',
     showlegend: false,
     marker: {
       size: cpSize,
@@ -270,18 +292,24 @@ export function renderChart(range) {
     {
       x: days, y: totals, type: 'bar', name: 'Отзывов',
       yaxis: 'y2',
+      legendgroup: 'totals',
+      visible: groupVisible('totals') ? true : 'legendonly',
       marker: { color: 'rgba(110,150,190,0.28)' },
       hovertemplate: '%{x}<br>Отзывов: %{y}<extra></extra>'
     },
     ...(isDelta ? [] : [{
       x: days, y: data.daily.map(d => d.base), mode: 'lines',
       name: 'База, медиана 90 дней',
+      legendgroup: 'base',
+      visible: groupVisible('base') ? true : 'legendonly',
       line: { color: '#8a95a3', width: 1.5, dash: 'dot' },
       hovertemplate: '%{x}<br>База: %{y}%<extra></extra>'
     }]),
     {
       x: days, y: values, mode: 'lines',
       name: isDelta ? 'Отклонение, п.п.' : 'Позитивных, %',
+      legendgroup: 'value',
+      visible: groupVisible('value') ? true : 'legendonly',
       // толще и контрастнее, чтобы читалась поверх маркеров в миниатюре rangeslider (см. комментарий у него ниже)
       line: { color: '#f0f4f8', width: 3.5, shape: 'spline', smoothing: 0.4 },
       customdata: totals,
@@ -345,19 +373,33 @@ export function renderChart(range) {
 
   if (!legendBound) {
     legendBound = true;
+    // Plotly шлёт legendclick и на первом щелчке двойного, поэтому одиночное действие откладывается: иначе двойной клик успевал бы сначала переключить группу, а перерисовка - подменить строку легенды под курсором
     document.getElementById('sentiment').on('plotly_legendclick', ev => {
       const group = ev.data[ev.curveNumber].legendgroup;
-      // у линий и переломов парной покраски нет - их Plotly переключает сам
-      if (!group || group === 'cp') return true;
+      if (!group) return true;
 
-      if (hiddenGroups.has(group)) hiddenGroups.delete(group);
-      else hiddenGroups.add(group);
+      clearTimeout(legendClickTimer);
+      legendClickTimer = setTimeout(() => {
+        // клик по любой строке событий выходит из изоляции: серая строка от щелчка обязана вернуться, а не остаться серой
+        if (isolatedGroup && !DATA_GROUPS.has(group)) isolatedGroup = null;
+        else toggleGroup(group);
+        renderChart(lastRenderedRange);
+      }, LEGEND_DBLCLICK_MS);
+      return false;
+    });
+
+    document.getElementById('sentiment').on('plotly_legenddoubleclick', ev => {
+      const group = ev.data[ev.curveNumber].legendgroup;
+      if (!group) return true;
+
+      clearTimeout(legendClickTimer);
+      // у кривой изолировать нечего, поэтому двойной клик по ней - тот же одиночный
+      if (DATA_GROUPS.has(group)) toggleGroup(group);
+      else isolatedGroup = isolatedGroup === group ? null : group;
 
       renderChart(lastRenderedRange);
       return false;
     });
-    // изоляция по двойному клику правит visible мимо hiddenGroups и снова развела бы слои
-    document.getElementById('sentiment').on('plotly_legenddoubleclick', () => false);
   }
 
   // zoom, pan, rangeslider и кнопки периода приходят сюда одним plotly_relayout - перерисовываем только клиентские слои
