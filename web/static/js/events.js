@@ -46,7 +46,7 @@ export function platformEventLabel(e) {
 }
 
 // на широком диапазоне мелкие события прячем, иначе сливаются в сплошную полосу; на узком (< 60 дней) показываем всё
-function densityThreshold(days) {
+export function densityThreshold(days) {
   if (days > 365) return 5;
   if (days >= 180) return 2;
   if (days >= 60) return 1;

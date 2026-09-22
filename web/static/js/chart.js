@@ -1,12 +1,13 @@
 import { shiftDay, esc, sameRange, dayInRange, plural } from './util.js';
 import { TYPES, PLATFORM_TYPES, BACKGROUND_COLOR, platformEventLabel,
-         densityFilter, eventFilterLabel } from './events.js';
+         densityFilter, densityThreshold, eventFilterLabel } from './events.js';
 import { renderChangePointList } from './cplist.js';
 
 let lastData = null;
 let cpMarkerIndices = [];
 let cpBaseMarker = null;
 let lastRenderedRange = null;
+let lastFigure = null;
 let relayoutBound = false;
 let legendBound = false;
 let relayoutTimer = null;
@@ -19,6 +20,9 @@ const DATA_GROUPS = new Set(['totals', 'base', 'value', 'cp']);
 
 // задержка та же, что у Plotly по умолчанию: одиночное действие ждёт, не придёт ли второй щелчок
 const LEGEND_DBLCLICK_MS = 300;
+
+// промежуток между событиями внутри одного жеста доходит до 185 мс (замер на перетаскивании ползунка), поэтому порог взят с запасом
+const RELAYOUT_DEBOUNCE_MS = 250;
 
 // фон подсказки Plotly берёт из цвета маркера, и светлый текст на жёлтом анонсе или на бледно-сером фоне не читается. Цвет типа остаётся в самом маркере
 const MARKER_HOVER = { bgcolor: '#262b33', bordercolor: '#3a4048', font: { color: '#c7d0d9' } };
@@ -39,6 +43,20 @@ function groupVisible(group) {
 function toggleGroup(group) {
   if (hiddenGroups.has(group)) hiddenGroups.delete(group);
   else hiddenGroups.add(group);
+}
+
+function rangeDays(range) {
+  return Math.abs(new Date(range[1]) - new Date(range[0])) / 86400000;
+}
+
+// от диапазона фигура зависит только через порог плотности: сам набор событий, покраска и трассы от границ окна не меняются.
+// Всё, что вошло сюда, требует полной перерисовки; при совпадении подписи хватает строки состояния и таблицы
+function figureSignature(windowDays) {
+  return [densityThreshold(windowDays),
+          document.getElementById('mode').value,
+          document.getElementById('showPlatform').checked,
+          isolatedGroup,
+          [...hiddenGroups].sort().join(',')].join('|');
 }
 
 function cpTraceIndex() {
@@ -114,6 +132,14 @@ export function renderChart(range) {
     onHover: highlightChangePoint,
     onLeave: unhighlightChangePoint
   });
+
+  // копия обязательна: переданный массив Plotly держит как свой xaxis.range и меняет на месте, так что ссылка на него всегда сравнивалась бы сама с собой
+  lastRenderedRange = effectiveRange ? effectiveRange.slice() : null;
+
+  // при том же пороге плотности фигура не меняется вовсе: ось Plotly уже подвинул сам, а строка состояния и таблица обновлены выше
+  const figure = figureSignature(windowDays);
+  if (figure === lastFigure) return;
+  lastFigure = figure;
 
   const cpIndex = {};
   days.forEach((d, i) => cpIndex[d] = i);
@@ -372,9 +398,6 @@ export function renderChart(range) {
   // Колесо зумит; страница листается мимо графика, свободной высоты хватает
   }, { responsive: true, doubleClick: false, scrollZoom: true });
 
-  // копия обязательна: переданный массив Plotly держит как свой xaxis.range и меняет на месте, так что ссылка на него всегда сравнивалась бы сама с собой
-  lastRenderedRange = effectiveRange ? effectiveRange.slice() : null;
-
   if (!legendBound) {
     legendBound = true;
     // Plotly шлёт legendclick и на первом щелчке двойного, поэтому одиночное действие откладывается: иначе двойной клик успевал бы сначала переключить группу, а перерисовка - подменить строку легенды под курсором
@@ -410,20 +433,26 @@ export function renderChart(range) {
   if (!relayoutBound) {
     relayoutBound = true;
     document.getElementById('sentiment').on('plotly_relayout', () => {
+      const gd = document.getElementById('sentiment');
+      const xr = gd.layout.xaxis.range;
+      const newRange = xr ? [xr[0], xr[1]] : null;
+      const sameFigure = newRange && figureSignature(rangeDays(newRange)) === lastFigure;
+      if (sameFigure && sameRange(newRange, lastRenderedRange)) return;
+
       clearTimeout(relayoutTimer);
-      relayoutTimer = setTimeout(() => {
-        const gd = document.getElementById('sentiment');
-        const xr = gd.layout.xaxis.range;
-        const newRange = xr ? [xr[0], xr[1]] : null;
-        if (sameRange(newRange, lastRenderedRange)) return;
-        renderChart(newRange);
-      }, 120);
+      // пока фигура прежняя, обновить нужно только строку состояния и таблицу - это доли миллисекунды, ждать нечего.
+      // Смена порога плотности перестраивает её целиком, и это лучше отложить до конца жеста
+      if (sameFigure) renderChart(newRange);
+      else relayoutTimer = setTimeout(() => renderChart(newRange), RELAYOUT_DEBOUNCE_MS);
     });
   }
+
 }
 
 export function setData(body) {
   lastData = body;
+  // данные другие, фигуру надо построить заново, какой бы ни была подпись
+  lastFigure = null;
 }
 
 export function getRange() {
