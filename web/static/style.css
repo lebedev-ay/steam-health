@@ -20,7 +20,9 @@ select, input {
   /* высоту задаёт Plotly после отрисовки; до неё блок нулевой, и оверлею загрузки не во что лечь */
   min-height: 640px;
 }
-#info { color: #8a95a3; font-size: 13px; }
+/* строка состояния стоит отдельным блоком: внутри .controls она переносилась наравне с полями и раскачивала высоту формы.
+   min-height держит место, чтобы график не прыгал, пока строки нет */
+#info { color: #8a95a3; font-size: 13px; min-height: 18px; margin-bottom: 12px; }
 .hint { color: #778391; font-size: 12px; margin-top: 8px; }
 .legal { color: #5f6a78; font-size: 11px; margin-top: 6px; }
 
@@ -84,8 +86,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   padding-bottom: 14px;
   border-bottom: 1px solid #262b33;
 }
-.collect-controls { display: flex; gap: 10px; align-items: center; }
-#collectAppId { width: 300px; }
+.collect-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+#collectAppId { width: 340px; max-width: 100%; }
+#gameFilter { width: 130px; max-width: 100%; }
 .collect-progress {
   margin-top: 8px;
   font-size: 13px;
@@ -104,7 +107,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   margin-right: 6px;
 }
 
-.cp-list { margin-top: 12px; font-size: 13px; }
+/* на узком экране четыре колонки не ужимаются дальше: пусть едет таблица, а не вся страница */
+.cp-list { margin-top: 12px; font-size: 13px; overflow-x: auto; }
 .cp-list table { width: 100%; border-collapse: collapse; }
 .cp-list th, .cp-list td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #333a44; }
 .cp-list th { color: #8a95a3; font-weight: 500; font-size: 12px; }

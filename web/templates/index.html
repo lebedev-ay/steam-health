@@ -2,6 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Steam Health</title>
 {% if collect_token %}<meta name="collect-token" content="{{ collect_token }}">{% endif %}
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
@@ -12,7 +13,7 @@
 <div class="collect-bar">
   <div class="collect-controls">
     <input type="text" id="collectAppId"
-           placeholder="ID игры или ссылка на store.steampowered.com">
+           placeholder="ID игры или ссылка на страницу Steam">
     <select id="collectMode">
       <option value="incremental" selected>инкрементально</option>
       <option value="full">полный сбор</option>
@@ -24,7 +25,7 @@
 
 <div class="controls">
   <label>Игра:
-    <input type="text" id="gameFilter" placeholder="фильтр" style="width:90px">
+    <input type="text" id="gameFilter" placeholder="фильтр">
     <select id="game">
       {% for g in games %}
       <option value="{{ g.app_id }}"{% if g.app_id|string == default_app_id %} selected{% endif %}>{{ g.game_name }}{% if g.collection_status == 'partial' %} (данные неполные){% endif %}</option>
@@ -67,9 +68,9 @@
   </label>
 
   <label><input type="checkbox" id="showPlatform" checked> события Steam</label>
-
-  <span id="info"></span>
 </div>
+
+<div id="info"></div>
 
 <div class="chart-wrap">
   <div id="sentiment" class="chart"></div>
