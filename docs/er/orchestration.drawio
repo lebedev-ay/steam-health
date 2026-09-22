@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="orchestration1" name="Page-1">
-        <mxGraphModel dx="1429" dy="835" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="1000" math="0" shadow="0">
+        <mxGraphModel dx="1799" dy="742" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="1000" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -14,7 +14,7 @@
                     <mxGeometry x="40" y="580" width="940" height="320" as="geometry"/>
                 </mxCell>
                 <mxCell id="g_af" value="Компоненты Airflow" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=none;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=14;fontStyle=1;" parent="1" vertex="1">
-                    <mxGeometry x="1020" y="60" width="440" height="300" as="geometry"/>
+                    <mxGeometry x="1120" y="60" width="440" height="300" as="geometry"/>
                 </mxCell>
                 <mxCell id="m_btn" value="Кнопка «Собрать» на дашборде" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;" parent="1" vertex="1">
                     <mxGeometry x="60" y="60" width="400" height="50" as="geometry"/>
@@ -74,19 +74,19 @@
                     <mxGeometry x="40" y="915" width="940" height="40" as="geometry"/>
                 </mxCell>
                 <mxCell id="af_api" value="api-server&lt;br&gt;интерфейс, REST API,&lt;br&gt;приём статусов от задач" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="1040" y="110" width="200" height="60" as="geometry"/>
+                    <mxGeometry x="1140" y="110" width="200" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="af_sch" value="scheduler&lt;br&gt;планирует; при LocalExecutor&lt;br&gt;сам запускает задачи" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="1040" y="185" width="200" height="60" as="geometry"/>
+                    <mxGeometry x="1140" y="185" width="200" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="af_dp" value="dag-processor&lt;br&gt;читает файлы DAG" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="1040" y="260" width="200" height="60" as="geometry"/>
+                    <mxGeometry x="1140" y="260" width="200" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="af_db" value="метабаза&lt;br&gt;отдельный Postgres,&lt;br&gt;журнал запусков" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=12;fillColor=#ffffff;strokeColor=#666666;" parent="1" vertex="1">
-                    <mxGeometry x="1290" y="160" width="150" height="140" as="geometry"/>
+                    <mxGeometry x="1390" y="160" width="150" height="140" as="geometry"/>
                 </mxCell>
                 <mxCell id="af_note" value="Между собой компоненты общаются через метабазу, задачи отчитываются через api-server." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="1020" y="370" width="440" height="40" as="geometry"/>
+                    <mxGeometry x="1120" y="370" width="440" height="40" as="geometry"/>
                 </mxCell>
                 <mxCell id="e_btn_flask" value="" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;" parent="1" source="m_btn" target="m_flask" edge="1">
                     <mxGeometry relative="1" as="geometry"/>

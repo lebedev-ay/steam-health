@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="pipeline1" name="Page-1">
-        <mxGraphModel dx="1429" dy="835" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1450" pageHeight="1300" math="0" shadow="0">
+        <mxGraphModel dx="1799" dy="742" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1450" pageHeight="1300" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -63,7 +63,7 @@
                 </mxCell>
                 <mxCell id="30" value="по водяному знаку:&lt;br&gt;fetched_at &amp;gt; max(loaded_from)&lt;br&gt;--full - весь raw" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;labelBackgroundColor=#ffffff;" parent="1" source="21" target="27" edge="1">
                     <mxGeometry relative="1" as="geometry">
-                        <mxPoint x="0" y="10" as="offset"/>
+                        <mxPoint y="10" as="offset"/>
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="31" value="" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;" parent="1" source="22" target="28" edge="1">
@@ -214,19 +214,19 @@
                         <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="70" value="collector/run_dbt.py&lt;br&gt;CLI и DAG запускают dbt только через неё:&lt;br&gt;берёт замок ядра" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="960" y="810" width="250" height="70" as="geometry"/>
+                <mxCell id="70" value="collector/run_dbt.py&lt;br&gt;CLI и DAG запускают dbt только через неё:&lt;br&gt;берёт замок ядра" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;" vertex="1" parent="1">
+                    <mxGeometry x="1060" y="660" width="250" height="70" as="geometry"/>
                 </mxCell>
-                <mxCell id="71" value="dbt run" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;" parent="1" vertex="1">
-                    <mxGeometry x="1000" y="930" width="170" height="44" as="geometry"/>
+                <mxCell id="71" value="dbt run" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;" vertex="1" parent="1">
+                    <mxGeometry x="1100" y="970" width="170" height="44" as="geometry"/>
                 </mxCell>
-                <mxCell id="72" value="subprocess, DBT_BIN" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;" parent="1" source="70" target="71" edge="1">
+                <mxCell id="72" value="subprocess, DBT_BIN" style="html=1;endArrow=block;elbow=vertical;rounded=0;fontSize=11;" edge="1" parent="1" source="70" target="71">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="73" value="после загрузки в core" style="html=1;endArrow=open;dashed=1;dashPattern=4 3;rounded=0;fontSize=11;strokeColor=#666666;fontColor=#666666;" parent="1" source="37" target="70" edge="1">
+                <mxCell id="73" value="после загрузки в core" style="html=1;endArrow=open;dashed=1;dashPattern=4 3;rounded=0;fontSize=11;strokeColor=#666666;fontColor=#666666;" edge="1" parent="1" source="37" target="70">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="74" value="пересобирает витрины" style="html=1;endArrow=open;dashed=1;dashPattern=4 3;rounded=0;fontSize=11;strokeColor=#666666;fontColor=#666666;" parent="1" source="71" target="46" edge="1">
+                <mxCell id="74" value="пересобирает витрины" style="html=1;endArrow=open;dashed=1;dashPattern=4 3;rounded=0;fontSize=11;strokeColor=#666666;fontColor=#666666;" edge="1" parent="1" source="71" target="46">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
             </root>

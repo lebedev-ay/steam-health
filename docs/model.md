@@ -53,9 +53,9 @@ flowchart TD
     C_PLATFORM -->|"напрямую, мимо marts"| WEB
 ```
 
-Подробная версия с порядком загрузчиков и веткой фоновой задачи - [pipeline.drawio](er/pipeline.drawio).
+Подробная версия с порядком загрузчиков и веткой фоновой задачи - [pipeline.drawio](er/pipeline.drawio). Кто и когда всё это запускает - [orchestration.drawio](er/orchestration.drawio).
 
-Вне схемы: `classify_news.py` - регулярки, его `classify()` вызывает `load_fct_patch.py`; `migrate.py` применяет файлы из `db/migration/` и ведёт `public.schema_history` (в нумерации пропущен V22, запись 018). После каждого сбора отзывов нужно перезапускать `load_fct_review.py`, иначе `core` отстаёт от `raw`.
+Вне схемы: `classify_news.py` - регулярки, его `classify()` вызывает `load_fct_patch.py`; `migrate.py` применяет файлы из `db/migration/` и ведёт `public.schema_history` (в нумерации пропущен V22, запись 018). После сбора отзывов нужен `load_fct_review.py`, иначе `core` отстаёт от `raw`: в ночном прогоне это отдельная задача DAG, при ручном сборе - отдельная команда.
 
 ## Звезда в core
 
@@ -125,7 +125,7 @@ erDiagram
 Зерно и особенности по таблицам:
 
 - **dim_game** - одна строка на версию атрибутов игры, SCD2. `app_id` уникален только среди `is_current`. Строка `game_sk = -1` - заглушка для фактов, у которых игра не нашлась. Пересечение интервалов `[valid_from, valid_to)` запрещено ограничением исключения `dim_game_no_overlap` (V30, запись 025). `valid_from` первой версии - 2000 год (запись 006).
-- **fct_review** - один отзыв. Моменты `created_at`, `updated_at`, `dev_responded_at` дозаполняются по мере жизни отзыва; голоса, комментарии и сама оценка обновляются через `on conflict do update`. `refunded` пуста: Steam её не отдаёт.
+- **fct_review** - один отзыв. Моменты `created_at`, `updated_at`, `dev_responded_at` дозаполняются по мере жизни отзыва; голоса, комментарии и сама оценка обновляются через `on conflict do update`. `refunded` пуста: Steam её не отдаёт. `loaded_from` (V36) хранит метку порции raw, из которой строка загружена: по максимуму этой колонки считается граница инкрементальной загрузки, и по ней же отклоняются попытки перезаписать свежие данные старыми.
 - **fct_patch** - пара «событие - игра». Уникален не `gid`, а `(gid, game_sk)`: одна новость Steam может относиться к нескольким играм, и для каждой это свой факт со своим весом (V34).
 - **dim_date**, **dim_time** заполняются целиком миграциями V2 и V3, без загрузчиков. **dim_language** - на лету при первой встрече языка; `language_name` есть только у заглушки `-1`, для настоящих языков Steam отдаёт лишь код.
 - **Справочники и мосты** заполняет `load_dim_game.py` из `raw.appdetails` (запись 035), на текущий `game_sk`.
@@ -187,7 +187,7 @@ pip install -r requirements.txt
 python collector/migrate.py
 set -a && source .env && set +a
 export PYTHONPATH=collector
-(cd dbt && dbt run)
+python collector/run_dbt.py run --project-dir dbt --profiles-dir dbt
 python web/app.py       # http://localhost:5000, с автоперезагрузкой
 ```
 
@@ -211,10 +211,14 @@ python collector/load_dim_game.py         # raw -> core.dim_game (SCD2)
 python collector/load_fct_review.py       # raw -> fct_review, review_text
 python collector/load_fct_patch.py        # raw -> fct_patch, вес событий
 
-(cd dbt && dbt run)                       # core -> marts
+python collector/run_dbt.py run --project-dir dbt --profiles-dir dbt   # core -> marts
 ```
 
 Порядок внутри блоков важен: `load_dim_game.py` должен отработать до остальных загрузчиков, иначе события и отзывы не найдут версию игры и уедут в заглушку.
+
+dbt запускается через обёртку `run_dbt.py`, а не напрямую: она берёт общий замок, чтобы ручная пересборка витрин не столкнулась с ночным прогоном. Тем же замком защищены загрузчики фактов. Путь к бинарнику dbt берётся из `DBT_BIN`, по умолчанию `dbt`.
+
+`load_fct_review.py` грузит только то, чего ещё нет: берёт из `raw.reviews` строки новее максимального `loaded_from` по каждой игре. Полный перебор - флаг `--full`, конкретное окно - `--since` и `--until`. Обычный прогон занимает секунды, полный - минуты.
 
 `fetch_platform_events.py` пишет и в `raw.news`, и сразу в `core.dim_platform_event`, отдельного загрузчика у него нет. В фоновую задачу дашборда он не входит, и без ручного запуска третий источник событий просто отсутствует. Флаги `--app-id` и `--mode` он не знает: appid один и фид отдаётся целиком за один вызов. Есть `--load-only` - разобрать заново уже скачанное, не обращаясь к Steam.
 
