@@ -1,5 +1,5 @@
 import { dayInRange } from './util.js';
-import { mainEventLabel } from './events.js';
+import { mainEventLabel, NO_EVENT_LABEL } from './events.js';
 
 // cps приходит полным списком: data-idx строки обязан остаться индексом в нём же, по нему ищется ромб на графике
 export function renderChangePointList(cps, range,
@@ -44,8 +44,9 @@ export function renderChangePointList(cps, range,
     const row = body.insertRow();
     row.className = 'cp-row';
     row.dataset.idx = i;
+    const label = mainEventLabel(c);
     [[dateStr, ''], [dir, dirClass], [`${Math.abs(c.score)} п.п.`, dirClass],
-     [mainEventLabel(c), '']].forEach(([text, cls]) => {
+     [label, label === NO_EVENT_LABEL ? 'cp-none' : '']].forEach(([text, cls]) => {
       const td = row.insertCell();
       td.textContent = text;
       if (cls) td.className = cls;

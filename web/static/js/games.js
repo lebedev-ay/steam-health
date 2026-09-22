@@ -58,6 +58,9 @@ export async function loadSafe() {
   setControlsDisabled(true);
   errorBox.style.display = 'none';
   chart.style.display = '';
+  // строка состояния и таблица описывают прежнюю игру: ни во время запроса, ни при ошибке им на экране не место
+  document.getElementById('info').textContent = '';
+  document.getElementById('cpList').replaceChildren();
   overlay.style.display = 'flex';
 
   try {

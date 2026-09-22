@@ -20,6 +20,9 @@ const DATA_GROUPS = new Set(['totals', 'base', 'value', 'cp']);
 // задержка та же, что у Plotly по умолчанию: одиночное действие ждёт, не придёт ли второй щелчок
 const LEGEND_DBLCLICK_MS = 300;
 
+// фон подсказки Plotly берёт из цвета маркера, и светлый текст на жёлтом анонсе или на бледно-сером фоне не читается. Цвет типа остаётся в самом маркере
+const MARKER_HOVER = { bgcolor: '#262b33', bordercolor: '#3a4048', font: { color: '#c7d0d9' } };
+
 // покраска колонок и треугольники - два слоя одного события, и прятаться они обязаны вместе.
 // Plotly переключает только трассу, до shapes ему дела нет, а его собственный visible к тому же сбрасывается на каждой перерисовке
 let hiddenGroups = new Set();
@@ -167,6 +170,7 @@ export function renderChart(range) {
     },
     text: platformEvents.map(e =>
       `${PLATFORM_TYPES[e.type]?.label || e.type}<br>${esc(e.title)}`),
+    hoverlabel: { ...MARKER_HOVER },
     hovertemplate: '%{x|%d.%m.%Y}<br>%{text}<extra></extra>'
   };
 
@@ -194,6 +198,7 @@ export function renderChart(range) {
     text: items.map(e => e.weight
       ? `${TYPES[type]?.label || type} ×${e.weight}<br>${esc(e.title)}`
       : `${TYPES[type]?.label || type}<br>${esc(e.title)}`),
+    hoverlabel: { ...MARKER_HOVER },
     hovertemplate: '%{x}<br>%{text}<extra></extra>'
   }));
 
@@ -283,8 +288,7 @@ export function renderChart(range) {
       line: { color: cpLine, width: cpLineWidth }
     },
     text: cpText,
-    // фон тултипа Plotly берёт из цвета маркера, и цветные строки внутри оказывались на цветном: коралловый на коралловом читался как пустая строка. Фон фиксирован, цвет типа остался в глифе
-    hoverlabel: { bgcolor: '#262b33', bordercolor: '#3a4048', font: { color: '#c7d0d9' } },
+    hoverlabel: { ...MARKER_HOVER },
     hovertemplate: '%{x|%d.%m.%Y}<br>%{text}<extra></extra>'
   };
 

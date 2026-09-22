@@ -17,6 +17,8 @@ select, input {
   background: #262b33;
   border: 1px solid #333a44;
   border-radius: 6px;
+  /* высоту задаёт Plotly после отрисовки; до неё блок нулевой, и оверлею загрузки не во что лечь */
+  min-height: 640px;
 }
 #info { color: #8a95a3; font-size: 13px; }
 .hint { color: #778391; font-size: 12px; margin-top: 8px; }
@@ -111,3 +113,4 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .cp-list .cp-up { color: #3ddc84; }
 .cp-list .cp-down { color: #ff4d3d; }
 .cp-list .cp-empty { color: #778391; padding: 6px 0; }
+.cp-list .cp-none { color: #778391; }

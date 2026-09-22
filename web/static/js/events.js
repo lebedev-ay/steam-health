@@ -1,5 +1,7 @@
 import { truncate, plural } from './util.js';
 
+export const NO_EVENT_LABEL = 'событий рядом нет';
+
 // один цвет на четыре типа, которые правило значимости и так держит фоном: четыре почти неразличимых серых различать было нечем. В легенде они остаются отдельными строками - клик по типу это фильтр
 export const BACKGROUND_COLOR = '#a0adbb';
 
@@ -75,5 +77,5 @@ export function mainEventLabel(c) {
     return `${c.events_minor.length} ` +
       `${plural(c.events_minor.length, 'фоновое событие', 'фоновых события', 'фоновых событий')}`;
   }
-  return '—';
+  return NO_EVENT_LABEL;
 }

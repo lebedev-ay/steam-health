@@ -325,7 +325,8 @@ def build_series(app_id, smoothing):
 
 def build_events(app_id, raw_daily, min_weight):
     # без фильтров по типу и весу: скрытый на графике тип и слабый патч тоже могут оказаться причиной перелома.
-    # distinct нужен потому, что Steam выпускает один анонс под несколькими gid, а маркер ему положен один
+    # distinct нужен потому, что Steam выпускает один анонс под несколькими gid, а маркер ему положен один.
+    # Границы ряда отзывов - потому что событию вне его нечего объяснять, а автомасштаб Plotly такие события растягивали на годы назад
     cp_events = query("""
         select distinct
                (p.published_at at time zone 'utc')::date as day,
@@ -335,8 +336,9 @@ def build_events(app_id, raw_daily, min_weight):
         from core.fct_patch p
         join core.dim_game g on g.game_sk = p.game_sk
         where g.app_id = %s
+          and (p.published_at at time zone 'utc')::date between %s and %s
         order by 1
-    """, (app_id,))
+    """, (app_id, raw_daily[0]["day"], raw_daily[-1]["day"]))
 
     # маркеры - подмножество cp_events, второй запрос не нужен.
     # Пустой вес считается нулём: иначе событие без веса проходило бы любой порог
