@@ -1,0 +1,24 @@
+services:
+  web:
+    ports: !reset []
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: steam-caddy
+    restart: unless-stopped
+    environment:
+      CADDY_COLLECT_HASH: ${CADDY_COLLECT_HASH}
+      CADDY_AIRFLOW_HASH: ${CADDY_AIRFLOW_HASH}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  caddy_data:
+  caddy_config:

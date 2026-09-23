@@ -1,0 +1,26 @@
+steam-health.ru {
+    @collect path /api/collect
+    basic_auth @collect {
+        anton {env.CADDY_COLLECT_HASH}
+    }
+
+    log {
+        output stdout
+        format json
+    }
+
+    reverse_proxy web:5000
+}
+
+airflow.steam-health.ru {
+    basic_auth {
+        anton {env.CADDY_AIRFLOW_HASH}
+    }
+
+    log {
+        output stdout
+        format json
+    }
+
+    reverse_proxy airflow-apiserver:8080
+}
