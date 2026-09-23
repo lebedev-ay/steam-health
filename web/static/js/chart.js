@@ -8,9 +8,10 @@ let cpMarkerIndices = [];
 let cpBaseMarker = null;
 let lastRenderedRange = null;
 let lastFigure = null;
-// пока идёт жест колесом, ось живёт в предпросмотре Plotly и в layout не попадает; после жеста ещё нужно дождаться его перерисовки, которая её туда запишет.
-// Срок ожидания снимает пришедший relayout, а сам срок нужен на случай, когда жест ничего не сдвинул и relayout не придёт вовсе
-let wheelHoldUntil = 0;
+// накопленный диапазон незавершённого жеста; пока он есть, в layout лежит то, что нарисовано, а не то, что видит пользователь.
+// После применения ещё ждём перерисовки Plotly - её приход снимает срок, а сам срок нужен, если relayout почему-то не придёт
+let zoomTarget = null;
+let zoomTimer = null;
 let wheelSettledBy = 0;
 let relayoutBound = false;
 let legendBound = false;
@@ -32,12 +33,12 @@ const RELAYOUT_DEBOUNCE_MS = 250;
 // Там раскладку верхней полосы отдаём Plotly - он сам отводит легенде место и сдвигает кнопки под неё
 const LEGEND_AUTO_PX = 1100;
 
-// Plotly и сам откладывает настоящую перерисовку: до неё он показывает быстрый предпросмотр, а полную сборку ставит на таймер в 50 мс после последнего колеса (REDRAWDELAY в его исходнике).
-// Щелчки медленнее этого в окно не попадают, и каждый тянет свою перерисовку - десять щелчков давали десять. Холостое событие колеса продлевает окно, ничего не сдвигая: множитель у Plotly это exp(-deltaY/200), при нуле он равен единице.
-// Окно 150 мс взято замером: щелчки с шагом 60 и 120 мс сливаются в одну перерисовку, а одиночный щелчок от двух-трёх холостых событий не дорожает
-const WHEEL_HOLD_MS = 150;
-const WHEEL_PUMP_MS = 40;
+// зум колесом ведём сами: встроенный перерисовывает график на каждом щелчке, и пользователь видит состояния, которые уже неактуальны.
+// Множитель шага и точка отсчёта взяты из исходника Plotly 2.35.2, чтобы жест ощущался прежним
+const WHEEL_SETTLE_MS = 250;
 const WHEEL_COMMIT_MS = 500;
+// сутки: зерно данных дневное, уже некуда
+const MIN_WINDOW_MS = 86400000;
 
 // фон подсказки Plotly берёт из цвета маркера, и светлый текст на жёлтом анонсе или на бледно-сером фоне не читается. Цвет типа остаётся в самом маркере
 const MARKER_HOVER = { bgcolor: '#262b33', bordercolor: '#3a4048', font: { color: '#c7d0d9' } };
@@ -60,41 +61,73 @@ function toggleGroup(group) {
   else hiddenGroups.add(group);
 }
 
-// предпросмотр во время жеста остаётся родной: настоящие события колеса не перехватываются и доходят до Plotly как раньше - те же шаги, та же точка отсчёта под курсором
-function wheelInFlight() {
-  return performance.now() < wheelHoldUntil;
+function zoomPending() {
+  return zoomTarget !== null || performance.now() < wheelSettledBy;
 }
 
-function wheelUnsettled() {
-  return wheelInFlight() || performance.now() < wheelSettledBy;
+function previewLayers(chart) {
+  return [chart.querySelector('.cartesianlayer .subplot.xy .overplot'),
+          chart.querySelector('.layer-below .shapelayer')].filter(Boolean);
 }
 
-function holdWheelRedraw() {
+function clearPreview(chart) {
+  previewLayers(chart).forEach(l => l.removeAttribute('transform'));
+}
+
+// отклик на щелчок - сдвиг и растяжение уже нарисованного: два setAttribute вместо полной отрисовки.
+// Сетка и подписи осей остаются на месте до конца жеста, данные едут по ним
+function drawPreview(chart, rect, drawn, target) {
+  const svg = chart.querySelector('.main-svg').getBoundingClientRect();
+  const left = rect.left - svg.left;
+  const scale = (drawn[1] - drawn[0]) / (target[1] - target[0]);
+  const shift = left + rect.width * (drawn[0] - target[0]) / (target[1] - target[0]) - left * scale;
+  const tr = `translate(${shift},0) scale(${scale},1)`;
+  previewLayers(chart).forEach(l => l.setAttribute('transform', tr));
+}
+
+function applyZoom(chart) {
+  const target = zoomTarget;
+  zoomTarget = null;
+  wheelSettledBy = performance.now() + WHEEL_COMMIT_MS;
+  clearPreview(chart);
+  // строкой, а не числом: числовую границу Plotly так и оставляет числом, и Date.parse в sameRange на ней ломается
+  Plotly.relayout(chart, {
+    'xaxis.range': [new Date(target[0]).toISOString(), new Date(target[1]).toISOString()]
+  });
+}
+
+function bindWheelZoom() {
   const chart = document.getElementById('sentiment');
-  let timer = null, at = null;
 
   chart.addEventListener('wheel', e => {
-    // холостые события приходят сюда же всплытием, отвечать на них нечем
-    if (!e.isTrusted) return;
+    const drag = chart.querySelector('.nsewdrag');
+    if (!drag) return;
 
-    at = { clientX: e.clientX, clientY: e.clientY };
-    wheelHoldUntil = performance.now() + WHEEL_HOLD_MS;
-    wheelSettledBy = wheelHoldUntil + WHEEL_COMMIT_MS;
-    if (timer) return;
+    const rect = drag.getBoundingClientRect();
+    // колесо вне области данных - над легендой, ползунком, полями: пусть страница листается как обычно
+    if (e.clientX < rect.left || e.clientX > rect.right
+        || e.clientY < rect.top || e.clientY > rect.bottom) return;
 
-    timer = setInterval(() => {
-      // слой перетаскивания Plotly пересоздаёт на каждой полной сборке, поэтому ищем его каждый раз
-      const drag = chart.querySelector('.nsewdrag');
-      if (!drag || !wheelInFlight()) {
-        clearInterval(timer);
-        timer = null;
-        return;
-      }
-      drag.dispatchEvent(new WheelEvent('wheel', {
-        deltaY: 0, clientX: at.clientX, clientY: at.clientY,
-        bubbles: true, cancelable: true
-      }));
-    }, WHEEL_PUMP_MS);
+    e.preventDefault();
+
+    const drawn = chart.layout.xaxis.range.map(v => new Date(v).getTime());
+    const from = zoomTarget || drawn;
+    const factor = Math.exp(-Math.min(Math.max(-e.deltaY, -20), 20) / 200);
+    const anchor = from[0] + (from[1] - from[0]) * (e.clientX - rect.left) / rect.width;
+    const k = Math.max((from[1] - from[0]) * factor, MIN_WINDOW_MS) / (from[1] - from[0]);
+    zoomTarget = [anchor + (from[0] - anchor) * k, anchor + (from[1] - anchor) * k];
+
+    drawPreview(chart, rect, drawn, zoomTarget);
+
+    clearTimeout(zoomTimer);
+    zoomTimer = setTimeout(() => applyZoom(chart), WHEEL_SETTLE_MS);
+  }, { passive: false });
+
+  // перетаскивание и рамка отсчитываются от того, что нарисовано: незавершённый зум применяем сразу
+  chart.addEventListener('mousedown', () => {
+    if (zoomTarget === null) return;
+    clearTimeout(zoomTimer);
+    applyZoom(chart);
   }, true);
 }
 
@@ -458,8 +491,8 @@ export function renderChart(range) {
   // двойной клик выключен: на ряде в несколько лет случайное попадание выбрасывало
   // из выбранного окна. 'reset' здесь не помогает - при autorange: false Plotly не хранит
   // _rangeInitial и откатывается к автомасштабу. Полный сброс остался кнопкой «всё».
-  // Колесо зумит; страница листается мимо графика, свободной высоты хватает
-  }, { responsive: true, doubleClick: false, scrollZoom: true });
+  // Встроенный зум колесом выключен: им управляет bindWheelZoom выше. Страница по-прежнему листается мимо графика, свободной высоты хватает
+  }, { responsive: true, doubleClick: false, scrollZoom: false });
 
   if (!legendBound) {
     legendBound = true;
@@ -495,7 +528,7 @@ export function renderChart(range) {
   // zoom, pan, rangeslider и кнопки периода приходят сюда одним plotly_relayout - перерисовываем только клиентские слои
   if (!relayoutBound) {
     relayoutBound = true;
-    holdWheelRedraw();
+    bindWheelZoom();
     document.getElementById('sentiment').on('plotly_relayout', () => {
       // Plotly записал ось в layout, ждать его больше нечего
       wheelSettledBy = 0;
@@ -517,7 +550,7 @@ export function renderChart(range) {
       relayoutTimer = setTimeout(function apply() {
         // сборка с диапазоном из layout вернула бы экран к нему и откатила начатый зум: пока жест идёт или
         // пока Plotly не записал ось, там лежит значение до жеста
-        if (wheelUnsettled()) {
+        if (zoomPending()) {
           relayoutTimer = setTimeout(apply, RELAYOUT_DEBOUNCE_MS);
           return;
         }
