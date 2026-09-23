@@ -380,15 +380,11 @@ export function renderChart(range) {
 
   Plotly.react('sentiment', [
     {
-      // заливка, а не столбики: 646 прямоугольников перерисовывались на каждом кадре жеста и стоили больше половины его времени, одна фигура столько не стоит
-      x: days, y: totals, type: 'scatter', mode: 'lines', name: 'Отзывов',
+      x: days, y: totals, type: 'bar', name: 'Отзывов',
       yaxis: 'y2',
       legendgroup: 'totals',
       visible: groupVisible('totals') ? true : 'legendonly',
-      fill: 'tozeroy',
-      fillcolor: 'rgba(110,150,190,0.20)',
-      line: { color: 'rgba(110,150,190,0.45)', width: 1 },
-      hoverlabel: { ...MARKER_HOVER },
+      marker: { color: 'rgba(110,150,190,0.28)' },
       hovertemplate: '%{x}<br>Отзывов: %{y}<extra></extra>'
     },
     ...(isDelta ? [] : [{
