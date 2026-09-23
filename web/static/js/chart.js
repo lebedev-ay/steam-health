@@ -8,6 +8,10 @@ let cpMarkerIndices = [];
 let cpBaseMarker = null;
 let lastRenderedRange = null;
 let lastFigure = null;
+// пока идёт жест колесом, ось живёт в предпросмотре Plotly и в layout не попадает; после жеста ещё нужно дождаться его перерисовки, которая её туда запишет.
+// Срок ожидания снимает пришедший relayout, а сам срок нужен на случай, когда жест ничего не сдвинул и relayout не придёт вовсе
+let wheelHoldUntil = 0;
+let wheelSettledBy = 0;
 let relayoutBound = false;
 let legendBound = false;
 let relayoutTimer = null;
@@ -33,6 +37,7 @@ const LEGEND_AUTO_PX = 1100;
 // Окно 150 мс взято замером: щелчки с шагом 60 и 120 мс сливаются в одну перерисовку, а одиночный щелчок от двух-трёх холостых событий не дорожает
 const WHEEL_HOLD_MS = 150;
 const WHEEL_PUMP_MS = 40;
+const WHEEL_COMMIT_MS = 500;
 
 // фон подсказки Plotly берёт из цвета маркера, и светлый текст на жёлтом анонсе или на бледно-сером фоне не читается. Цвет типа остаётся в самом маркере
 const MARKER_HOVER = { bgcolor: '#262b33', bordercolor: '#3a4048', font: { color: '#c7d0d9' } };
@@ -56,22 +61,31 @@ function toggleGroup(group) {
 }
 
 // предпросмотр во время жеста остаётся родной: настоящие события колеса не перехватываются и доходят до Plotly как раньше - те же шаги, та же точка отсчёта под курсором
+function wheelInFlight() {
+  return performance.now() < wheelHoldUntil;
+}
+
+function wheelUnsettled() {
+  return wheelInFlight() || performance.now() < wheelSettledBy;
+}
+
 function holdWheelRedraw() {
   const chart = document.getElementById('sentiment');
-  let timer = null, until = 0, at = null;
+  let timer = null, at = null;
 
   chart.addEventListener('wheel', e => {
     // холостые события приходят сюда же всплытием, отвечать на них нечем
     if (!e.isTrusted) return;
 
     at = { clientX: e.clientX, clientY: e.clientY };
-    until = performance.now() + WHEEL_HOLD_MS;
+    wheelHoldUntil = performance.now() + WHEEL_HOLD_MS;
+    wheelSettledBy = wheelHoldUntil + WHEEL_COMMIT_MS;
     if (timer) return;
 
     timer = setInterval(() => {
       // слой перетаскивания Plotly пересоздаёт на каждой полной сборке, поэтому ищем его каждый раз
       const drag = chart.querySelector('.nsewdrag');
-      if (!drag || performance.now() > until) {
+      if (!drag || !wheelInFlight()) {
         clearInterval(timer);
         timer = null;
         return;
@@ -483,6 +497,8 @@ export function renderChart(range) {
     relayoutBound = true;
     holdWheelRedraw();
     document.getElementById('sentiment').on('plotly_relayout', () => {
+      // Plotly записал ось в layout, ждать его больше нечего
+      wheelSettledBy = 0;
       const gd = document.getElementById('sentiment');
       const xr = gd.layout.xaxis.range;
       const newRange = xr ? [xr[0], xr[1]] : null;
@@ -493,8 +509,21 @@ export function renderChart(range) {
       clearTimeout(relayoutTimer);
       // пока фигура прежняя, обновить нужно только строку состояния и таблицу - это доли миллисекунды, ждать нечего.
       // Смена порога плотности или ширины перестраивает её целиком, и это лучше отложить до конца жеста
-      if (sameFigure) renderChart(newRange);
-      else relayoutTimer = setTimeout(() => renderChart(newRange), RELAYOUT_DEBOUNCE_MS);
+      if (sameFigure) {
+        renderChart(newRange);
+        return;
+      }
+
+      relayoutTimer = setTimeout(function apply() {
+        // сборка с диапазоном из layout вернула бы экран к нему и откатила начатый зум: пока жест идёт или
+        // пока Plotly не записал ось, там лежит значение до жеста
+        if (wheelUnsettled()) {
+          relayoutTimer = setTimeout(apply, RELAYOUT_DEBOUNCE_MS);
+          return;
+        }
+        const now = gd.layout.xaxis.range;
+        renderChart(now ? [now[0], now[1]] : null);
+      }, RELAYOUT_DEBOUNCE_MS);
     });
   }
 
