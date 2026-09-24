@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import psycopg
 from psycopg.rows import dict_row
 
+import fetch_appdetails
 from db import DSN, read_games
 
 # события за прошлые годы должны находить свою версию, иначе улетят
@@ -30,8 +31,7 @@ def parse_release_date(raw):
     return None
 
 
-def extract(payload, app_id):
-    data = payload[str(app_id)]["data"]
+def extract(data, app_id):
     release = data.get("release_date") or {}
     raw_date = release.get("date")
     metacritic = data.get("metacritic") or {}
@@ -50,9 +50,7 @@ def extract(payload, app_id):
     }
 
 
-def extract_links(payload, app_id):
-    data = payload[str(app_id)]["data"]
-
+def extract_links(data):
     return {
         "developer": data.get("developers") or [],
         "publisher": data.get("publishers") or [],
@@ -200,14 +198,14 @@ def load_one(conn, app_id, name):
         return None
 
     payload = row["payload"]
-    info = payload.get(str(app_id)) or {}
+    info = fetch_appdetails.pick(payload, app_id)
     if not info.get("success") or "data" not in info:
         print(f"{name}: Steam не вернул данные (success={info.get('success')})")
         return None
 
-    fields = extract(payload, app_id)
+    fields = extract(info["data"], app_id)
     game_sk, result = load(conn, fields)
-    load_links(conn, game_sk, extract_links(payload, app_id))
+    load_links(conn, game_sk, extract_links(info["data"]))
     conn.commit()
 
     print(f"{name}: {result}")

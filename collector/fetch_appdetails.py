@@ -17,6 +17,24 @@ def fetch(app_id):
     return status, payload
 
 
+def pick(payload, app_id):
+    """Элемент ответа по app_id. Steam бывает кладёт его под чужим ключом (2344520 -> "3958800"), свой id лежит в data.steam_appid."""
+    items = payload or {}
+    for info in items.values():
+        info = info or {}
+        if info.get("success") and str((info.get("data") or {}).get("steam_appid")) == str(app_id):
+            return info
+    if str(app_id) in items:
+        return items[str(app_id)] or {}
+    if len(items) == 1:
+        (key, info), = items.items()
+        info = info or {}
+        if info.get("success"):
+            print(f"  appdetails: app_id {app_id} пришёл под ключом {key}")
+        return info
+    return {}
+
+
 def save(conn, app_id, status, payload):
     conn.execute(
         "insert into raw.appdetails (app_id, http_status, payload) values (%s, %s, %s)",

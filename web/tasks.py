@@ -74,7 +74,7 @@ def collect_game(self, app_id, mode="incremental"):
     try:
         progress(1, "проверка игры в Steam")
         status, payload = fetch_appdetails.fetch(app_id)
-        info = (payload or {}).get(str(app_id)) or {}
+        info = fetch_appdetails.pick(payload, app_id)
 
         if not info.get("success"):
             raise ValueError(f"appdetails не вернул данные для app_id {app_id}")
