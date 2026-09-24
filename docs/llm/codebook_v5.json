@@ -1,0 +1,311 @@
+{
+  "version": "v5",
+  "source": "codebook_v4 + сравнение модели с эталоном 24.09.2026: разведены цена и монетизация, сеттинг и тема в атмосфере, кража контента в поведении компании. Заморожен: дальнейшие правки только по отложенной выборке других жанров",
+  "categories": [
+    {
+      "id": "overall",
+      "name": "Overall",
+      "definition": "General evaluations of the game that do not single out a specific dimension of quality.",
+      "subaspects": [
+        {
+          "id": "overall_impression",
+          "name": "Overall impression",
+          "definition": "A holistic judgment of the game, including nostalgia and comparisons with other games. Use only when the review gives no specific reasons."
+        }
+      ]
+    },
+    {
+      "id": "monetization_and_value",
+      "name": "Monetization and value",
+      "definition": "Judgments about the financial relationship between the player and the game, including pricing, purchases, and business ethics.",
+      "subaspects": [
+        {
+          "id": "pricing_fairness",
+          "name": "Pricing fairness",
+          "definition": "Judgment of a specific price: the game or a paid add-on is too expensive, fairly priced, or worth it on sale."
+        },
+        {
+          "id": "monetization_practices",
+          "name": "Monetization practices",
+          "definition": "How the company extracts money from players: microtransactions, battle passes, splitting the game into paid add-ons, pressure to keep paying."
+        },
+        {
+          "id": "content_access_model",
+          "name": "Content access model",
+          "definition": "Whether content is unfairly locked behind payment, removed, vaulted, or rotated away from players who previously had access."
+        },
+        {
+          "id": "business_conduct",
+          "name": "Business conduct",
+          "definition": "Company decisions and attitude toward players and the game: priorities, ethics, treatment of fans, plagiarism or stolen content, regional restrictions, bans, corporate strategy."
+        }
+      ]
+    },
+    {
+      "id": "technical_performance",
+      "name": "Technical performance",
+      "definition": "Judgments about how well the software runs.",
+      "subaspects": [
+        {
+          "id": "frame_performance",
+          "name": "Frame performance",
+          "definition": "Frame rate, loading times, hardware demands, and optimization."
+        },
+        {
+          "id": "stability",
+          "name": "Stability",
+          "definition": "Bugs, crashes, glitches, save corruption, and other technical errors during play."
+        },
+        {
+          "id": "connectivity",
+          "name": "Connectivity",
+          "definition": "Network connection quality, server availability, login reliability, and offline functionality."
+        }
+      ]
+    },
+    {
+      "id": "challenge_and_difficulty",
+      "name": "Challenge and difficulty",
+      "definition": "Judgments about how the game calibrates challenge, handles failure, and introduces complexity.",
+      "subaspects": [
+        {
+          "id": "difficulty_balance",
+          "name": "Enemy and boss difficulty",
+          "definition": "How hard the game is against the player: enemy and boss health, damage, challenge level, too hard or too easy."
+        },
+        {
+          "id": "punishment_design",
+          "name": "Punishment design",
+          "definition": "How the game penalizes failure (death penalty, item loss, lost progress) and whether it feels fair."
+        },
+        {
+          "id": "learning_curve",
+          "name": "Learning curve",
+          "definition": "How well the game explains its systems, guides new players, and ramps up complexity."
+        }
+      ]
+    },
+    {
+      "id": "progression_and_engagement",
+      "name": "Progression and engagement",
+      "definition": "Judgments about the sense of advancement and whether the game respects the player's time.",
+      "subaspects": [
+        {
+          "id": "progression_pacing",
+          "name": "Progression pacing",
+          "definition": "The rate and satisfaction of character, account, or skill advancement."
+        },
+        {
+          "id": "grind_and_repetition",
+          "name": "Grind and repetition",
+          "definition": "Whether required activities are tediously repetitive, padded, or demand excessive time investment."
+        },
+        {
+          "id": "reward_satisfaction",
+          "name": "Reward satisfaction",
+          "definition": "The quality, excitement, and fairness of loot, drops, and earned rewards."
+        }
+      ]
+    },
+    {
+      "id": "presentation",
+      "name": "Presentation",
+      "definition": "Judgments about the audiovisual and atmospheric qualities of the game.",
+      "subaspects": [
+        {
+          "id": "visual_quality",
+          "name": "Visual quality",
+          "definition": "Graphics, art direction, animations, and overall visual appeal."
+        },
+        {
+          "id": "audio_quality",
+          "name": "Audio quality",
+          "definition": "Music, sound effects, sound design, and voice acting."
+        },
+        {
+          "id": "atmosphere_and_immersion",
+          "name": "Atmosphere, setting and theme",
+          "definition": "Mood, sense of place and immersion, including the game's setting and theme (mythology, era, genre fantasy)."
+        }
+      ]
+    },
+    {
+      "id": "narrative_and_world",
+      "name": "Narrative and world",
+      "definition": "Judgments about storytelling, world construction, and structured content like quests.",
+      "subaspects": [
+        {
+          "id": "narrative_quality",
+          "name": "Narrative quality",
+          "definition": "Story, writing, lore, and characters."
+        },
+        {
+          "id": "world_design",
+          "name": "World design",
+          "definition": "The physical game world only: map layout, environments, and exploration. Not the amount of content and not access to areas."
+        },
+        {
+          "id": "quest_design",
+          "name": "Quest design",
+          "definition": "The quality and variety of missions, objectives, and structured activities."
+        }
+      ]
+    },
+    {
+      "id": "core_systems",
+      "name": "Core systems",
+      "definition": "Judgments about the feel and balance of the game's main interactive systems.",
+      "subaspects": [
+        {
+          "id": "combat_feel",
+          "name": "Combat feel",
+          "definition": "Responsiveness, satisfaction, and physicality of combat and action controls."
+        },
+        {
+          "id": "power_balance",
+          "name": "Class and weapon balance",
+          "definition": "Balance between player options: classes, weapons, builds, strategies, or PvP sides. Not the player versus enemies."
+        },
+        {
+          "id": "build_depth",
+          "name": "Build depth",
+          "definition": "Variety and meaningfulness of character customization, skill choices, and strategic options."
+        },
+        {
+          "id": "non_combat_systems",
+          "name": "Non-combat systems",
+          "definition": "Building, crafting, farming, fishing, taming, trading, and other non-combat activities."
+        }
+      ]
+    },
+    {
+      "id": "social_and_online",
+      "name": "Play modes and social",
+      "definition": "Judgments about playing alone or with others and about the online social environment.",
+      "subaspects": [
+        {
+          "id": "solo_experience",
+          "name": "Solo experience",
+          "definition": "How enjoyable and viable the game is when played alone."
+        },
+        {
+          "id": "multiplayer_experience",
+          "name": "Multiplayer experience",
+          "definition": "The quality of playing cooperatively or competitively with other people."
+        },
+        {
+          "id": "community_quality",
+          "name": "Community quality",
+          "definition": "Behavior, toxicity, and overall health of the player community."
+        },
+        {
+          "id": "matchmaking_quality",
+          "name": "Matchmaking quality",
+          "definition": "How well players are paired by skill, interest, or connection quality."
+        },
+        {
+          "id": "anti_cheat",
+          "name": "Anti-cheat",
+          "definition": "How well the game detects, prevents, and handles cheating and exploitation."
+        }
+      ]
+    },
+    {
+      "id": "development_and_support",
+      "name": "Development and support",
+      "definition": "Judgments about the ongoing stewardship of the game by its creators.",
+      "subaspects": [
+        {
+          "id": "update_quality",
+          "name": "Update quality",
+          "definition": "The polish and effect of patches and changes, including updates that break or worsen the game."
+        },
+        {
+          "id": "development_pace",
+          "name": "Development pace",
+          "definition": "Speed and direction of ongoing development, including prolonged early access."
+        },
+        {
+          "id": "developer_communication",
+          "name": "Developer communication",
+          "definition": "Public statements, announcements, roadmaps: transparency and honesty of what the developers say."
+        },
+        {
+          "id": "customer_support",
+          "name": "Customer support",
+          "definition": "Help with a specific account, purchase, or technical problem through support channels. Not the general attitude of the company."
+        },
+        {
+          "id": "mod_support",
+          "name": "Mod support",
+          "definition": "Whether the game supports player-made modifications and how the developers treat modding."
+        },
+        {
+          "id": "game_lifecycle",
+          "name": "Game lifecycle",
+          "definition": "End of service, server shutdown, sunset of live content, or announced end of development."
+        }
+      ]
+    },
+    {
+      "id": "usability",
+      "name": "Usability",
+      "definition": "Judgments about how easy and comfortable the game is to interact with.",
+      "subaspects": [
+        {
+          "id": "interface_design",
+          "name": "Interface design",
+          "definition": "Menus, HUD, inventory management, and convenience features that reduce friction in everyday play."
+        },
+        {
+          "id": "control_scheme",
+          "name": "Control scheme",
+          "definition": "Comfort, intuitiveness, and responsiveness of input and keybindings."
+        },
+        {
+          "id": "accessibility",
+          "name": "Accessibility",
+          "definition": "Settings and options for players with different physical needs: subtitles, colorblind modes, remapping, and similar."
+        },
+        {
+          "id": "localization",
+          "name": "Localization",
+          "definition": "Quality and availability of translation, subtitles, and voice-over in the player's language."
+        }
+      ]
+    },
+    {
+      "id": "content_design",
+      "name": "Content design",
+      "definition": "Judgments about the amount, freshness, and replayability of what the game offers.",
+      "subaspects": [
+        {
+          "id": "content_volume",
+          "name": "Content volume",
+          "definition": "The amount of content relative to price or expectations."
+        },
+        {
+          "id": "content_variety",
+          "name": "Content variety",
+          "definition": "Diversity of activities, environments, and experiences."
+        },
+        {
+          "id": "endgame_depth",
+          "name": "Endgame depth",
+          "definition": "Availability and quality of meaningful activities after the main content is complete."
+        },
+        {
+          "id": "replayability",
+          "name": "Replayability",
+          "definition": "Incentive and enjoyment of replaying content or starting new playthroughs."
+        },
+        {
+          "id": "originality",
+          "name": "Originality",
+          "definition": "How fresh and innovative the game feels compared to alternatives in its genre."
+        }
+      ]
+    }
+  ],
+  "status": "frozen"
+}
