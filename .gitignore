@@ -17,3 +17,4 @@ dbt/.user.yml
 *.dump
 visits_clean.txt
 airflow/logs/
+explore/
