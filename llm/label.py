@@ -1,7 +1,7 @@
 """Разметка отзывов игры аспектами со знаком.
 
     python -m llm.label --app-id 892970 [--since 2026-01-01] [--until 2026-02-01] [--dry-run]
-    python -m llm.label --ids-file llm/eval/gold_ids.txt [--dry-run]
+    python -m llm.label --ids-file llm/gold/gold_ids.txt [--dry-run]
 
 --ids-file размечает только отзывы из списка recommendation_id (по одному в строке), без порога длины и дневного лимита.
 

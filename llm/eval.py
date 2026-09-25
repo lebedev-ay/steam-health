@@ -3,7 +3,7 @@
     python -m llm.eval [--config-sk N]
 
 По умолчанию берётся конфигурация из окружения (LLM_MODEL + текущий промпт + параметры генерации).
-Сначала эталон размечается той же конфигурацией: python -m llm.label --ids-file llm/eval/gold_ids.txt
+Сначала эталон размечается той же конфигурацией: python -m llm.label --ids-file llm/gold/gold_ids.txt
 Согласие - коэффициент Дайса по парам (отзыв, аспект): 2|A∩B| / (|A| + |B|).
 """
 
@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "collector"))
 
 from db import DSN
 
-GOLD = Path(__file__).parent / "eval"
+GOLD = Path(__file__).parent / "gold"
 RATERS = {"Антон": GOLD / "gold_anton_v4.json", "Claude": GOLD / "gold_claude.json"}
 OVERALL = "overall_impression"
 
