@@ -36,6 +36,19 @@ def candidates(conn, config_sk, app_id=None, since=None, until=None, ids=None):
     """, params).fetchall()
 
 
+def content_by_day(conn, app_id, min_length):
+    """{день: содержательных отзывов} за всю историю игры: медиане всплеска нужны дни и до начала периода разметки."""
+    rows = conn.execute("""
+        select (f.created_at at time zone 'utc')::date as day, count(*) as n
+        from core.fct_review f
+        join core.dim_game g on g.game_sk = f.game_sk
+        join core.review_text t on t.review_sk = f.review_sk
+        where g.app_id = %s and char_length(btrim(coalesce(t.review_body, ''))) >= %s
+        group by 1
+    """, (app_id, min_length)).fetchall()
+    return {r["day"]: r["n"] for r in rows}
+
+
 def snapshot(conn, recommendation_ids):
     """Снять версии текущих текстов; вернуть {recommendation_id: (review_text_sk, текст)}."""
     ids = list(recommendation_ids)

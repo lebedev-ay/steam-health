@@ -2,8 +2,11 @@
 
     python -m llm.label --app-id 892970 [--since 2026-01-01] [--until 2026-02-01] [--dry-run]
     python -m llm.label --ids-file llm/gold/gold_ids.txt [--dry-run]
+    python -m llm.label --app-id 892970 --adaptive [--spike-factor 2 --spike-min-abs 60 --spike-limit 200] [--dry-run]
 
 --ids-file размечает только отзывы из списка recommendation_id (по одному в строке), без порога длины и дневного лимита.
+--adaptive в дни всплесков (содержательных отзывов не меньше spike-factor x медиана за 28 предыдущих дней и не меньше spike-min-abs)
+поднимает дневной лимит до spike-limit; порядок внутри дня прежний, поэтому доразмечаются только следующие по порядку отзывы.
 
 Уже размеченное этой конфигурацией (модель + итоговый промпт + параметры генерации) пропускается.
 Отзывы короче порога только считаются: в базу не пишутся и в модель не уходят. --dry-run ничего не пишет в базу и не зовёт модель.
@@ -21,8 +24,8 @@ from psycopg.rows import dict_row
 
 from llm import client, codebook
 from llm.check import batch_text, parse
-from llm.select import plan, plan_listed
-from llm.texts import candidates, snapshot
+from llm.select import day_limits, plan, plan_listed
+from llm.texts import candidates, content_by_day, snapshot
 
 # DSN общий с collector/, а он не пакет - подключается так же, как в tools/
 sys.path.insert(0, str(Path(__file__).parent.parent / "collector"))
@@ -126,9 +129,17 @@ def parse_args():
     parser.add_argument("--day-limit", type=int, default=30, help="отзывов на игру в день")
     parser.add_argument("--min-length", type=int, default=20, help="короче - только в счёт, без модели и записи")
     parser.add_argument("--dry-run", action="store_true", help="только посчитать, без модели и записи в базу")
+    parser.add_argument("--adaptive", action="store_true",
+                        help="в дни всплесков лимит --spike-limit вместо --day-limit")
+    parser.add_argument("--spike-factor", type=float, default=2,
+                        help="всплеск: содержательных не меньше медианы за 28 дней, умноженной на это число")
+    parser.add_argument("--spike-min-abs", type=int, default=60, help="всплеск: и не меньше этого числа содержательных")
+    parser.add_argument("--spike-limit", type=int, default=200, help="лимит разметки в день всплеска")
     args = parser.parse_args()
     if args.ids_file and (args.since or args.until):
         parser.error("--ids-file не сочетается с --since и --until")
+    if args.ids_file and args.adaptive:
+        parser.error("--adaptive работает с --app-id: у списка id дневного лимита нет")
     return args
 
 
@@ -165,10 +176,27 @@ def main():
                 print(f"  нет в core.fct_review или без текста: {sorted(missing)}")
         else:
             rows = candidates(conn, config_sk, args.app_id, args.since, args.until)
-            p = plan(rows, args.min_length, args.day_limit)
+            limits = None
+            if args.adaptive:
+                days = day_limits(content_by_day(conn, args.app_id, args.min_length), args.day_limit,
+                                  args.spike_factor, args.spike_min_abs, args.spike_limit)
+                period = {r["day"] for r in rows}
+                spikes = sorted(d for d, v in days.items() if v["spike"] and d in period)
+                limits = {d: v["limit"] for d, v in days.items()}
+                base = plan(rows, args.min_length, args.day_limit)
+            p = plan(rows, args.min_length, args.day_limit, limits)
+            limit_note = f"{args.day_limit}/день, во всплеск {args.spike_limit}" if args.adaptive else f"{args.day_limit}/день"
             print(f"отзывов в периоде: {len(rows)} | короче {args.min_length}: {p['too_short']} | "
-                  f"сверх лимита {args.day_limit}/день: {p['over_limit']} | уже размечено: {p['done']} | "
+                  f"сверх лимита {limit_note}: {p['over_limit']} | уже размечено: {p['done']} | "
                   f"в работу: {len(p['to_label'])} (из них повтор failed: {p['retry']})")
+            if args.adaptive:
+                print(f"всплесков: {len(spikes)} (содержательных >= {args.spike_factor:g} x медиана за 28 дней "
+                      f"и >= {args.spike_min_abs}) | к обычному лимиту добавится: {len(p['to_label']) - len(base['to_label'])}")
+                for d in spikes[:20]:
+                    v = days[d]
+                    print(f"  {d:%d.%m.%Y}  содержательных {v['content']:>5}  медиана {v['median']:>6g}  лимит {v['limit']}")
+                if len(spikes) > 20:
+                    print(f"  ... и ещё {len(spikes) - 20}")
         chars = sum(r["length"] for r in p["to_label"])
 
         if args.dry_run:
