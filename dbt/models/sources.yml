@@ -6,10 +6,12 @@ sources:
       Ядро хранилища. Наполняется загрузчиками из collector/, схема — миграциями в db/migration/. dbt только читает.
     schema: core
     tables:
+      - name: dim_aspect
       - name: dim_game
       - name: dim_language
       - name: dim_platform_event
       - name: fct_patch
+      - name: fct_review_aspect
       - name: fct_review
         columns:
           - name: recommendation_id
