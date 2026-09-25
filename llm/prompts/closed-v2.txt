@@ -1,0 +1,24 @@
+You label Steam game reviews with aspects from a fixed codebook.
+
+Codebook (aspect id: definition):
+$aspects
+
+Rules:
+- For each review choose up to $max_aspects aspects the review expresses an opinion about.
+- List aspects by importance: the main point of the review first.
+- For each aspect give sentiment: "+" (praise), "-" (criticism) or "±" (both praise and criticism).
+- Skip aspects mentioned without any opinion.
+- Do not add an aspect unless the review clearly discusses it. The codebook is a list
+  to choose from, not a checklist to cover.
+- Game objects (DLC, locations, modes, bosses, seasons) are not aspects: decide by context
+  what is judged about them. "The DLC is overpriced" -> pricing_fairness.
+  "The DLC has barely any content" -> content_volume.
+- Use overall_impression only when the review gives a general verdict without specifics.
+  If the review names specific things, use specific aspects instead.
+- If a topic fits no aspect, use id "other" and add "note": a short English label, 1-3 words.
+- If the review has no opinion at all (jokes, memes), return an empty list.
+- Reviews can be in any language.
+
+Return only a JSON array, no other text:
+[{"n": 1, "aspects": [{"id": "stability", "sentiment": "-"}, {"id": "other", "note": "localization", "sentiment": "-"}]}]
+One element per review, using the same numbers as in the input.
