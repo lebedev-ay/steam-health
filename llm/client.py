@@ -19,6 +19,14 @@ def settings():
         raise SystemExit("нужны LLM_BASE_URL и LLM_MODEL в окружении или .env")
     return base_url.rstrip("/"), model
 
+
+def api_key():
+    key = os.getenv("LLM_API_KEY")
+    if not key:
+        raise SystemExit("нет LLM_API_KEY в окружении")
+    return key
+
+
 def provider_fields(base_url):
     """Поля запроса, которые у провайдеров разные: выключение размышлений и цена в usage."""
     enabled = GENERATION["reasoning"]
@@ -30,9 +38,7 @@ def provider_fields(base_url):
 def complete(system_prompt, user_text):
     """Вернуть (текст ответа, finish_reason, цена или None)."""
     base_url, model = settings()
-    key = os.getenv("LLM_API_KEY")
-    if not key:
-        raise SystemExit("нет LLM_API_KEY в окружении")
+    key = api_key()
 
     for attempt in range(len(PAUSES) + 1):
         response = requests.post(

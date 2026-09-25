@@ -133,6 +133,8 @@ def read_ids(path):
 def main():
     args = parse_args()
     _, model = client.settings()
+    if not args.dry_run:
+        client.api_key()   # без ключа выход до любой записи в базу
     book = codebook.load()
     prompt = codebook.build_prompt(book)
 
