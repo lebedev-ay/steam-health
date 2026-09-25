@@ -40,3 +40,15 @@ def plan(rows, min_length, day_limit):
                 out["to_label"].append({**r, "day_rank": rank})
 
     return out
+
+
+def plan_listed(rows):
+    """Отзывы из явного списка (эталон): без порога длины и дневного лимита, day_rank не заполняется."""
+    out = {"to_label": [], "too_short": 0, "over_limit": 0, "done": 0, "retry": 0}
+    for r in rows:
+        if r["status"] in DONE:
+            out["done"] += 1
+        else:
+            out["retry"] += r["status"] == "failed"
+            out["to_label"].append({**r, "day_rank": None})
+    return out

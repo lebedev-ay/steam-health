@@ -1,7 +1,7 @@
 import unittest
 from datetime import date
 
-from llm.select import day_order, plan
+from llm.select import day_order, plan, plan_listed
 
 D1, D2 = date(2026, 9, 1), date(2026, 9, 2)
 
@@ -50,6 +50,15 @@ class PlanTest(unittest.TestCase):
         p = plan([row(1, status="failed"), row(2, status="no_opinion"), row(3, status="labeled")], 20, 30)
         self.assertEqual([r["recommendation_id"] for r in p["to_label"]], [1])
         self.assertEqual((p["done"], p["retry"]), (2, 1))
+
+
+class PlanListedTest(unittest.TestCase):
+    def test_no_threshold_no_limit_no_rank(self):
+        rows = [row(i, length=3) for i in range(40)] + [row(99, status="labeled"), row(98, status="failed")]
+        p = plan_listed(rows)
+        self.assertEqual(len(p["to_label"]), 41)
+        self.assertEqual((p["done"], p["retry"], p["too_short"], p["over_limit"]), (1, 1, 0, 0))
+        self.assertTrue(all(r["day_rank"] is None for r in p["to_label"]))
 
 
 if __name__ == "__main__":

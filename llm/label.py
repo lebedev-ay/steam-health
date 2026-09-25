@@ -1,6 +1,9 @@
 """Разметка отзывов игры аспектами со знаком.
 
     python -m llm.label --app-id 892970 [--since 2026-01-01] [--until 2026-02-01] [--dry-run]
+    python -m llm.label --ids-file llm/eval/gold_ids.txt [--dry-run]
+
+--ids-file размечает только отзывы из списка recommendation_id (по одному в строке), без порога длины и дневного лимита.
 
 Уже размеченное этой конфигурацией (модель + итоговый промпт + параметры генерации) пропускается.
 Отзывы короче порога только считаются: в базу не пишутся и в модель не уходят. --dry-run ничего не пишет в базу и не зовёт модель.
@@ -18,7 +21,7 @@ from psycopg.rows import dict_row
 
 from llm import client, codebook
 from llm.check import batch_text, parse
-from llm.select import plan
+from llm.select import plan, plan_listed
 from llm.texts import candidates, snapshot
 
 # DSN общий с collector/, а он не пакет - подключается так же, как в tools/
@@ -108,13 +111,23 @@ def run(conn, todo, prompt, config_sk, run_id, aspect_sks):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="LLM-разметка отзывов игры")
-    parser.add_argument("--app-id", type=int, required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--app-id", type=int)
+    source.add_argument("--ids-file", type=Path, help="файл с recommendation_id по одному в строке")
     parser.add_argument("--since", type=date.fromisoformat, help="created_at отзыва от, UTC, включительно")
     parser.add_argument("--until", type=date.fromisoformat, help="created_at отзыва до, UTC, исключительно")
     parser.add_argument("--day-limit", type=int, default=30, help="отзывов на игру в день")
     parser.add_argument("--min-length", type=int, default=20, help="короче - только в счёт, без модели и записи")
     parser.add_argument("--dry-run", action="store_true", help="только посчитать, без модели и записи в базу")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.ids_file and (args.since or args.until):
+        parser.error("--ids-file не сочетается с --since и --until")
+    return args
+
+
+def read_ids(path):
+    lines = (line.strip() for line in path.read_text(encoding="utf-8").splitlines())
+    return [int(line) for line in lines if line and not line.startswith("#")]
 
 
 def main():
@@ -131,23 +144,32 @@ def main():
             config_sk = codebook.ensure_config(conn, model, prompt, client.GENERATION, book["version"])
             conn.commit()
 
-        rows = candidates(conn, args.app_id, args.since, args.until, config_sk)
-        p = plan(rows, args.min_length, args.day_limit)
-        chars = sum(r["length"] for r in p["to_label"])
-
         print(f"справочник {book['version']} | промпт {codebook.PROMPT_NAME} ({codebook.prompt_hash(prompt)[:8]}) | {model}")
-        print(f"отзывов в периоде: {len(rows)} | короче {args.min_length}: {p['too_short']} | "
-              f"сверх лимита {args.day_limit}/день: {p['over_limit']} | уже размечено: {p['done']} | "
-              f"в работу: {len(p['to_label'])} (из них повтор failed: {p['retry']})")
+        if args.ids_file:
+            ids = read_ids(args.ids_file)
+            rows = candidates(conn, config_sk, ids=ids)
+            p = plan_listed(rows)
+            missing = set(ids) - {r["recommendation_id"] for r in rows}
+            print(f"отзывов в списке: {len(ids)} | нет в базе: {len(missing)} | уже размечено: {p['done']} | "
+                  f"в работу: {len(p['to_label'])} (из них повтор failed: {p['retry']})")
+            if missing:
+                print(f"  нет в core.fct_review или без текста: {sorted(missing)}")
+        else:
+            rows = candidates(conn, config_sk, args.app_id, args.since, args.until)
+            p = plan(rows, args.min_length, args.day_limit)
+            print(f"отзывов в периоде: {len(rows)} | короче {args.min_length}: {p['too_short']} | "
+                  f"сверх лимита {args.day_limit}/день: {p['over_limit']} | уже размечено: {p['done']} | "
+                  f"в работу: {len(p['to_label'])} (из них повтор failed: {p['retry']})")
+        chars = sum(r["length"] for r in p["to_label"])
 
         if args.dry_run:
             print(f"оценка: ${chars * COST_PER_MCHAR / 1e6:.4f} по символам ({chars}), "
                   f"${len(p['to_label']) * COST_PER_REVIEW:.4f} по средней цене отзыва разведки")
             return
 
-        run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S") + f"-{args.app_id}"
+        run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S") + f"-{args.app_id or 'ids'}"
 
-        order = sorted(p["to_label"], key=lambda r: (r["day"], r["day_rank"]))
+        order = sorted(p["to_label"], key=lambda r: (r["day"], r["day_rank"] or 0, r["recommendation_id"]))
         texts = snapshot(conn, [r["recommendation_id"] for r in order])
         conn.commit()
         todo = [(*texts[r["recommendation_id"]], r["day_rank"]) for r in order]

@@ -1,10 +1,16 @@
 """Кандидаты в разметку и версии их текстов. Текст берётся из core.review_text через core.fct_review, версия снимается только у отзывов, отобранных в разметку."""
 
 
-def candidates(conn, app_id, since, until, config_sk):
-    """Все отзывы игры за период: день, длина текущего текста и статус его разметки этой конфигурацией."""
+def candidates(conn, config_sk, app_id=None, since=None, until=None, ids=None):
+    """Отзывы игры за период или из списка recommendation_id: день, длина текущего текста и статус его разметки этой конфигурацией."""
     # первым идёт config_sk: он стоит в соединении раньше условий where
-    conds, params = ["g.app_id = %s"], [config_sk, app_id]
+    conds, params = [], [config_sk]
+    if app_id is not None:
+        conds.append("g.app_id = %s")
+        params.append(app_id)
+    if ids is not None:
+        conds.append("f.recommendation_id = any(%s)")
+        params.append(list(ids))
     if since is not None:
         conds.append("f.created_at >= %s")
         params.append(since)
