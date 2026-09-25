@@ -63,3 +63,15 @@ models:
       - name: llm_config_sk
         data_tests:
           - not_null
+
+  - name: review_aspect_daily
+    description: >
+      Подаспекты по дням, одна строка на (app_id, day, llm_config_sk, aspect_id): число размеченных отзывов с аспектом, из них с «+», «-», «±», и знаменатели дня.
+      overall_impression - только у отзывов, где он единственный аспект.
+    columns:
+      - name: aspect_id
+        data_tests:
+          - not_null
+      - name: category_id
+        data_tests:
+          - not_null
