@@ -64,7 +64,7 @@ OpenRouter, модель `qwen/qwen3.8-flash`. Для разметки разм�
 - добавлены `solo_experience`, `localization`, `mod_support`, `game_lifecycle`;
 - `world_design` сужен до физического мира.
 
-v5 заморожен (`"status": "frozen"`).
+v5 заморожен (`"status": "frozen"`). В репозитории - [llm/codebook/codebook_v5.json](../../llm/codebook/codebook_v5.json), его читает модуль разметки.
 
 **Эталон.** 45 отзывов на английском и русском, по 15 на игру, два независимых разметчика: автор (`gold_anton_v4.json`) и Claude (`gold_claude.json`). Согласие разметчиков эталона: 61% по подаспектам, 72% по категориям, 94% по знаку. Уточнение определений подняло согласие по подаспектам с 55% до 61%.
 
