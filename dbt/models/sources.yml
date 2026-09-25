@@ -9,12 +9,16 @@ sources:
       - name: dim_aspect
       - name: dim_game
       - name: dim_language
+      - name: dim_llm_config
       - name: dim_platform_event
       - name: fct_patch
       - name: fct_review_aspect
+      - name: fct_review_labeling
       - name: fct_review
         columns:
           - name: recommendation_id
             data_tests:
               - unique
               - not_null
+      - name: review_text
+      - name: review_text_version

@@ -36,3 +36,30 @@ models:
       - name: day
         data_tests:
           - not_null
+
+  - name: llm_config_active
+    description: >
+      Активная конфигурация LLM-разметки, одна строка. Задаётся переменными llm_active_model и llm_active_prompt_hash в dbt_project.yml.
+
+  - name: review_labeled
+    description: >
+      Размеченные отзывы, одна строка на (recommendation_id, llm_config_sk): статусы labeled и no_opinion, размечен текущий текст, текст не короче llm_min_length.
+    columns:
+      - name: labeling_sk
+        data_tests:
+          - unique
+          - not_null
+
+  - name: review_labeling_daily
+    description: >
+      Знаменатели дня для LLM-разметки, одна строка на (app_id, day, llm_config_sk): всего отзывов, из них содержательных, из них размеченных.
+    columns:
+      - name: app_id
+        data_tests:
+          - not_null
+      - name: day
+        data_tests:
+          - not_null
+      - name: llm_config_sk
+        data_tests:
+          - not_null

@@ -10,3 +10,8 @@ clean-targets: ['target', 'dbt_packages']
 vars:
   # порог для dbt/tests/unknown_member_ratio.sql
   unknown_member_max_ratio: 0.05
+  # LLM-разметка: отзыв короче порога не содержательный - в знаменатель «среди отзывов с текстом» не входит (llm/label.py, --min-length)
+  llm_min_length: 20
+  # активная конфигурация разметки для dbt/models/llm_config_active.sql: модель и начало хэша промпта (core.dim_llm_config)
+  llm_active_model: deepseek-flash
+  llm_active_prompt_hash: 0ac4fe63
