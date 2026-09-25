@@ -16,6 +16,10 @@ class PriceTest(unittest.TestCase):
         self.assertEqual(client.tokens(openai), (1000, 800, 50))
         self.assertEqual(client.tokens({}), (0, 0, 0))
 
+    def test_reasoning_tokens(self):
+        self.assertEqual(client.reasoning_tokens({"completion_tokens_details": {"reasoning_tokens": 88}}), 88)
+        self.assertEqual(client.reasoning_tokens({"completion_tokens": 5}), 0)
+
     def test_cost_by_tokens(self):
         usage = {"prompt_tokens": 1_000_000, "completion_tokens": 1_000_000, "prompt_cache_hit_tokens": 500_000}
         self.assertAlmostEqual(client.cost(usage, PRICE), 0.5 * 0.3 + 0.5 * 0.03 + 1.2)

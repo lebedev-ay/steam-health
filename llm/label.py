@@ -84,7 +84,7 @@ def run(conn, todo, prompt, config_sk, run_id, aspect_sks):
     """
     allowed = set(aspect_sks) - {"other"}
     counts = {"labeled": 0, "no_opinion": 0, "failed": 0}
-    spend = {"input": 0, "cached": 0, "output": 0, "cost": 0.0}
+    spend = {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}
     price, failed = client.prices(), []
 
     def process(batch):
@@ -92,6 +92,7 @@ def run(conn, todo, prompt, config_sk, run_id, aspect_sks):
         if usage is not None:   # сетевой сбой - вызова не было, платить не за что
             for key, n in zip(("input", "cached", "output"), client.tokens(usage)):
                 spend[key] += n
+            spend["reasoning"] += client.reasoning_tokens(usage)
             batch_cost = client.cost(usage, price)
             spend["cost"] = None if batch_cost is None or spend["cost"] is None else spend["cost"] + batch_cost
         done = [(sk, "labeled" if results[n] else "no_opinion", rank, results[n])
@@ -186,7 +187,8 @@ def main():
         started = time.monotonic()
         counts, spend = run(conn, todo, prompt, config_sk, run_id, aspect_sks)
         print(f"run_id {run_id} | {time.monotonic() - started:.0f} с | {money(spend['cost'])} | "
-              f"токены вход {spend['input']} (кэш {spend['cached']}), выход {spend['output']} | "
+              f"токены вход {spend['input']} (кэш {spend['cached']}), выход {spend['output']} "
+              f"(размышления {spend['reasoning']}) | "
               f"labeled {counts['labeled']} | no_opinion {counts['no_opinion']} | failed {counts['failed']}")
 
 

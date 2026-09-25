@@ -51,6 +51,11 @@ def tokens(usage):
     return usage.get("prompt_tokens") or 0, cached, usage.get("completion_tokens") or 0
 
 
+def reasoning_tokens(usage):
+    """Токены размышлений внутри выхода. На разметке размышления выключены, и счётчик обязан быть нулевым."""
+    return ((usage or {}).get("completion_tokens_details") or {}).get("reasoning_tokens") or 0
+
+
 def price_of(n_in, n_cached, n_out, price):
     return ((n_in - n_cached) * price["input"] + n_cached * price["input_cached"] + n_out * price["output"]) / 1e6
 
