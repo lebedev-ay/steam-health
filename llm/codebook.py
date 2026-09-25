@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from string import Template
 
+from psycopg.types.json import Jsonb
+
 HERE = Path(__file__).parent
 CODEBOOK = HERE / "codebook" / "codebook_v5.json"
 PROMPT_NAME = "closed-v2"
@@ -89,21 +91,21 @@ def sync_aspects(conn, codebook):
     return {aspect_id: r["aspect_sk"] for aspect_id, r in by_id.items()}
 
 
-def find_config(conn, model, prompt):
+def find_config(conn, model, prompt, params):
     row = conn.execute(
-        "select llm_config_sk from core.dim_llm_config where prompt_hash = %s and model = %s",
-        (prompt_hash(prompt), model),
+        "select llm_config_sk from core.dim_llm_config where prompt_hash = %s and model = %s and params = %s",
+        (prompt_hash(prompt), model, Jsonb(params)),
     ).fetchone()
     return row["llm_config_sk"] if row else None
 
 
-def ensure_config(conn, model, prompt, codebook_version, name=PROMPT_NAME):
+def ensure_config(conn, model, prompt, params, codebook_version, name=PROMPT_NAME):
     conn.execute(
         """
-        insert into core.dim_llm_config (model, prompt_name, codebook_version, system_prompt, prompt_hash)
-        values (%s, %s, %s, %s, %s)
-        on conflict (prompt_hash, model) do nothing
+        insert into core.dim_llm_config (model, prompt_name, codebook_version, system_prompt, prompt_hash, params)
+        values (%s, %s, %s, %s, %s, %s)
+        on conflict (prompt_hash, model, params) do nothing
         """,
-        (model, name, codebook_version, prompt, prompt_hash(prompt)),
+        (model, name, codebook_version, prompt, prompt_hash(prompt), Jsonb(params)),
     )
-    return find_config(conn, model, prompt)
+    return find_config(conn, model, prompt, params)

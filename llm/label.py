@@ -2,7 +2,8 @@
 
     python -m llm.label --app-id 892970 [--since 2026-01-01] [--until 2026-02-01] [--dry-run]
 
-Уже размеченное этой конфигурацией (модель + итоговый промпт) пропускается. --dry-run ничего не пишет в базу и не зовёт модель.
+Уже размеченное этой конфигурацией (модель + итоговый промпт + параметры генерации) пропускается.
+Отзывы короче порога только считаются: в базу не пишутся и в модель не уходят. --dry-run ничего не пишет в базу и не зовёт модель.
 """
 
 import argparse
@@ -24,8 +25,6 @@ from llm.texts import candidates, snapshot
 sys.path.insert(0, str(Path(__file__).parent.parent / "collector"))
 
 from db import DSN
-
-BATCH_SIZE = 10
 
 # оценка цены по полному прогону разведки на qwen3.8-flash: 2957 отзывов, 1.66 млн символов, $0.19 (exploration.md)
 COST_PER_MCHAR = 0.115
@@ -49,7 +48,7 @@ def label_batch(prompt, texts, allowed_ids):
 
 
 def save(conn, config_sk, run_id, items, aspect_sks):
-    """items - (review_text_sk, статус, day_rank, аспекты). Перезаписываются только failed и too_short."""
+    """items - (review_text_sk, статус, day_rank, аспекты). Перезаписывается только failed."""
     for text_sk, status, rank, aspects in items:
         row = conn.execute(
             """
@@ -58,7 +57,7 @@ def save(conn, config_sk, run_id, items, aspect_sks):
             on conflict (review_text_sk, llm_config_sk) do update
                 set status = excluded.status, run_id = excluded.run_id,
                     day_rank = excluded.day_rank, labeled_at = now()
-                where core.fct_review_labeling.status in ('failed', 'too_short')
+                where core.fct_review_labeling.status = 'failed'
             returning labeling_sk
             """,
             (text_sk, config_sk, status, run_id, rank),
@@ -77,7 +76,7 @@ def save(conn, config_sk, run_id, items, aspect_sks):
 
 
 def run(conn, todo, prompt, config_sk, run_id, aspect_sks):
-    """todo - (review_text_sk, текст, day_rank). Пачки по BATCH_SIZE, упавшие - поштучно. Вернуть (счётчики, цена)."""
+    """todo - (review_text_sk, текст, day_rank). Пачки по batch_size из параметров, упавшие - поштучно. Вернуть (счётчики, цена)."""
     allowed = set(aspect_sks) - {"other"}
     counts = {"labeled": 0, "no_opinion": 0, "failed": 0}
     total_cost, failed = 0, []
@@ -93,9 +92,10 @@ def run(conn, todo, prompt, config_sk, run_id, aspect_sks):
             counts[status] += 1
         return [item for n, item in enumerate(batch, start=1) if n not in results]
 
-    for start in range(0, len(todo), BATCH_SIZE):
-        failed += process(todo[start:start + BATCH_SIZE])
-        print(f"  {min(start + BATCH_SIZE, len(todo))} из {len(todo)}")
+    size = client.GENERATION["batch_size"]
+    for start in range(0, len(todo), size):
+        failed += process(todo[start:start + size])
+        print(f"  {min(start + size, len(todo))} из {len(todo)}")
 
     if failed:
         print(f"повтор поштучно: {len(failed)}")
@@ -112,7 +112,7 @@ def parse_args():
     parser.add_argument("--since", type=date.fromisoformat, help="created_at отзыва от, UTC, включительно")
     parser.add_argument("--until", type=date.fromisoformat, help="created_at отзыва до, UTC, исключительно")
     parser.add_argument("--day-limit", type=int, default=30, help="отзывов на игру в день")
-    parser.add_argument("--min-length", type=int, default=20, help="короче - too_short без вызова модели")
+    parser.add_argument("--min-length", type=int, default=20, help="короче - только в счёт, без модели и записи")
     parser.add_argument("--dry-run", action="store_true", help="только посчитать, без модели и записи в базу")
     return parser.parse_args()
 
@@ -125,10 +125,10 @@ def main():
 
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
         if args.dry_run:
-            config_sk, aspect_sks = codebook.find_config(conn, model, prompt), {}
+            config_sk, aspect_sks = codebook.find_config(conn, model, prompt, client.GENERATION), {}
         else:
             aspect_sks = codebook.sync_aspects(conn, book)
-            config_sk = codebook.ensure_config(conn, model, prompt, book["version"])
+            config_sk = codebook.ensure_config(conn, model, prompt, client.GENERATION, book["version"])
             conn.commit()
 
         rows = candidates(conn, args.app_id, args.since, args.until, config_sk)
@@ -136,9 +136,9 @@ def main():
         chars = sum(r["length"] for r in p["to_label"])
 
         print(f"справочник {book['version']} | промпт {codebook.PROMPT_NAME} ({codebook.prompt_hash(prompt)[:8]}) | {model}")
-        print(f"отзывов в периоде: {len(rows)} | короче {args.min_length}: {len(p['too_short']) + p['short_known']} "
-              f"(новых {len(p['too_short'])}) | сверх лимита {args.day_limit}/день: {p['over_limit']} | "
-              f"уже размечено: {p['done']} | в работу: {len(p['to_label'])} (из них повтор failed/too_short: {p['retry']})")
+        print(f"отзывов в периоде: {len(rows)} | короче {args.min_length}: {p['too_short']} | "
+              f"сверх лимита {args.day_limit}/день: {p['over_limit']} | уже размечено: {p['done']} | "
+              f"в работу: {len(p['to_label'])} (из них повтор failed: {p['retry']})")
 
         if args.dry_run:
             print(f"оценка: ${chars * COST_PER_MCHAR / 1e6:.4f} по символам ({chars}), "
@@ -146,9 +146,6 @@ def main():
             return
 
         run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S") + f"-{args.app_id}"
-
-        short = snapshot(conn, [r["recommendation_id"] for r in p["too_short"]])
-        save(conn, config_sk, run_id, [(sk, "too_short", None, []) for sk, _ in short.values()], aspect_sks)
 
         order = sorted(p["to_label"], key=lambda r: (r["day"], r["day_rank"]))
         texts = snapshot(conn, [r["recommendation_id"] for r in order])
@@ -158,8 +155,7 @@ def main():
         started = time.monotonic()
         counts, cost = run(conn, todo, prompt, config_sk, run_id, aspect_sks)
         print(f"run_id {run_id} | {time.monotonic() - started:.0f} с | ${cost:.4f} | "
-              f"labeled {counts['labeled']} | no_opinion {counts['no_opinion']} | failed {counts['failed']} | "
-              f"too_short {len(short)}")
+              f"labeled {counts['labeled']} | no_opinion {counts['no_opinion']} | failed {counts['failed']}")
 
 
 if __name__ == "__main__":

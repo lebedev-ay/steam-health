@@ -8,6 +8,10 @@ import requests
 PAUSES = (2, 4, 8)
 TIMEOUT = 120
 
+# параметры генерации - часть конфигурации разметчика (core.dim_llm_config.params): поменялись - это новая конфигурация.
+# Размышления на разметке - 88 из 92 выходных токенов при том же ответе (exploration.md)
+GENERATION = {"temperature": 0, "max_tokens": 4000, "batch_size": 10, "reasoning": False}
+
 
 def settings():
     base_url, model = os.getenv("LLM_BASE_URL"), os.getenv("LLM_MODEL")
@@ -33,10 +37,10 @@ def complete(system_prompt, user_text):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_text},
                 ],
-                "max_tokens": 4000,
-                "temperature": 0,
-                # размышления на разметке - 88 из 92 выходных токенов при том же ответе (exploration.md). Поля reasoning и usage - расширение OpenRouter
-                "reasoning": {"enabled": False},
+                "max_tokens": GENERATION["max_tokens"],
+                "temperature": GENERATION["temperature"],
+                # reasoning и usage - расширение OpenRouter, у другого провайдера их надо проверить (docs/TODO.md)
+                "reasoning": {"enabled": GENERATION["reasoning"]},
                 "usage": {"include": True},
             },
             timeout=TIMEOUT,

@@ -11,18 +11,16 @@ def row(rid, day=D1, length=100, status=None):
 
 
 class PlanTest(unittest.TestCase):
-    def test_short_reviews_go_to_too_short_outside_limit(self):
+    def test_short_reviews_only_counted_outside_limit(self):
         p = plan([row(1, length=5), row(2, length=19), row(3, length=20)], min_length=20, day_limit=1)
-        self.assertEqual([r["recommendation_id"] for r in p["too_short"]], [1, 2])
+        self.assertEqual(p["too_short"], 2)
         self.assertEqual([r["recommendation_id"] for r in p["to_label"]], [3])
+        self.assertEqual(p["over_limit"], 0)
 
-    def test_known_too_short_not_repeated_but_retried_after_threshold_drop(self):
-        rows = [row(1, length=10, status="too_short"), row(2, length=15, status="too_short")]
-        p = plan(rows, min_length=20, day_limit=30)
-        self.assertEqual((p["too_short"], p["short_known"]), ([], 2))
-        p = plan(rows, min_length=12, day_limit=30)
-        self.assertEqual([r["recommendation_id"] for r in p["to_label"]], [2])
-        self.assertEqual(p["retry"], 1)
+    def test_short_reviews_do_not_take_day_ranks(self):
+        rows = [row(i, length=5) for i in range(10)] + [row(100)]
+        p = plan(rows, min_length=20, day_limit=1)
+        self.assertEqual([(r["recommendation_id"], r["day_rank"]) for r in p["to_label"]], [(100, 1)])
 
     def test_day_limit_by_md5_order_per_day(self):
         rows = [row(i) for i in range(10)] + [row(i, day=D2) for i in range(100, 105)]
