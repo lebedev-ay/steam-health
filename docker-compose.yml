@@ -141,7 +141,7 @@ services:
       # LLM-разметка запускается руками внутри worker: docker compose exec worker python -m llm.label ...
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
     volumes:
       - ./web:/app
       - ./collector:/app/collector
