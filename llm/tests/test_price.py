@@ -42,7 +42,7 @@ class PriceTest(unittest.TestCase):
             self.assertEqual(client.prices(), PRICE)
 
     def test_estimate_counts_cache_after_first_batch(self):
-        prompt = "x" * 3500   # 1000 токенов при 3.5 символа на токен
+        prompt = "x" * 5500   # 1000 токенов промпта
         full = dict(PRICE, input_cached=PRICE["input"])
         # 20 отзывов - две пачки: со скидкой на кэш второй промпт дешевле
         self.assertLess(client.estimate(prompt, 0, 20, PRICE), client.estimate(prompt, 0, 20, full))

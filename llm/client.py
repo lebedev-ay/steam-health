@@ -12,9 +12,11 @@ TIMEOUT = 120
 # Размышления на разметке - 88 из 92 выходных токенов при том же ответе (exploration.md)
 GENERATION = {"temperature": 0, "max_tokens": 4000, "batch_size": 10, "reasoning": False}
 
-# для оценки до вызова: символов на токен и выходных токенов на отзыв. Фактические токены печатает каждый прогон - по ним и уточнять
-CHARS_PER_TOKEN = 3.5
-OUTPUT_TOKENS_PER_REVIEW = 30
+# для оценки до вызова. Замер на эталоне (45 отзывов, deepseek-flash): английский промпт 5.5 символа на токен, тексты на разных языках - 3,
+# ответ 61 токен на отзыв. Фактические токены печатает каждый прогон - по ним и уточнять
+PROMPT_CHARS_PER_TOKEN = 5.5
+TEXT_CHARS_PER_TOKEN = 3.0
+OUTPUT_TOKENS_PER_REVIEW = 60
 REVIEW_TAG_CHARS = len('<review n="10"></review>\n')
 
 
@@ -74,8 +76,8 @@ def estimate(prompt, text_chars, n, price):
     if price is None or n == 0:
         return None if price is None else 0.0
     batches = -(-n // GENERATION["batch_size"])
-    prompt_tokens = len(prompt) / CHARS_PER_TOKEN
-    n_in = batches * prompt_tokens + (text_chars + n * REVIEW_TAG_CHARS) / CHARS_PER_TOKEN
+    prompt_tokens = len(prompt) / PROMPT_CHARS_PER_TOKEN
+    n_in = batches * prompt_tokens + (text_chars + n * REVIEW_TAG_CHARS) / TEXT_CHARS_PER_TOKEN
     # системный промпт общий у всех пачек: после первой он обычно берётся из кэша провайдера
     n_cached = (batches - 1) * prompt_tokens
     return price_of(n_in, n_cached, n * OUTPUT_TOKENS_PER_REVIEW, price)
