@@ -1,4 +1,4 @@
--- overall_impression в витрине - только отзывы, где он единственный аспект: число в витрине сверяется с пересчётом по core
+-- overall_impression в витринах - только отзывы, где он единственный аспект: подаспект и категория overall сверяются с пересчётом по core
 with alone as (
     select r.app_id, r.day, r.llm_config_sk, count(*) as n
     from {{ ref('review_labeled') }} r
@@ -12,13 +12,22 @@ expected as (
     from alone
     group by app_id, day, llm_config_sk
 ),
-mart as (
-    select app_id, day, llm_config_sk, review_count as n
+marts as (
+    select 'review_aspect_daily' as mart, app_id, day, llm_config_sk, review_count as n
     from {{ ref('review_aspect_daily') }}
     where aspect_id = 'overall_impression'
+    union all
+    select 'review_category_daily', app_id, day, llm_config_sk, review_count
+    from {{ ref('review_category_daily') }}
+    where category_id = 'overall'
+),
+checks as (
+    select m.mart, e.app_id, e.day, e.llm_config_sk, e.n
+    from expected e
+    cross join (values ('review_aspect_daily'), ('review_category_daily')) as m (mart)
 )
-select coalesce(e.app_id, m.app_id) as app_id, coalesce(e.day, m.day) as day,
-       coalesce(e.llm_config_sk, m.llm_config_sk) as llm_config_sk, e.n as expected, m.n as in_mart
-from expected e
-full join mart m on m.app_id = e.app_id and m.day = e.day and m.llm_config_sk = e.llm_config_sk
-where e.n is distinct from m.n
+select coalesce(c.mart, m.mart) as mart, coalesce(c.app_id, m.app_id) as app_id, coalesce(c.day, m.day) as day,
+       coalesce(c.llm_config_sk, m.llm_config_sk) as llm_config_sk, c.n as expected, m.n as in_mart
+from checks c
+full join marts m on m.mart = c.mart and m.app_id = c.app_id and m.day = c.day and m.llm_config_sk = c.llm_config_sk
+where c.n is distinct from m.n

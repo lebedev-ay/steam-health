@@ -79,3 +79,12 @@ models:
   - name: review_aspect_tag
     description: >
       Теги размеченных отзывов после правила overall_impression, одна строка на (labeling_sk, aspect_id). Несколько other в отзыве сворачиваются в одну строку, разные знаки - в «±».
+
+  - name: review_category_daily
+    description: >
+      Категории по дням, одна строка на (app_id, day, llm_config_sk, category_id): число разных размеченных отзывов с хотя бы одним аспектом категории,
+      из них по знаку отзыва в категории (одинаковые знаки - этот знак, разные - «±»), и знаменатели дня.
+    columns:
+      - name: category_id
+        data_tests:
+          - not_null
