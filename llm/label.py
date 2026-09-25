@@ -29,25 +29,24 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "collector"))
 
 from db import DSN
 
-# оценка цены по полному прогону разведки на qwen3.8-flash: 2957 отзывов, 1.66 млн символов, $0.19 (exploration.md)
-COST_PER_MCHAR = 0.115
-COST_PER_REVIEW = 0.000064
+def money(value):
+    return "цена неизвестна" if value is None else f"${value:.4f}"
 
 
 def label_batch(prompt, texts, allowed_ids):
-    """Вернуть ({позиция в пачке: аспекты}, цена). Сетевой сбой и обрезанный ответ - вся пачка не прошла."""
+    """Вернуть ({позиция в пачке: аспекты}, usage). Сетевой сбой и обрезанный ответ - вся пачка не прошла."""
     try:
-        content, finish, cost = client.complete(prompt, batch_text(texts))
+        content, finish, usage = client.complete(prompt, batch_text(texts))
     except requests.RequestException as e:
         print(f"  сетевая ошибка: {e}")
-        return {}, 0
+        return {}, None
     if finish != "stop":
         print(f"  ответ обрезан ({finish})")
-        return {}, cost or 0
+        return {}, usage
     results, errors = parse(content, len(texts), allowed_ids)
     if errors:
         print(f"  {errors}")
-    return results, cost or 0
+    return results, usage
 
 
 def save(conn, config_sk, run_id, items, aspect_sks):
@@ -79,15 +78,22 @@ def save(conn, config_sk, run_id, items, aspect_sks):
 
 
 def run(conn, todo, prompt, config_sk, run_id, aspect_sks):
-    """todo - (review_text_sk, текст, day_rank). Пачки по batch_size из параметров, упавшие - поштучно. Вернуть (счётчики, цена)."""
+    """todo - (review_text_sk, текст, day_rank). Пачки по batch_size из параметров, упавшие - поштучно.
+
+    Вернуть (счётчики, расход): токены вход/кэш/выход и цена; цена None, если хоть одну пачку оценить не удалось.
+    """
     allowed = set(aspect_sks) - {"other"}
     counts = {"labeled": 0, "no_opinion": 0, "failed": 0}
-    total_cost, failed = 0, []
+    spend = {"input": 0, "cached": 0, "output": 0, "cost": 0.0}
+    price, failed = client.prices(), []
 
     def process(batch):
-        nonlocal total_cost
-        results, cost = label_batch(prompt, [t for _, t, _ in batch], allowed)
-        total_cost += cost
+        results, usage = label_batch(prompt, [t for _, t, _ in batch], allowed)
+        if usage is not None:   # сетевой сбой - вызова не было, платить не за что
+            for key, n in zip(("input", "cached", "output"), client.tokens(usage)):
+                spend[key] += n
+            batch_cost = client.cost(usage, price)
+            spend["cost"] = None if batch_cost is None or spend["cost"] is None else spend["cost"] + batch_cost
         done = [(sk, "labeled" if results[n] else "no_opinion", rank, results[n])
                 for n, (sk, _, rank) in enumerate(batch, start=1) if n in results]
         save(conn, config_sk, run_id, done, aspect_sks)
@@ -106,7 +112,7 @@ def run(conn, todo, prompt, config_sk, run_id, aspect_sks):
         save(conn, config_sk, run_id, [(sk, "failed", rank, []) for sk, _, rank in still], aspect_sks)
         counts["failed"] = len(still)
 
-    return counts, total_cost
+    return counts, spend
 
 
 def parse_args():
@@ -165,8 +171,9 @@ def main():
         chars = sum(r["length"] for r in p["to_label"])
 
         if args.dry_run:
-            print(f"оценка: ${chars * COST_PER_MCHAR / 1e6:.4f} по символам ({chars}), "
-                  f"${len(p['to_label']) * COST_PER_REVIEW:.4f} по средней цене отзыва разведки")
+            est = client.estimate(prompt, chars, len(p["to_label"]), client.prices())
+            note = "" if est is not None else " (не заданы LLM_PRICE_INPUT и LLM_PRICE_OUTPUT)"
+            print(f"оценка: {money(est)}{note}, текста {chars} символов")
             return
 
         run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S") + f"-{args.app_id or 'ids'}"
@@ -177,8 +184,9 @@ def main():
         todo = [(*texts[r["recommendation_id"]], r["day_rank"]) for r in order]
 
         started = time.monotonic()
-        counts, cost = run(conn, todo, prompt, config_sk, run_id, aspect_sks)
-        print(f"run_id {run_id} | {time.monotonic() - started:.0f} с | ${cost:.4f} | "
+        counts, spend = run(conn, todo, prompt, config_sk, run_id, aspect_sks)
+        print(f"run_id {run_id} | {time.monotonic() - started:.0f} с | {money(spend['cost'])} | "
+              f"токены вход {spend['input']} (кэш {spend['cached']}), выход {spend['output']} | "
               f"labeled {counts['labeled']} | no_opinion {counts['no_opinion']} | failed {counts['failed']}")
 
 
