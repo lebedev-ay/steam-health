@@ -75,3 +75,7 @@ models:
       - name: category_id
         data_tests:
           - not_null
+
+  - name: review_aspect_tag
+    description: >
+      Теги размеченных отзывов после правила overall_impression, одна строка на (labeling_sk, aspect_id). Несколько other в отзыве сворачиваются в одну строку, разные знаки - в «±».
