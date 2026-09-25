@@ -138,10 +138,15 @@ services:
       COLLECT_REVIEW_DAYS: ${COLLECT_REVIEW_DAYS:-}
       COLLECT_REVIEW_PAGES: ${COLLECT_REVIEW_PAGES:-}
       COLLECT_NEWS_PAGES: ${COLLECT_NEWS_PAGES:-}
+      # LLM-разметка запускается руками внутри worker: docker compose exec worker python -m llm.label ...
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     volumes:
       - ./web:/app
       - ./collector:/app/collector
       - ./dbt:/app/dbt
+      - ./llm:/app/llm
     depends_on:
       postgres:
         condition: service_healthy
