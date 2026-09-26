@@ -2,10 +2,10 @@ import json
 import re
 import argparse
 
-import requests
 import psycopg
 from psycopg.rows import dict_row
 
+import steam_api
 from db import DSN
 
 URL = "https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/"
@@ -37,20 +37,11 @@ def classify_event(title):
     return None  # железо, суды, Гейб Ньюэлл и т.д. - не наше
 
 
-def fetch_page():
-    response = requests.get(
-        URL,
-        params={"appid": PLATFORM_APP_ID, "count": 500, "maxlength": 0},
-        headers={"User-Agent": "steam-health/0.1"},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()
-
-
 def fetch(conn):
     # один вызов с count=500 покрывает весь фид с 2014 года: постраничный обход назад по времени здесь не нужен
-    data = fetch_page()
+    data = steam_api.get(URL, {"appid": PLATFORM_APP_ID, "count": 500, "maxlength": 0})
+    if data is None:
+        raise SystemExit("Steam не ответил на запрос фида платформы")
     news = (data.get("appnews") or {}).get("newsitems") or []
 
     conn.execute(

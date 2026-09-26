@@ -71,6 +71,28 @@ def cost(usage, price):
     return price_of(*tokens(usage), price)
 
 
+def new_spend():
+    return {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}
+
+
+def add_spend(total, part):
+    """Прибавить расход part к total. Цена None заразна: одна неизвестная делает неизвестной всю сумму."""
+    for key in ("input", "cached", "output", "reasoning"):
+        total[key] += part[key]
+    total["cost"] = None if part["cost"] is None or total["cost"] is None else total["cost"] + part["cost"]
+
+
+def spend_of(usage, price):
+    """Расход одного вызова по usage ответа."""
+    n_in, n_cached, n_out = tokens(usage)
+    return {"input": n_in, "cached": n_cached, "output": n_out,
+            "reasoning": reasoning_tokens(usage), "cost": cost(usage, price)}
+
+
+def money(value):
+    return "цена неизвестна" if value is None else f"${value:.4f}"
+
+
 def estimate(prompt, text_chars, n, price):
     """Оценка цены разметки n отзывов до вызова; None - цены не заданы."""
     if price is None or n == 0:

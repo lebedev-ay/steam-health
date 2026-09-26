@@ -11,7 +11,6 @@
 
 import argparse
 import math
-import sys
 import time
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
@@ -23,9 +22,6 @@ from psycopg.types.json import Jsonb
 
 from llm import client, codebook
 from llm.verdict_check import WINDOW, check, evidence_hash, excerpts, percent, refs, status
-
-# детектор и DSN общие с collector/, а он не пакет - подключается так же, как в tools/
-sys.path.insert(0, str(Path(__file__).parent.parent / "collector"))
 
 import change_points
 from db import DSN
@@ -348,14 +344,10 @@ def generate(prompt, text, ev, vocab, price):
     v = ev["votes"]
     votes_pair = (None if v["before"]["negative_share"] is None or v["after"]["negative_share"] is None
                   else (percent(v["before"]["negative_share"]), percent(v["after"]["negative_share"])))
-    spend = {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}
+    spend = client.new_spend()
     for attempt in (1, 2):
         raw, finish, usage = client.complete(prompt, text)
-        for key, n in zip(("input", "cached", "output"), client.tokens(usage)):
-            spend[key] += n
-        spend["reasoning"] += client.reasoning_tokens(usage)
-        c = client.cost(usage, price)
-        spend["cost"] = None if c is None or spend["cost"] is None else spend["cost"] + c
+        client.add_spend(spend, client.spend_of(usage, price))
         problems, what, talk = check(raw, lab, votes_pair, reviews, vocab)
         if finish != "stop":
             problems.append(f"ответ обрезан: {finish}")
@@ -446,7 +438,7 @@ def process_game(conn, app_id, ctx, acc):
 
         if templated:
             problems, what, talk, attempts = [], template(ev), None, 1
-            spend = {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}
+            spend = client.new_spend()
             counts["template"] += 1
         else:
             problems, what, talk, attempts, spend = generate(ctx["prompt"], text, ev, ctx["vocab"], ctx["price"])
@@ -454,9 +446,7 @@ def process_game(conn, app_id, ctx, acc):
             counts["flagged"] += bool(problems)
         save(conn, ev, h, point, ctx["cfg_sk"], "template" if templated else "model", what, talk, problems, attempts,
              spend, ctx["run_id"], ctx["today"])
-        for key in ("input", "cached", "output", "reasoning"):
-            spend_total[key] += spend[key]
-        spend_total["cost"] = None if spend["cost"] is None or spend_total["cost"] is None else spend_total["cost"] + spend["cost"]
+        client.add_spend(spend_total, spend)
         print(f"  {point['day']}: {'шаблон' if templated else 'модель'}{', замечания: ' + str(problems) if problems else ''}")
 
 
@@ -477,7 +467,7 @@ def main():
     ctx = {"prompt": prompt, "price": client.prices(), "today": now.date(), "dry_run": args.dry_run,
            "run_id": now.strftime("%Y%m%d-%H%M%S") + (f"-v{args.app_id}" if args.app_id else "-vall")}
     acc = {"counts": {"new": 0, "changed": 0, "same": 0, "finalized": 0, "excerpts": 0, "model": 0, "template": 0, "flagged": 0},
-           "spend": {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}, "estimate": 0.0}
+           "spend": client.new_spend(), "estimate": 0.0}
 
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
         cfg = conn.execute("select llm_config_sk, codebook_version from marts.llm_config_active").fetchone()
@@ -504,11 +494,10 @@ def main():
           + (f" (переведено в итоговые {counts['finalized']})" if counts["finalized"] else "")
           + (f", обновлены отрывки {counts['excerpts']}" if counts["excerpts"] else ""))
     if args.dry_run:
-        print(f"оценка: {'цена неизвестна' if acc['estimate'] is None else f'${acc['estimate']:.4f}'}")
+        print(f"оценка: {client.money(acc['estimate'])}")
         return
-    cost = "цена неизвестна" if spend["cost"] is None else f"${spend['cost']:.4f}"
     print(f"run_id {ctx['run_id']} | {time.monotonic() - started:.0f} с | модель {counts['model']} (не прошли проверки {counts['flagged']}), "
-          f"шаблон {counts['template']} | {cost} | токены вход {spend['input']} (кэш {spend['cached']}), "
+          f"шаблон {counts['template']} | {client.money(spend['cost'])} | токены вход {spend['input']} (кэш {spend['cached']}), "
           f"выход {spend['output']} (размышления {spend['reasoning']})")
 
 

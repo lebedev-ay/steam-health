@@ -2,6 +2,7 @@ import os
 
 import psycopg
 from dotenv import load_dotenv
+from psycopg.rows import dict_row
 
 load_dotenv()
 
@@ -14,6 +15,12 @@ DSN = (
     f"user={os.getenv('POSTGRES_USER')} "
     f"password={os.getenv('POSTGRES_PASSWORD')}"
 )
+
+
+def query(sql, params=()):
+    """Выполнить запрос на коротком соединении и вернуть строки словарями."""
+    with psycopg.connect(DSN, row_factory=dict_row) as conn:
+        return conn.execute(sql, params).fetchall()
 
 
 def read_games(app_id=None):

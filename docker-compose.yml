@@ -1,3 +1,19 @@
+# подключение к базе steam - одно на все сервисы, которые в неё пишут или читают
+x-db-env: &db-env
+  POSTGRES_DB: ${POSTGRES_DB}
+  POSTGRES_USER: ${POSTGRES_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  DB_HOST: postgres
+  DB_PORT: 5432
+
+# web и worker: очередь сбора и его глубина
+x-app-env: &app-env
+  <<: *db-env
+  REDIS_URL: redis://redis:6379/0
+  COLLECT_REVIEW_DAYS: ${COLLECT_REVIEW_DAYS:-}
+  COLLECT_REVIEW_PAGES: ${COLLECT_REVIEW_PAGES:-}
+  COLLECT_NEWS_PAGES: ${COLLECT_NEWS_PAGES:-}
+
 # общий блок для всех сервисов Airflow; x- - поле-расширение, compose не считает его сервисом
 x-airflow-common: &airflow-common
   build:
@@ -65,12 +81,7 @@ services:
       dockerfile: web/Dockerfile
     image: steam-health:latest
     command: python collector/migrate.py
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_HOST: postgres
-      DB_PORT: 5432
+    environment: *db-env
     volumes:
       - ./collector:/app/collector
       - ./db:/app/db
@@ -82,12 +93,7 @@ services:
   dbt:
     image: steam-health:latest
     command: dbt run --project-dir dbt --profiles-dir dbt
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_HOST: postgres
-      DB_PORT: 5432
+    environment: *db-env
     volumes:
       - ./dbt:/app/dbt
     depends_on:
@@ -99,17 +105,9 @@ services:
     ports:
       - "127.0.0.1:5000:5000"
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      REDIS_URL: redis://redis:6379/0
+      <<: *app-env
       COLLECT_TOKEN: ${COLLECT_TOKEN:-}
       DEFAULT_APP_ID: ${DEFAULT_APP_ID:-}
-      COLLECT_REVIEW_DAYS: ${COLLECT_REVIEW_DAYS:-}
-      COLLECT_REVIEW_PAGES: ${COLLECT_REVIEW_PAGES:-}
-      COLLECT_NEWS_PAGES: ${COLLECT_NEWS_PAGES:-}
     volumes:
       - ./web:/app
       - ./collector:/app/collector
@@ -129,15 +127,7 @@ services:
     image: steam-health:latest
     command: celery -A tasks worker --loglevel=info --concurrency=1
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      REDIS_URL: redis://redis:6379/0
-      COLLECT_REVIEW_DAYS: ${COLLECT_REVIEW_DAYS:-}
-      COLLECT_REVIEW_PAGES: ${COLLECT_REVIEW_PAGES:-}
-      COLLECT_NEWS_PAGES: ${COLLECT_NEWS_PAGES:-}
+      <<: *app-env
       # LLM-разметка запускается руками внутри worker: docker compose exec worker python -m llm.label ...
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
@@ -238,15 +228,10 @@ services:
     mem_limit: 500m
     command: scheduler
     environment:
-      <<: *airflow-common-env
+      # доступы к базе steam нужны только здесь: задачи выполняются в scheduler
+      <<: [*airflow-common-env, *db-env]
       AIRFLOW__CORE__PARALLELISM: "4"
       AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: "4"
-      # доступы к базе steam нужны только здесь: задачи выполняются в scheduler
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_HOST: postgres
-      DB_PORT: 5432
     healthcheck:
       test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
       interval: 30s

@@ -9,7 +9,6 @@
 
 import argparse
 import json
-import sys
 from collections import Counter
 from pathlib import Path
 
@@ -17,9 +16,6 @@ import psycopg
 from psycopg.rows import dict_row
 
 from llm import client, codebook
-
-# DSN общий с collector/, а он не пакет - подключается так же, как в tools/
-sys.path.insert(0, str(Path(__file__).parent.parent / "collector"))
 
 from db import DSN
 

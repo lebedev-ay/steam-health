@@ -16,7 +16,6 @@
 """
 
 import argparse
-import sys
 import time
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -30,13 +29,7 @@ from llm.check import batch_text, parse
 from llm.select import cap, day_limits, plan, plan_listed
 from llm.texts import candidates, content_by_day, snapshot
 
-# DSN общий с collector/, а он не пакет - подключается так же, как в tools/
-sys.path.insert(0, str(Path(__file__).parent.parent / "collector"))
-
 from db import DSN
-
-def money(value):
-    return "цена неизвестна" if value is None else f"${value:.4f}"
 
 
 def label_batch(prompt, texts, allowed_ids):
@@ -90,17 +83,13 @@ def run(conn, todo, prompt, config_sk, run_id, aspect_sks):
     """
     allowed = set(aspect_sks) - {"other"}
     counts = {"labeled": 0, "no_opinion": 0, "failed": 0}
-    spend = {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}
+    spend = client.new_spend()
     price, failed = client.prices(), []
 
     def process(batch):
         results, usage = label_batch(prompt, [t for _, t, _ in batch], allowed)
         if usage is not None:   # сетевой сбой - вызова не было, платить не за что
-            for key, n in zip(("input", "cached", "output"), client.tokens(usage)):
-                spend[key] += n
-            spend["reasoning"] += client.reasoning_tokens(usage)
-            batch_cost = client.cost(usage, price)
-            spend["cost"] = None if batch_cost is None or spend["cost"] is None else spend["cost"] + batch_cost
+            client.add_spend(spend, client.spend_of(usage, price))
         done = [(sk, "labeled" if results[n] else "no_opinion", rank, results[n])
                 for n, (sk, _, rank) in enumerate(batch, start=1) if n in results]
         save(conn, config_sk, run_id, done, aspect_sks)
@@ -236,7 +225,7 @@ def main():
         if args.dry_run:
             est = client.estimate(prompt, chars, len(p["to_label"]), client.prices())
             note = "" if est is not None else " (не заданы LLM_PRICE_INPUT и LLM_PRICE_OUTPUT)"
-            print(f"оценка: {money(est)}{note}, текста {chars} символов")
+            print(f"оценка: {client.money(est)}{note}, текста {chars} символов")
             return
 
         run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S") + f"-{args.app_id or ('all' if args.all_enabled else 'ids')}"
@@ -248,7 +237,7 @@ def main():
 
         started = time.monotonic()
         counts, spend = run(conn, todo, prompt, config_sk, run_id, aspect_sks)
-        print(f"run_id {run_id} | {time.monotonic() - started:.0f} с | {money(spend['cost'])} | "
+        print(f"run_id {run_id} | {time.monotonic() - started:.0f} с | {client.money(spend['cost'])} | "
               f"токены вход {spend['input']} (кэш {spend['cached']}), выход {spend['output']} "
               f"(размышления {spend['reasoning']}) | "
               f"labeled {counts['labeled']} | no_opinion {counts['no_opinion']} | failed {counts['failed']}")

@@ -140,15 +140,20 @@ def load_reviews(conn, first_rn, last_rn):
             where core.fct_review.loaded_from is null
                or excluded.loaded_from >= core.fct_review.loaded_from
             returning review_sk, recommendation_id
+        ),
+        text as (
+            insert into core.review_text (review_sk, review_body)
+            select f.review_sk, s.item ->> 'review'
+            from fact f
+            join src s on s.recommendation_id = f.recommendation_id
+            -- неизменный текст не переписывается: иначе каждая повторная загрузка оставляла бы мёртвую версию строки
+            on conflict (review_sk) do update set review_body = excluded.review_body
+            where core.review_text.review_body is distinct from excluded.review_body
         )
-        insert into core.review_text (review_sk, review_body)
-        select f.review_sk, s.item ->> 'review'
-        from fact f
-        join src s on s.recommendation_id = f.recommendation_id
-        on conflict (review_sk) do update set review_body = excluded.review_body
+        select count(*) as n from fact
     """, (first_rn, last_rn))
 
-    return cur.rowcount
+    return cur.fetchone()["n"]
 
 
 def batch_end(conn, first_rn, total):
