@@ -101,15 +101,15 @@ function mainEvent(c) {
   return { color: null, text: 'событий рядом нет', muted: true };
 }
 
-function pointCard(c, onSelect) {
+function turnCard(c, onSelect) {
   const down = c.score < 0;
-  const card = el('article', 'point');
-  card.id = `point-${c.day}`;
+  const card = el('article', 'turn');
+  card.id = `turn-${c.day}`;
 
-  const head = el('div', 'point-head');
-  const shift = el('span', 'point-shift', `${down ? '▼' : '▲'} ${Math.abs(c.score)} п.п.`);
+  const head = el('div', 'turn-head');
+  const shift = el('span', 'turn-shift', `${down ? '▼' : '▲'} ${Math.abs(c.score)} п.п.`);
   shift.style.color = down ? DOWN : UP;
-  head.append(el('span', 'point-date', ruDate(c.day, { day: 'numeric', month: 'long', year: 'numeric' })), shift);
+  head.append(el('span', 'turn-date', ruDate(c.day, { day: 'numeric', month: 'long', year: 'numeric' })), shift);
   if (c.verdict?.preliminary) {
     const badge = el('span', 'badge', 'предварительно');
     badge.title = 'окно «после» ещё не закрыто: поздние отзывы могут изменить вывод';
@@ -118,11 +118,11 @@ function pointCard(c, onSelect) {
   card.append(head);
 
   if (c.positive_before != null && c.positive_after != null) {
-    card.append(el('p', 'point-numbers', `Позитивных за неделю: ${c.positive_before}% → ${c.positive_after}%`));
+    card.append(el('p', 'turn-numbers', `Позитивных за неделю: ${c.positive_before}% → ${c.positive_after}%`));
   }
 
   const ev = mainEvent(c);
-  const event = el('p', ev.muted ? 'point-event muted' : 'point-event');
+  const event = el('p', ev.muted ? 'turn-event muted' : 'turn-event');
   if (ev.color) {
     const dot = el('span', 'dot');
     dot.style.background = ev.color;
@@ -133,8 +133,8 @@ function pointCard(c, onSelect) {
 
   const v = c.verdict;
   if (v && v.checked) {
-    card.append(el('p', 'point-text', v.what_happened));
-    if (v.what_players_say) card.append(el('p', 'point-text', v.what_players_say));
+    card.append(el('p', 'turn-text', v.what_happened));
+    if (v.what_players_say) card.append(el('p', 'turn-text', v.what_players_say));
     if (v.excerpts?.length) {
       const details = el('details', 'excerpts');
       details.append(el('summary', null, 'Цитаты из отзывов'));
@@ -142,7 +142,7 @@ function pointCard(c, onSelect) {
       card.append(details);
     }
   } else if (v) {
-    card.append(el('p', 'point-text muted', 'Текст разбора не прошёл проверку кодом и не показывается.'));
+    card.append(el('p', 'turn-text muted', 'Текст разбора не прошёл проверку кодом и не показывается.'));
   }
 
   const btn = el('button', 'link-button', 'Показать на графике');
@@ -152,19 +152,19 @@ function pointCard(c, onSelect) {
   return card;
 }
 
-export function renderPoints(data, onSelect) {
-  const list = document.getElementById('points');
+export function renderTurns(data, onSelect) {
+  const list = document.getElementById('turns');
   const cps = [...data.change_points].reverse();
-  document.getElementById('points-note').textContent = data.change_points_note ||
+  document.getElementById('turns-note').textContent = data.change_points_note ||
     'Дни, когда доля позитивных отзывов резко сменила уровень. Совпадение с событием по времени - подсказка, а не доказательство причины.';
-  list.replaceChildren(...cps.map(c => pointCard(c, onSelect)));
+  list.replaceChildren(...cps.map(c => turnCard(c, onSelect)));
 }
 
-export function focusPoint(day) {
-  const node = document.getElementById(`point-${day}`);
+export function focusTurn(day) {
+  const node = document.getElementById(`turn-${day}`);
   if (!node) return;
   node.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  document.querySelectorAll('.point.focus').forEach(n => n.classList.remove('focus'));
+  document.querySelectorAll('.turn.focus').forEach(n => n.classList.remove('focus'));
   node.classList.add('focus');
 }
 

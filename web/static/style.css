@@ -104,8 +104,8 @@ button:hover:not(:disabled) { background: #2b3036; }
 .empty { border-color: var(--border); color: var(--text-2); }
 
 /* --- переломы --- */
-.points { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
-.point {
+.turns { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.turn {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -115,13 +115,13 @@ button:hover:not(:disabled) { background: #2b3036; }
   gap: 6px;
   transition: border-color 0.3s;
 }
-.point.focus { border-color: var(--up); }
-.point-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.point-date { font-weight: 600; }
-.point-shift { font-weight: 600; }
-.point-numbers { color: var(--text-2); font-size: 14px; }
-.point-event { font-size: 14px; display: flex; align-items: baseline; gap: 8px; }
-.point-text { font-size: 14px; color: var(--text-2); }
+.turn.focus { border-color: var(--up); }
+.turn-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.turn-date { font-weight: 600; }
+.turn-shift { font-weight: 600; }
+.turn-numbers { color: var(--text-2); font-size: 14px; }
+.turn-event { font-size: 14px; display: flex; align-items: baseline; gap: 8px; }
+.turn-text { font-size: 14px; color: var(--text-2); }
 .muted { color: var(--muted); }
 .dot { width: 10px; height: 10px; border-radius: 2px; flex: none; transform: translateY(1px); }
 .excerpts summary { cursor: pointer; color: var(--up); font-size: 13px; }
@@ -177,6 +177,6 @@ button:hover:not(:disabled) { background: #2b3036; }
   .audience { grid-template-columns: 1fr; }
   .segment-row { grid-template-columns: 120px 1fr 36px; }
   .segment-share { display: none; }
-  .points { grid-template-columns: 1fr; }
+  .turns { grid-template-columns: 1fr; }
   .card { padding: 14px; }
 }

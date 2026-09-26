@@ -55,11 +55,11 @@ export function renderChart(data, { onPointClick }) {
   const traces = [
     {
       x: days, y: data.daily.map(d => d.base), type: 'scatter', mode: 'lines', name: 'обычный уровень',
-      line: { color: MUTED, width: 1.5 }, hovertemplate: '%{y}%<extra>обычный уровень</extra>'
+      line: { color: MUTED, width: 1.5 }, hovertemplate: '%{y}<extra>обычный уровень</extra>'
     },
     {
       x: days, y: data.daily.map(d => d.pct), type: 'scatter', mode: 'lines', name: 'позитивных, %',
-      line: { color: INK, width: 2 }, connectgaps: false, hovertemplate: '<b>%{y}%</b><extra>позитивных</extra>'
+      line: { color: INK, width: 2 }, connectgaps: false, hovertemplate: '<b>%{y}</b><extra>позитивных</extra>'
     },
     cpTrace,
     cpLegend,

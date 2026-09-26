@@ -1,7 +1,7 @@
 import { fetchGame, fetchGames } from './api.js';
 import { renderChart, zoomTo } from './chart.js';
 import { initCollect } from './collect.js';
-import { focusPoint, renderAspects, renderAudience, renderHeader, renderKpis, renderPoints } from './sections.js';
+import { focusTurn, renderAspects, renderAudience, renderHeader, renderKpis, renderTurns } from './sections.js';
 
 const $ = id => document.getElementById(id);
 
@@ -33,11 +33,11 @@ async function load() {
     // у только что заведённой игры отзывов ещё нет: пустой график ничего не говорит, остаётся заметка в переломах
     $('chart-card').hidden = !data.daily.length;
     if (data.daily.length) {
-      renderChart(data, { onPointClick: focusPoint });
+      renderChart(data, { onPointClick: focusTurn });
       $('chart-note').textContent = `Сглаживание - окно ${data.window} дн. Серая линия - обычный для игры уровень, ` +
         'медиана за 90 дней. Колесо мыши - приблизить, перетаскивание - сдвинуть, двойной щелчок - вернуть весь период.';
     }
-    renderPoints(data, showOnChart);
+    renderTurns(data, showOnChart);
     renderAspects(data.aspects);
     renderAudience(data.segments);
   } catch (err) {
