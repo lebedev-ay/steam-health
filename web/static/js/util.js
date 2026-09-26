@@ -39,3 +39,19 @@ export function plural(n, one, few, many) {
   if (last > 1 && last < 5) return few;
   return many;
 }
+
+// тултип Plotly строки не переносит, длинный вывод уезжал бы за край графика. Текст экранируется: его пишет модель
+export function wrapText(s, width) {
+  const lines = [];
+  let line = '';
+  String(s).split(/\s+/).forEach(word => {
+    if (line && (line + ' ' + word).length > width) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line ? line + ' ' + word : word;
+    }
+  });
+  if (line) lines.push(line);
+  return lines.map(esc).join('<br>');
+}

@@ -118,3 +118,41 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .cp-list .cp-down { color: #ff4d3d; }
 .cp-list .cp-empty { color: #778391; padding: 6px 0; }
 .cp-list .cp-none { color: #778391; }
+
+/* выводы по переломам: карточки под таблицей переломов, в тех же цветах, что таблица и панели */
+.verdicts { margin-top: 20px; font-size: 14px; }
+.verdicts[hidden] { display: none; }
+.verdicts-title { font-size: 15px; font-weight: 600; color: #c7d0d9; margin: 0 0 4px; }
+.verdicts-note { color: #778391; font-size: 12px; margin: 0 0 10px; }
+.verdict {
+  background: #262b33;
+  border: 1px solid #333a44;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  line-height: 1.5;
+  transition: border-color 0.3s;
+}
+.verdict-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.verdict-date { font-weight: 600; color: #f0f4f8; }
+.verdict-badge {
+  font-size: 11px;
+  color: #8a95a3;
+  border: 1px solid #3a4048;
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+.verdict-part { margin: 4px 0; }
+.verdict-label { color: #8a95a3; }
+.verdict-numbers { margin: 4px 0; color: #8a95a3; }
+.verdict-excerpts { margin-top: 6px; }
+.verdict-excerpts summary { cursor: pointer; color: #4aa3e0; font-size: 13px; }
+.verdict-excerpts blockquote {
+  margin: 6px 0;
+  padding: 4px 10px;
+  border-left: 3px solid #3a4048;
+  color: #aab4bf;
+  font-size: 13px;
+}
+/* переход с отметки на графике: карточку видно среди соседних */
+.verdict-focus { border-color: #4aa3e0; }

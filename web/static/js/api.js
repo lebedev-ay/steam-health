@@ -44,3 +44,13 @@ export async function postCollect(appId, mode) {
   }
   return body;
 }
+
+// выводы - дополнение к графику: их сбой не должен ронять загрузку данных, поэтому ошибка превращается в пустой список
+export async function fetchVerdicts(appId) {
+  try {
+    const res = await fetch(`/api/verdicts?app_id=${appId}`);
+    return res.ok ? await res.json() : [];
+  } catch {
+    return [];
+  }
+}

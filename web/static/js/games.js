@@ -1,5 +1,6 @@
-import { fetchData, fetchGames } from './api.js';
-import { setData, renderChart } from './chart.js';
+import { fetchData, fetchGames, fetchVerdicts } from './api.js';
+import { setData, setVerdicts, renderChart } from './chart.js';
+import { renderVerdicts, clearVerdicts } from './verdicts.js';
 
 // полный список игр держим отдельно от select: фильтр перерисовывает его содержимое, и выбранная игра выпадать из него не должна
 let gameOptions = [...document.getElementById('game').options]
@@ -44,10 +45,16 @@ async function load() {
   const sensitivity = document.getElementById('sensitivity').value;
   const minWeight = document.getElementById('minWeight').value;
 
-  const body = await fetchData({ appId, smoothing, minWeight, sensitivity });
+  // выводы грузятся параллельно с данными графика и не зависят от его параметров: они посчитаны заранее по детектору с настройками по умолчанию
+  const [body, verdicts] = await Promise.all([
+    fetchData({ appId, smoothing, minWeight, sensitivity }),
+    fetchVerdicts(appId)
+  ]);
 
+  setVerdicts(verdicts);
   setData(body);
   renderChart(null);
+  renderVerdicts(verdicts);
 }
 
 export async function loadSafe() {
@@ -61,6 +68,7 @@ export async function loadSafe() {
   // строка состояния и таблица описывают прежнюю игру: ни во время запроса, ни при ошибке им на экране не место
   document.getElementById('info').textContent = '';
   document.getElementById('cpList').replaceChildren();
+  clearVerdicts();
   overlay.style.display = 'flex';
 
   try {
