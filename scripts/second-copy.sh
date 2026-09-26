@@ -123,7 +123,7 @@ if [ -n "$DOMAIN" ]; then
   fi
   src_prod exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
   ok "caddy перечитал настройки, резервная копия: $backup"
-  for _ in $(seq 20); do curl -fsS -o /dev/null "https://$DOMAIN/" && break; sleep 5; done
+  for _ in $(seq 24); do curl -fsS -o /dev/null "https://$DOMAIN/" 2>/dev/null && break; sleep 5; done
   curl -fsS -o /dev/null "https://$DOMAIN/" && ok "https://$DOMAIN открывается" \
     || echo "  ! https://$DOMAIN пока не открывается - сертификат может выпускаться ещё пару минут"
 fi
