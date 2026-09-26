@@ -44,10 +44,15 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(any("tier" in e for e in errors))
 
     def test_title_checks(self):
-        for title, why in (("A" * 41, "длиной"), ("Season 7", "без русских"), ("Сезон 季", "не кириллицы")):
+        for title, why in (("A" * 61, "длиной"), ("Сезон 季", "не кириллицы")):
             results, errors = parse(answer({**GOOD, "title_ru": title}), 1)
             self.assertNotIn(1, results, title)
             self.assertTrue(any(why in e for e in errors), (title, errors))
+
+    def test_title_of_proper_names_only_is_fine(self):
+        # «Season 7», «Hotfix 2.1.3» - одни имена собственные, переводить нечего; прежде такое отбрасывалось
+        results, _ = parse(answer({**GOOD, "title_ru": "Hotfix 2.1.3"}), 1)
+        self.assertEqual(results[1]["title_ru"], "Hotfix 2.1.3")
 
     def test_title_trimmed_of_quotes_and_period(self):
         results, _ = parse(answer({**GOOD, "title_ru": "«Сезон 7»."}), 1)
