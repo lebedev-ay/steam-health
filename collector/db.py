@@ -23,6 +23,12 @@ def query(sql, params=()):
         return conn.execute(sql, params).fetchall()
 
 
+def execute(sql, params=()):
+    """Выполнить изменение на коротком соединении и зафиксировать его."""
+    with psycopg.connect(DSN) as conn:
+        conn.execute(sql, params)
+
+
 def read_games(app_id=None):
     # состав игр - те, по которым уже есть сырьё в raw.appdetails.
     # Имя берётся из ядра; пока игра туда не загружена, вместо имени идёт app_id. Явный app_id возвращается всегда, даже если игры в базе ещё нет - так заводится новая

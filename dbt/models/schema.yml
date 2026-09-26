@@ -107,3 +107,12 @@ models:
           - unique
           - not_null
 
+  - name: game_digest_current
+    description: >
+      Текущая сводка месяца по игре, одна строка на (app_id, period_from): самая свежая сводка по активной конфигурации разметки,
+      независимо от checks_passed. Дашборд показывает только прошедшие проверку.
+    columns:
+      - name: digest_sk
+        data_tests:
+          - unique
+          - not_null

@@ -106,8 +106,9 @@ services:
       - "127.0.0.1:5000:5000"
     environment:
       <<: *app-env
-      COLLECT_TOKEN: ${COLLECT_TOKEN:-}
-      DEFAULT_APP_ID: ${DEFAULT_APP_ID:-}
+      # подпись сессии входа; без него вход и сбор из дашборда выключены
+      SECRET_KEY: ${SECRET_KEY:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-1}
     volumes:
       - ./web:/app
       - ./collector:/app/collector

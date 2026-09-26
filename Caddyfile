@@ -1,8 +1,5 @@
 steam-health.ru {
-    @collect path /api/collect
-    basic_auth @collect {
-        anton {env.CADDY_COLLECT_HASH}
-    }
+    # сбор игры защищает вход в самом дашборде (web/auth.py), отдельного пароля на прокси нет
 
     log {
         output stdout

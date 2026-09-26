@@ -7,7 +7,6 @@ services:
     container_name: steam-caddy
     restart: unless-stopped
     environment:
-      CADDY_COLLECT_HASH: ${CADDY_COLLECT_HASH}
       CADDY_AIRFLOW_HASH: ${CADDY_AIRFLOW_HASH}
     ports:
       - "80:80"
