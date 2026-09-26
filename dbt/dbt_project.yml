@@ -17,4 +17,4 @@ vars:
   llm_active_prompt_hash: 0ac4fe63
   # активная конфигурация выводов по переломам для dbt/models/llm_verdict_config_active.sql: модель и начало хэша промпта вывода
   llm_verdict_model: deepseek-flash
-  llm_verdict_prompt_hash: ced67d91
+  llm_verdict_prompt_hash: af261708
