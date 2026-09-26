@@ -88,3 +88,18 @@ models:
       - name: category_id
         data_tests:
           - not_null
+
+  - name: llm_verdict_config_active
+    description: >
+      Активная конфигурация выводов по переломам, одна строка. Задаётся переменными llm_verdict_model и llm_verdict_prompt_hash в dbt_project.yml.
+
+  - name: change_point_verdict_current
+    description: >
+      Текущий вывод по точке перелома, одна строка на (app_id, change_date): самый свежий вывод активной конфигурации генерации
+      по активной конфигурации разметки, независимо от checks_passed. Дашборд показывает текст только при checks_passed.
+    columns:
+      - name: verdict_sk
+        data_tests:
+          - unique
+          - not_null
+

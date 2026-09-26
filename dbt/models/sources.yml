@@ -11,6 +11,7 @@ sources:
       - name: dim_language
       - name: dim_llm_config
       - name: dim_platform_event
+      - name: fct_change_point_verdict
       - name: fct_patch
       - name: fct_review_aspect
       - name: fct_review_labeling
