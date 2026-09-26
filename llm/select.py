@@ -78,3 +78,12 @@ def plan_listed(rows):
             out["retry"] += r["status"] == "failed"
             out["to_label"].append({**r, "day_rank": None})
     return out
+
+
+def cap(items, limit):
+    """Потолок на запуск по всем играм: свежие дни первыми, внутри дня - по рангу. Вернуть (взятые, сколько осталось).
+
+    Свежее - то, что на дашборде смотрят первым; история новой игры добирается следующими запусками, уже размеченное они пропускают.
+    """
+    ordered = sorted(items, key=lambda r: (-r["day"].toordinal(), r["day_rank"] or 0, r["recommendation_id"]))
+    return ordered[:limit], max(len(ordered) - limit, 0)

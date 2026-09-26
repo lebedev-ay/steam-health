@@ -3,8 +3,11 @@
     python -m llm.label --app-id 892970 [--since 2026-01-01] [--until 2026-02-01] [--dry-run]
     python -m llm.label --ids-file llm/gold/gold_ids.txt [--dry-run]
     python -m llm.label --app-id 892970 --adaptive [--spike-factor 2 --spike-min-abs 60 --spike-limit 200] [--dry-run]
+    python -m llm.label --all-enabled [--max-per-run 5000] [--dry-run]
 
 --ids-file размечает только отзывы из списка recommendation_id (по одному в строке), без порога длины и дневного лимита.
+--all-enabled - по всем играм, включённым в core.llm_game, с адаптивным лимитом и потолком --max-per-run на весь запуск:
+свежие дни первыми, остальное доберут следующие запуски. Ручной --app-id потолка не имеет - это рычаг полной разметки.
 --adaptive в дни всплесков (содержательных отзывов не меньше spike-factor x медиана за 28 предыдущих дней и не меньше spike-min-abs)
 поднимает дневной лимит до spike-limit; порядок внутри дня прежний, поэтому доразмечаются только следующие по порядку отзывы.
 
@@ -24,7 +27,7 @@ from psycopg.rows import dict_row
 
 from llm import client, codebook
 from llm.check import batch_text, parse
-from llm.select import day_limits, plan, plan_listed
+from llm.select import cap, day_limits, plan, plan_listed
 from llm.texts import candidates, content_by_day, snapshot
 
 # DSN общий с collector/, а он не пакет - подключается так же, как в tools/
@@ -124,6 +127,8 @@ def parse_args():
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--app-id", type=int)
     source.add_argument("--ids-file", type=Path, help="файл с recommendation_id по одному в строке")
+    source.add_argument("--all-enabled", action="store_true", help="все игры, включённые в core.llm_game, по расписанию")
+    parser.add_argument("--max-per-run", type=int, default=5000, help="потолок отзывов на запуск с --all-enabled")
     parser.add_argument("--since", type=date.fromisoformat, help="created_at отзыва от, UTC, включительно")
     parser.add_argument("--until", type=date.fromisoformat, help="created_at отзыва до, UTC, исключительно")
     parser.add_argument("--day-limit", type=int, default=30, help="отзывов на игру в день")
@@ -140,7 +145,44 @@ def parse_args():
         parser.error("--ids-file не сочетается с --since и --until")
     if args.ids_file and args.adaptive:
         parser.error("--adaptive работает с --app-id: у списка id дневного лимита нет")
+    if args.all_enabled and (args.since or args.until):
+        parser.error("--all-enabled размечает всю историю игр, --since и --until к нему не применяются")
+    # по расписанию лимит всегда адаптивный, а потолок есть только у расписания
+    args.adaptive = args.adaptive or args.all_enabled
+    args.cap = args.max_per_run if args.all_enabled else None
     return args
+
+
+def enabled_games(conn):
+    return [r["app_id"] for r in conn.execute(
+        "select app_id from core.llm_game where enabled order by app_id").fetchall()]
+
+
+def plan_game(conn, config_sk, app_id, args):
+    """План разметки одной игры с печатью итогов - как у ручного --app-id."""
+    rows = candidates(conn, config_sk, app_id, args.since, args.until)
+    limits = None
+    if args.adaptive:
+        days = day_limits(content_by_day(conn, app_id, args.min_length), args.day_limit,
+                          args.spike_factor, args.spike_min_abs, args.spike_limit)
+        period = {r["day"] for r in rows}
+        spikes = sorted(d for d, v in days.items() if v["spike"] and d in period)
+        limits = {d: v["limit"] for d, v in days.items()}
+        base = plan(rows, args.min_length, args.day_limit)
+    p = plan(rows, args.min_length, args.day_limit, limits)
+    limit_note = f"{args.day_limit}/день, во всплеск {args.spike_limit}" if args.adaptive else f"{args.day_limit}/день"
+    print(f"отзывов в периоде: {len(rows)} | короче {args.min_length}: {p['too_short']} | "
+          f"сверх лимита {limit_note}: {p['over_limit']} | уже размечено: {p['done']} | "
+          f"в работу: {len(p['to_label'])} (из них повтор failed: {p['retry']})")
+    if args.adaptive:
+        print(f"всплесков: {len(spikes)} (содержательных >= {args.spike_factor:g} x медиана за 28 дней "
+              f"и >= {args.spike_min_abs}) | к обычному лимиту добавится: {len(p['to_label']) - len(base['to_label'])}")
+        for d in spikes[:20]:
+            v = days[d]
+            print(f"  {d:%d.%m.%Y}  содержательных {v['content']:>5}  медиана {v['median']:>6g}  лимит {v['limit']}")
+        if len(spikes) > 20:
+            print(f"  ... и ещё {len(spikes) - 20}")
+    return p
 
 
 def read_ids(path):
@@ -174,29 +216,21 @@ def main():
                   f"в работу: {len(p['to_label'])} (из них повтор failed: {p['retry']})")
             if missing:
                 print(f"  нет в core.fct_review или без текста: {sorted(missing)}")
+        elif args.all_enabled:
+            games = enabled_games(conn)
+            if not games:
+                print("в core.llm_game нет включённых игр - размечать нечего")
+                return
+            todo_all = []
+            for app_id in games:
+                print(f"--- app_id {app_id}")
+                todo_all += plan_game(conn, config_sk, app_id, args)["to_label"]
+            taken, left = cap(todo_all, args.cap)
+            print(f"итого в работу: {len(todo_all)} | потолок {args.cap}: берётся {len(taken)}"
+                  + (f", осталось {left} - доразметят следующие запуски" if left else ""))
+            p = {"to_label": taken}
         else:
-            rows = candidates(conn, config_sk, args.app_id, args.since, args.until)
-            limits = None
-            if args.adaptive:
-                days = day_limits(content_by_day(conn, args.app_id, args.min_length), args.day_limit,
-                                  args.spike_factor, args.spike_min_abs, args.spike_limit)
-                period = {r["day"] for r in rows}
-                spikes = sorted(d for d, v in days.items() if v["spike"] and d in period)
-                limits = {d: v["limit"] for d, v in days.items()}
-                base = plan(rows, args.min_length, args.day_limit)
-            p = plan(rows, args.min_length, args.day_limit, limits)
-            limit_note = f"{args.day_limit}/день, во всплеск {args.spike_limit}" if args.adaptive else f"{args.day_limit}/день"
-            print(f"отзывов в периоде: {len(rows)} | короче {args.min_length}: {p['too_short']} | "
-                  f"сверх лимита {limit_note}: {p['over_limit']} | уже размечено: {p['done']} | "
-                  f"в работу: {len(p['to_label'])} (из них повтор failed: {p['retry']})")
-            if args.adaptive:
-                print(f"всплесков: {len(spikes)} (содержательных >= {args.spike_factor:g} x медиана за 28 дней "
-                      f"и >= {args.spike_min_abs}) | к обычному лимиту добавится: {len(p['to_label']) - len(base['to_label'])}")
-                for d in spikes[:20]:
-                    v = days[d]
-                    print(f"  {d:%d.%m.%Y}  содержательных {v['content']:>5}  медиана {v['median']:>6g}  лимит {v['limit']}")
-                if len(spikes) > 20:
-                    print(f"  ... и ещё {len(spikes) - 20}")
+            p = plan_game(conn, config_sk, args.app_id, args)
         chars = sum(r["length"] for r in p["to_label"])
 
         if args.dry_run:
@@ -205,7 +239,7 @@ def main():
             print(f"оценка: {money(est)}{note}, текста {chars} символов")
             return
 
-        run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S") + f"-{args.app_id or 'ids'}"
+        run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S") + f"-{args.app_id or ('all' if args.all_enabled else 'ids')}"
 
         order = sorted(p["to_label"], key=lambda r: (r["day"], r["day_rank"] or 0, r["recommendation_id"]))
         texts = snapshot(conn, [r["recommendation_id"] for r in order])
