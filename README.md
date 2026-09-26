@@ -52,6 +52,25 @@ docker compose --profile airflow up -d   # http://localhost:8080
 
 Логин `admin`, пароль из `AIRFLOW_ADMIN_PASSWORD`. Порт открыт только на петлевом интерфейсе, снаружи недоступен; на сервере заходить через туннель `ssh -L 8080:127.0.0.1:8080`.
 
+### Вторая копия рядом
+
+Каждая папка - отдельный проект compose: имена контейнеров и томов берутся от имени папки, поэтому базы у копий разные. Общие только порты на хосте - их второй копии задают в её `.env`:
+
+```bash
+git clone <репозиторий> steam-health-exp && cd steam-health-exp
+git checkout <ветка>
+cp .env.example .env    # PG_PORT=5434, WEB_PORT=5001, AIRFLOW_PORT=8081
+```
+
+Данные - копией базы из первой папки, до первого полного запуска, чтобы миграции новой ветки применились к копии:
+
+```bash
+docker compose up -d postgres
+(cd ../steam-health && docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"') \
+  | docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner'
+docker compose up -d --build
+```
+
 Для разработки дашборд удобнее держать снаружи docker, чтобы он перезапускался сам при правке кода. Порядок команд - в [docs/model.md](docs/model.md).
 
 ## Сбор данных
