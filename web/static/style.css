@@ -1,159 +1,182 @@
+:root {
+  --page: #111315;
+  --surface: #1a1d21;
+  --surface-2: #22262b;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #e8ebee;
+  --text-2: #c3c8cf;
+  --muted: #8b929b;
+  --up: #3987e5;
+  --down: #e66767;
+  --radius: 10px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
 body {
-  font-family: system-ui, sans-serif;
-  margin: 24px;
-  background: #14161a;
-  color: #c7d0d9;
-}
-.controls { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-select, input {
-  padding: 6px 10px;
-  font-size: 14px;
-  background: #262b33;
-  color: #c7d0d9;
-  border: 1px solid #3a4048;
-  border-radius: 4px;
-}
-.chart {
-  background: #262b33;
-  border: 1px solid #333a44;
-  border-radius: 6px;
-  /* высоту задаёт Plotly после отрисовки; до неё блок нулевой, и оверлею загрузки не во что лечь */
-  min-height: 640px;
-}
-/* строка состояния стоит отдельным блоком: внутри .controls она переносилась наравне с полями и раскачивала высоту формы.
-   min-height держит место, чтобы график не прыгал, пока строки нет */
-#info { color: #8a95a3; font-size: 13px; min-height: 18px; margin-bottom: 12px; }
-.hint { color: #778391; font-size: 12px; margin-top: 8px; }
-.legal { color: #5f6a78; font-size: 11px; margin-top: 6px; }
-
-/* логотип цветной, currentColor к нему не применить: заметность даёт яркость */
-.steam-link { display: inline-flex; align-items: center; margin-left: 8px; }
-.steam-link:hover { filter: brightness(1.25); }
-
-.chart-wrap { position: relative; }
-select:disabled, input:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.loading-overlay {
-  display: none;
-  position: absolute;
-  inset: 0;
-  background: rgba(20, 22, 26, 0.7);
-  border-radius: 6px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  z-index: 10;
-}
-.spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid #3a4048;
-  border-top-color: #4aa3e0;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-.loading-text { color: #c7d0d9; font-size: 14px; }
-
-.error-box {
-  display: none;
-  min-height: 200px;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  color: #ff6b5b;
-  background: #262b33;
-  border: 1px solid #333a44;
-  border-radius: 6px;
-  padding: 40px 20px;
-}
-
-button {
-  padding: 6px 14px;
-  font-size: 14px;
-  background: #262b33;
-  color: #c7d0d9;
-  border: 1px solid #3a4048;
-  border-radius: 4px;
-  cursor: pointer;
-}
-button:hover:not(:disabled) { background: #2d333d; }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.collect-bar {
-  margin-bottom: 14px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid #262b33;
-}
-.collect-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-#collectAppId { width: 340px; max-width: 100%; }
-#gameFilter { width: 130px; max-width: 100%; }
-.collect-progress {
-  margin-top: 8px;
-  font-size: 13px;
-  color: #8a95a3;
-  min-height: 18px;
-}
-.spinner-sm {
-  display: inline-block;
-  width: 11px;
-  height: 11px;
-  border: 2px solid #3a4048;
-  border-top-color: #4aa3e0;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  vertical-align: middle;
-  margin-right: 6px;
-}
-
-/* на узком экране четыре колонки не ужимаются дальше: пусть едет таблица, а не вся страница */
-.cp-list { margin-top: 12px; font-size: 13px; overflow-x: auto; }
-.cp-list table { width: 100%; border-collapse: collapse; }
-.cp-list th, .cp-list td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #333a44; }
-.cp-list th { color: #8a95a3; font-weight: 500; font-size: 12px; }
-.cp-list tr.cp-row { cursor: pointer; }
-.cp-list tr.cp-row:hover { background: #2d333d; }
-.cp-list .cp-up { color: #3ddc84; }
-.cp-list .cp-down { color: #ff4d3d; }
-.cp-list .cp-empty { color: #778391; padding: 6px 0; }
-.cp-list .cp-none { color: #778391; }
-
-/* выводы по переломам: карточки под таблицей переломов, в тех же цветах, что таблица и панели */
-.verdicts { margin-top: 20px; font-size: 14px; }
-.verdicts[hidden] { display: none; }
-.verdicts-caption { color: #8a95a3; font-size: 12px; margin: 0 0 6px; }
-.verdicts-title { font-size: 15px; font-weight: 600; color: #c7d0d9; margin: 0 0 4px; }
-.verdicts-note { color: #778391; font-size: 12px; margin: 0 0 10px; }
-.verdict {
-  background: #262b33;
-  border: 1px solid #333a44;
-  border-radius: 6px;
-  padding: 10px 14px;
-  margin-bottom: 10px;
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--page);
+  color: var(--text);
   line-height: 1.5;
+}
+
+main { max-width: 1200px; margin: 0 auto; padding: 0 16px 32px; }
+h1, h2, h3 { margin: 0; font-weight: 600; }
+h2 { font-size: 18px; }
+h3 { font-size: 15px; margin-top: 24px; }
+p { margin: 0; }
+
+select, input, button {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+button { cursor: pointer; }
+button:hover:not(:disabled) { background: #2b3036; }
+:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* --- шапка сайта --- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; }
+.brand svg { width: 28px; height: 28px; }
+.picker { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.picker select { min-width: 240px; max-width: 70vw; font-size: 15px; }
+
+/* --- шапка игры --- */
+.game-head { padding: 12px 0 20px; }
+.game-title { font-size: 32px; line-height: 1.2; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.game-meta { color: var(--text-2); margin-top: 6px; }
+.steam-link { display: inline-block; margin-top: 8px; color: var(--up); text-decoration: none; font-size: 14px; }
+.steam-link:hover { text-decoration: underline; }
+.badge {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 10px;
+}
+
+/* --- ключевые числа --- */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile, .callout {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.tile-label { color: var(--muted); font-size: 13px; }
+.tile-value { font-size: 34px; font-weight: 600; line-height: 1.2; margin: 4px 0 2px; }
+.tile-note { color: var(--text-2); font-size: 13px; }
+.tile-sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+/* --- карточки разделов --- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.card-sub { color: var(--muted); font-size: 13px; margin: 4px 0 12px; }
+.note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+.settings { display: flex; gap: 12px; flex-wrap: wrap; }
+.settings label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.chart { min-height: 480px; }
+#content.loading { opacity: 0.5; pointer-events: none; transition: opacity 0.2s; }
+.error, .empty { background: var(--surface); border: 1px solid var(--down); border-radius: var(--radius); padding: 16px; margin: 16px 0; color: var(--down); }
+.empty { border-color: var(--border); color: var(--text-2); }
+
+/* --- переломы --- */
+.points { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.point {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   transition: border-color 0.3s;
 }
-.verdict-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-.verdict-date { font-weight: 600; color: #f0f4f8; }
-.verdict-badge {
-  font-size: 11px;
-  color: #8a95a3;
-  border: 1px solid #3a4048;
-  border-radius: 10px;
-  padding: 1px 8px;
+.point.focus { border-color: var(--up); }
+.point-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.point-date { font-weight: 600; }
+.point-shift { font-weight: 600; }
+.point-numbers { color: var(--text-2); font-size: 14px; }
+.point-event { font-size: 14px; display: flex; align-items: baseline; gap: 8px; }
+.point-text { font-size: 14px; color: var(--text-2); }
+.muted { color: var(--muted); }
+.dot { width: 10px; height: 10px; border-radius: 2px; flex: none; transform: translateY(1px); }
+.excerpts summary { cursor: pointer; color: var(--up); font-size: 13px; }
+.excerpts blockquote { margin: 6px 0; padding: 2px 10px; border-left: 2px solid var(--border); color: var(--text-2); font-size: 13px; }
+.link-button { align-self: flex-start; background: none; border: none; padding: 0; color: var(--up); font-size: 13px; margin-top: auto; }
+.link-button:hover:not(:disabled) { background: none; text-decoration: underline; }
+
+/* --- темы отзывов --- */
+.callouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.callout { background: var(--surface-2); border-left: 3px solid; }
+.callout-name { font-size: 22px; font-weight: 600; margin: 2px 0; }
+.aspect { display: grid; grid-template-columns: 1fr 170px 1fr; align-items: center; gap: 10px; padding: 3px 0; font-size: 14px; }
+.aspect-legend { color: var(--muted); font-size: 12px; }
+.aspect-name { text-align: center; color: var(--text); }
+.aspect-side { display: flex; align-items: center; gap: 8px; }
+.aspect-side.left { justify-content: flex-end; }
+.aspect-num { color: var(--text-2); font-size: 12px; font-variant-numeric: tabular-nums; min-width: 42px; }
+.aspect-side.left .aspect-num { text-align: right; }
+.bar { height: 12px; border-radius: 4px; min-width: 2px; }
+.heat-wrap { overflow-x: auto; }
+.heat { width: 100%; border-collapse: separate; border-spacing: 2px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.heat th { color: var(--muted); font-weight: 400; padding: 2px 6px; white-space: nowrap; }
+.heat tbody th { text-align: right; color: var(--text-2); }
+.heat td { min-width: 38px; height: 26px; text-align: center; border-radius: 4px; color: var(--text); }
+
+/* --- аудитория --- */
+.audience { display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 24px 40px; }
+.segment h3 { margin: 0 0 4px; }
+.segment-insight { color: var(--text-2); font-size: 13px; margin-bottom: 8px; }
+.segment-row { display: grid; grid-template-columns: 170px 1fr 40px 96px; align-items: center; gap: 10px; padding: 3px 0; font-size: 13px; }
+.segment-label { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.segment-num { text-align: right; font-variant-numeric: tabular-nums; }
+.segment-share { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.split { display: flex; gap: 2px; height: 12px; }
+.split div { border-radius: 3px; min-width: 2px; }
+
+/* --- сбор --- */
+.collect summary { cursor: pointer; font-weight: 600; }
+.collect-form { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.collect-form input { flex: 1 1 320px; }
+.collect-status { font-size: 13px; margin-top: 8px; min-height: 20px; color: var(--muted); }
+.collect-status.ok { color: var(--up); }
+.collect-status.error { color: var(--down); }
+
+.legal { max-width: 1200px; margin: 0 auto; padding: 0 16px 24px; color: #5f6770; font-size: 11px; }
+
+@media (max-width: 640px) {
+  .game-title { font-size: 24px; }
+  .tiles { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tile { padding: 10px 12px; }
+  .tile-value { font-size: 26px; }
+  .aspect { grid-template-columns: 1fr 110px 1fr; font-size: 13px; }
+  .audience { grid-template-columns: 1fr; }
+  .segment-row { grid-template-columns: 120px 1fr 36px; }
+  .segment-share { display: none; }
+  .points { grid-template-columns: 1fr; }
+  .card { padding: 14px; }
 }
-.verdict-part { margin: 4px 0; }
-.verdict-label { color: #8a95a3; }
-.verdict-numbers { margin: 4px 0; color: #8a95a3; }
-.verdict-excerpts { margin-top: 6px; }
-.verdict-excerpts summary { cursor: pointer; color: #4aa3e0; font-size: 13px; }
-.verdict-excerpts blockquote {
-  margin: 6px 0;
-  padding: 4px 10px;
-  border-left: 3px solid #3a4048;
-  color: #aab4bf;
-  font-size: 13px;
-}
-/* переход с отметки на графике: карточку видно среди соседних */
-.verdict-focus { border-color: #4aa3e0; }

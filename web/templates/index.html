@@ -10,94 +10,94 @@
 </head>
 <body>
 
-<div class="collect-bar">
-  <div class="collect-controls">
-    <input type="text" id="collectAppId"
-           placeholder="ID игры или ссылка на страницу Steam">
-    <select id="collectMode">
-      <option value="incremental" selected>инкрементально</option>
-      <option value="full">полный сбор</option>
-    </select>
-    <button id="collectBtn" type="button">Собрать</button>
-  </div>
-  <div id="collectProgress" class="collect-progress"></div>
-</div>
-
-<div class="controls">
-  <label>Игра:
-    <input type="text" id="gameFilter" placeholder="фильтр">
+<header class="topbar">
+  <div class="brand">{% include 'steam-icon.svg' %}<span>Steam Health</span></div>
+  <label class="picker">
+    <span>Игра</span>
     <select id="game">
       {% for g in games %}
-      <option value="{{ g.app_id }}"{% if g.app_id|string == default_app_id %} selected{% endif %}>{{ g.game_name }}{% if g.collection_status == 'partial' %} (данные неполные){% endif %}</option>
+      <option value="{{ g.app_id }}"{% if g.app_id|string == default_app_id %} selected{% endif %}>{{ g.game_name }}{% if g.collection_status == 'partial' %} (неполные данные){% endif %}</option>
       {% endfor %}
     </select>
-    <a id="steamLink" class="steam-link" target="_blank" rel="noopener"
-       title="Страница игры в Steam"
-       aria-label="Страница игры в Steam">{% include 'steam-icon.svg' %}</a>
   </label>
+</header>
 
-  <label>Сглаживание:
-    <select id="smoothing">
-      <option value="auto" selected>Авто</option>
-      <option value="off">Без сглаживания</option>
-      <option value="7">7 дней</option>
-      <option value="15">15 дней</option>
-      <option value="29">29 дней</option>
-    </select>
-  </label>
+<main>
+  <div id="error" class="error" hidden></div>
+  {% if not games %}<p class="empty">В базе пока нет игр. Добавьте первую формой внизу страницы.</p>{% endif %}
 
-  <label>Чувствительность:
-    <select id="sensitivity">
-      <option value="2.5">низкая</option>
-      <option value="1.5" selected>средняя</option>
-      <option value="1.0">высокая</option>
-      <option value="0.5">максимальная</option>
-    </select>
-  </label>
+  <div id="content" hidden>
+    <section id="game-head" class="game-head"></section>
 
-  <label>Значимость от:
-    <input type="number" id="minWeight" value="0" min="0" max="20" step="0.5"
-           style="width:70px">
-  </label>
+    <section id="kpis" class="tiles"></section>
 
-  <label>Показывать:
-    <select id="mode">
-      <option value="pct" selected>долю позитива</option>
-      <option value="delta">отклонение от базы</option>
-    </select>
-  </label>
+    <section id="chart-card" class="card">
+      <div class="card-head">
+        <h2>Настроение игроков</h2>
+        <div class="settings">
+          <label>Сглаживание
+            <select id="smoothing">
+              <option value="auto" selected>авто</option>
+              <option value="off">без сглаживания</option>
+              <option value="7">7 дней</option>
+              <option value="15">15 дней</option>
+              <option value="29">29 дней</option>
+            </select>
+          </label>
+          <label>Чувствительность к переломам
+            <select id="sensitivity">
+              <option value="2.5">низкая</option>
+              <option value="1.5" selected>средняя</option>
+              <option value="1.0">высокая</option>
+              <option value="0.5">максимальная</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <p class="card-sub">Доля положительных отзывов по дням. Ромбы - переломы: залитый значит, что по нему есть разбор отзывов ниже. Треугольники - новости игры, квадраты - события всего Steam.</p>
+      <div id="chart" class="chart"></div>
+      <p id="chart-note" class="note"></p>
+    </section>
 
-  <label><input type="checkbox" id="showPlatform" checked> события Steam</label>
-</div>
+    <section class="card">
+      <h2>Переломы</h2>
+      <p id="points-note" class="card-sub"></p>
+      <div id="points" class="points"></div>
+    </section>
 
-<div id="info"></div>
+    <section id="aspects-section" class="card" hidden>
+      <h2>О чём пишут</h2>
+      <p id="aspects-note" class="card-sub"></p>
+      <div id="aspects" class="aspects"></div>
+      <h3>Критика по месяцам</h3>
+      <p class="card-sub">Доля размеченных отзывов месяца, где тему ругают. Чем краснее клетка, тем больше жалоб.</p>
+      <div id="heat" class="heat-wrap"></div>
+    </section>
 
-<div class="chart-wrap">
-  <div id="sentiment" class="chart"></div>
-  <div id="loadingOverlay" class="loading-overlay">
-    <div class="spinner"></div>
-    <div class="loading-text">Загрузка…</div>
+    <section id="audience-section" class="card" hidden>
+      <h2>Кто пишет</h2>
+      <p class="card-sub">Доля положительных отзывов в разных группах игроков: синим - рекомендуют, красным - нет.</p>
+      <div id="audience" class="audience"></div>
+    </section>
   </div>
-  <div id="errorBox" class="error-box"></div>
-</div>
 
-<div id="cpList" class="cp-list"></div>
+  <details id="collect" class="card collect">
+    <summary>Добавить или обновить игру</summary>
+    <form id="collect-form" class="collect-form">
+      <input id="collect-id" type="text" placeholder="ID игры или ссылка на страницу Steam" autocomplete="off">
+      <select id="collect-mode">
+        <option value="incremental" selected>только новое</option>
+        <option value="full">собрать заново</option>
+      </select>
+      <button id="collect-btn" type="submit">Собрать</button>
+    </form>
+    <div id="collect-status" class="collect-status"></div>
+    <p class="note">Сбор берёт отзывы за последние {{ review_days }} дн., но не больше {{ review_pages }} страниц по 100, и занимает несколько минут.</p>
+  </details>
+</main>
 
-<section id="verdicts" class="verdicts" hidden></section>
-
-<div class="hint">Клик по легенде скрывает и показывает тип событий.
-  Широкие бледные полосы - события платформы Steam: распродажа,
-  Steam Awards, фестиваль. Дата у них приблизительная, по публикации
-  заметки. В таблице переломов клик по строке приближает график
-  к этой дате, наведение подсвечивает маркер. Сбор из дашборда берёт
-  отзывы за последние {{ review_days }} дн., но не больше
-  {{ review_pages }} страниц по 100.</div>
-
-<div class="legal">Данные получены через публичный Steam Web API.
-  Steam и логотип Steam - товарные знаки Valve Corporation.
-  Проект к Valve отношения не имеет.</div>
+<footer class="legal">Данные получены через публичный Steam Web API. Steam и логотип Steam - товарные знаки Valve Corporation. Проект к Valve отношения не имеет.</footer>
 
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
-
 </body>
 </html>

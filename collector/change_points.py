@@ -2,16 +2,8 @@
 
 from datetime import datetime
 
-import psycopg
-from psycopg.rows import dict_row
-
-from db import DSN
+from db import query
 from text import plural
-
-
-def query(sql, params=()):
-    with psycopg.connect(DSN, row_factory=dict_row) as conn:
-        return conn.execute(sql, params).fetchall()
 
 
 # на ровном ряде разброс сдвигов нулевой, порог тоже, и нестрогое сравнение объявляло переломом каждый день с нулевым сдвигом
@@ -108,11 +100,6 @@ def has_response(day_index, totals, positives, day):
     return abs(100 * ap / at - 100 * bp / bt) >= RESPONSE_SHIFT_PP
 
 
-# что показывать независимо от веса: сезон и дополнение - по типу, остальное - если рядом данные повели себя необычно. Совпадение по времени причиной не является: всплеск объёма бывает от чего угодно, включая распродажу. Это правило показа, а не утверждение о влиянии
-def always_shown(e, responsive_days):
-    return e["event_type"] in ALWAYS_SIGNIFICANT or e["day"] in responsive_days
-
-
 def build_series(app_id, smoothing):
     # дневной агрегат уже посчитан витриной; календарь нужен, чтобы дни без отзывов попадали в ряд нулями
     raw_daily = query("""
@@ -167,36 +154,28 @@ def build_series(app_id, smoothing):
         smoothed.append({
             "day": row["day"].isoformat(),
             "total": row["total"],
+            "positive": row["positive"],
             "pct": round(100 * pos / tot, 1) if tot else None,
-            "window_n": tot,
         })
 
+    # база - медиана сглаженной доли за 90 предыдущих дней: обычный для игры уровень, от которого видно отклонение
     BASE_DAYS = 90
     for i, row in enumerate(smoothed):
-        if row["pct"] is None:
-            row["delta"] = None
-            row["base"] = None
-            continue
-
-        lo = max(0, i - BASE_DAYS)
-        history = [s["pct"] for s in smoothed[lo:i] if s["pct"] is not None]
-
-        if len(history) < 14:
-            row["delta"] = None
-            row["base"] = None
-        else:
-            base = sorted(history)[len(history) // 2]
-            row["base"] = base
-            row["delta"] = round(row["pct"] - base, 1)
+        history = [s["pct"] for s in smoothed[max(0, i - BASE_DAYS):i] if s["pct"] is not None]
+        row["base"] = sorted(history)[len(history) // 2] if row["pct"] is not None and len(history) >= 14 else None
 
     return smoothed, raw_daily, half, median
 
 
-def build_events(app_id, raw_daily, min_weight):
-    # без фильтров по типу и весу: скрытый на графике тип и слабый патч тоже могут оказаться причиной перелома.
-    # distinct нужен потому, что Steam выпускает один анонс под несколькими gid, а маркер ему положен один.
-    # Границы ряда отзывов - потому что событию вне его нечего объяснять, а автомасштаб Plotly такие события растягивали на годы назад
-    cp_events = query("""
+def build_events(app_id, raw_daily):
+    """События игры и платформы в границах ряда отзывов: событию вне его нечего объяснять.
+
+    У события игры флаг shown - место на графике: значимое по правилу is_significant_event или с откликом в данных рядом.
+    Совпадение по времени причиной не является: всплеск объёма бывает от чего угодно. Это правило показа, а не утверждение о влиянии.
+    Детектору и выводам нужны все события, включая фоновые: скрытый на графике слабый патч тоже может оказаться рядом с переломом.
+    """
+    # distinct нужен потому, что Steam выпускает один анонс под несколькими gid, а маркер ему положен один
+    events = query("""
         select distinct
                (p.published_at at time zone 'utc')::date as day,
                p.event_type,
@@ -209,16 +188,11 @@ def build_events(app_id, raw_daily, min_weight):
         order by 1
     """, (app_id, raw_daily[0]["day"], raw_daily[-1]["day"]))
 
-    # маркеры - подмножество cp_events, второй запрос не нужен.
-    # Пустой вес считается нулём: иначе событие без веса проходило бы любой порог
     day_index = {r["day"]: i for i, r in enumerate(raw_daily)}
     totals = [r["total"] for r in raw_daily]
     positives = [r["positive"] for r in raw_daily]
-    responsive_days = {e["day"] for e in cp_events
-                       if has_response(day_index, totals, positives, e["day"])}
-
-    events = [e for e in cp_events
-              if always_shown(e, responsive_days) or (e["weight"] or 0) >= min_weight]
+    for e in events:
+        e["shown"] = is_significant_event(e) or has_response(day_index, totals, positives, e["day"])
 
     # общие для всех игр, не зависят от app_id. Дата приблизительная (по публикации заметки)
     platform_events = query("""
@@ -228,7 +202,7 @@ def build_events(app_id, raw_daily, min_weight):
         order by event_date
     """, (raw_daily[0]["day"], raw_daily[-1]["day"]))
 
-    return cp_events, events, platform_events, responsive_days
+    return events, platform_events
 
 
 def attach_events(change_points, smoothed, cp_events, platform_events):

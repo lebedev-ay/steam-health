@@ -59,7 +59,7 @@ def points(app_id):
         return []
     found, _ = change_points.find_change_points(smoothed)
     found = sorted(found, key=lambda t: -abs(t[1]))[:MAX_POINTS]
-    cp_events, _, platform_events, _ = change_points.build_events(app_id, raw_daily, 0)
+    cp_events, platform_events = change_points.build_events(app_id, raw_daily)
     out = []
     for idx, score in sorted(found):
         day = date.fromisoformat(smoothed[idx]["day"])
