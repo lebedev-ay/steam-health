@@ -140,7 +140,12 @@ erDiagram
 - **review_daily** - таблица, дневной агрегат по игре прямо из ядра: `app_id`, `day`, `review_count`, `positive_count`. Заглушка `app_id = -1` отфильтрована. Отсюда берут ряд дашборд, детектор переломов и доли «не рекомендую» в выводах.
 - **review_segment** - таблица, доля позитива в разрезах аудитории: `app_id`, `dimension`, `segment`, `sort_order`, `review_count`, `positive_count`. Разрезы - наигранные часы к отзыву, язык, способ получения игры, ранний доступ, ответ разработчика. Сегменты хранятся кодами, подписи к ним - в `web/static/js/labels.js`.
 - **dim_game_current** - представление, по строке на игру, текущая версия без заглушки, с разработчиками, издателями и жанрами через запятую. Нужна потому, что `app_id` в SCD2 не уникален (запись 012).
-- **Витрины LLM-разметки** - `review_labeled`, `review_labeling_daily`, `review_aspect_tag`, `review_aspect_daily`, `review_category_daily`, `change_point_verdict_current` и активные конфигурации `llm_config_active`, `llm_verdict_config_active`. Дашборд читает из них темы отзывов и выводы по переломам.
+- **Витрины LLM-разметки** - `review_labeled`, `review_labeling_daily`, `review_aspect_tag`, `review_aspect_daily`, `review_category_daily`, `change_point_verdict_current`, `game_digest_current` и активные конфигурации `llm_config_active`, `llm_verdict_config_active`. Дашборд читает из них темы отзывов, выводы по переломам и сводки месяца.
+
+Вне витрин:
+
+- **core.fct_game_digest** (V42) - сводка месяца по игре от модели (`python -m llm.digest --all-enabled`). Модель видит только агрегаты витрин разметки, без текстов отзывов; хэш улик не изменился - сводка не пересчитывается. Текущая сводка на месяц - `marts.game_digest_current`.
+- **app.web_user** (V43) - учётки дашборда, отдельная схема: это настройка приложения, а не данные хранилища. Заводятся `web/users.py`.
 
 Витрин окон больше нет: `patch_impact` и `dim_window` удалены в V33 и V35 вместе с таблицей влияния событий. События для графика дашборд читает прямо из `core.fct_patch`.
 
