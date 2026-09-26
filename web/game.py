@@ -2,6 +2,7 @@
 
 import re
 from datetime import date, timedelta
+from functools import lru_cache
 
 from change_points import (NEVER_SIGNIFICANT, attach_events, build_events, build_series,
                            find_change_points)
@@ -12,6 +13,14 @@ WINDOW = 7
 SPARK_WEEKS = 26
 REVIEWS_PAGE = 20
 QUOTES = 4
+WORDS = 14
+WORDS_BASE_DAYS = 90
+# сверх стоп-слов Postgres: общие слова отзывов, которые есть везде и ничего не говорят о конкретной игре
+COMMON_WORDS = [
+    "game", "games", "play", "playing", "played", "every", "since", "also", "would", "really", "even", "much", "get", "got",
+    "one", "like", "just", "still", "make", "made", "lot", "lots", "thing", "things", "way", "time", "good", "bad", "well",
+    "игра", "игры", "игре", "игру", "игрой", "играть", "очень", "просто", "это", "всё", "все", "ещё", "еще", "может", "которые",
+]
 
 # номера опор в тексте вывода нужны для проверки по уликам, читателю дашборда они ничего не говорят
 SUPPORT_REFS_RE = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
@@ -38,7 +47,9 @@ def games_overview():
     """
     games = query("""
         with last as (select app_id, max(day) as last_day from marts.review_daily group by app_id)
-        select g.app_id, g.game_name, g.genres, g.collection_status, l.last_day,
+        select g.app_id, g.game_name, g.genres, g.developers, g.collection_status, l.last_day,
+               exists (select 1 from marts.review_labeling_daily r join marts.llm_config_active c using (llm_config_sk)
+                       where r.app_id = g.app_id and r.labeled_count > 0) as has_llm,
                coalesce(sum(d.review_count), 0)::int as reviews,
                sum(d.positive_count) filter (where d.day > l.last_day - 30)::int as positive_30,
                sum(d.review_count) filter (where d.day > l.last_day - 30)::int as reviews_30,
@@ -47,7 +58,7 @@ def games_overview():
         from marts.dim_game_current g
         left join last l on l.app_id = g.app_id
         left join marts.review_daily d on d.app_id = g.app_id
-        group by g.app_id, g.game_name, g.genres, g.collection_status, l.last_day
+        group by g.app_id, g.game_name, g.genres, g.developers, g.collection_status, l.last_day
         order by g.game_name
     """)
     weeks = query("""
@@ -107,7 +118,8 @@ def game_page(app_id, smoothing, sensitivity):
     smoothed, raw_daily, half, median = build_series(app_id, smoothing)
     out = {"game": info[0], "daily": smoothed, "window": half * 2 + 1, "median_volume": median,
            "events": [], "platform_events": [], "updates": [], "change_points": [], "change_points_note": None,
-           "segments": segments(app_id), "aspects": aspects(app_id), "digest": digest(app_id)}
+           "segments": segments(app_id), "aspects": aspects(app_id), "digest": digest(app_id),
+           "lengths": lengths(app_id)}
     if not raw_daily:
         out["change_points_note"] = "по этой игре ещё нет собранных отзывов"
         return out
@@ -243,14 +255,16 @@ def aspect_detail(app_id, aspect_id):
             "critique": [q for q in quotes if q["sentiment"] == "-"]}
 
 
-def reviews(app_id, since, until, vote=None, language=None, sort="helpful", offset=0):
-    """Страница отзывов с текстом за [since, until): фильтры по оценке и языку, теги разметки, если отзыв размечен."""
+def reviews(app_id, since, until, vote=None, language=None, sort="helpful", offset=0, text=None):
+    """Страница отзывов с текстом за [since, until): фильтры по оценке, языку и слову в тексте, теги разметки у размеченных."""
     conds = ["g.app_id = %(app)s", "f.created_at >= %(since)s", "f.created_at < %(until)s",
              "char_length(btrim(coalesce(t.review_body, ''))) >= 20"]
     if vote is not None:
         conds.append("f.is_voted_up = %(up)s")
     if language:
         conds.append("l.language_code = %(language)s")
+    if text:
+        conds.append("t.review_body ilike %(text)s")
     order = "f.votes_up desc, f.created_at desc" if sort == "helpful" else "f.created_at desc"
     rows = query(f"""
         select f.recommendation_id as id, (f.created_at at time zone 'utc')::date as day, f.is_voted_up as up,
@@ -265,7 +279,9 @@ def reviews(app_id, since, until, vote=None, language=None, sort="helpful", offs
         order by {order}
         limit %(limit)s offset %(offset)s
     """, {"app": app_id, "since": since, "until": until, "up": vote == "up", "language": language,
-          "limit": REVIEWS_PAGE + 1, "offset": offset})
+          "limit": REVIEWS_PAGE + 1, "offset": offset,
+          # % и _ в слове - буквы, а не шаблон ilike
+          "text": "%" + re.sub(r"([%_\\])", r"\\\1", text or "") + "%"})
     return {"items": rows[:REVIEWS_PAGE], "more": len(rows) > REVIEWS_PAGE}
 
 
@@ -277,3 +293,61 @@ def digest(app_id):
         where app_id = %s and checks_passed
         order by period_from desc
     """, (app_id,))
+
+
+@lru_cache(maxsize=512)
+def words(app_id, since, until, vote):
+    """Слова, которые в отзывах за [since, until) встречаются чаще, чем за 90 дней до since. Без модели, средствами Postgres.
+
+    Считается доля отзывов со словом (каждый отзыв - один голос), рост - отношение долей со сглаживанием на единицу.
+    Слова берутся как есть, без приведения к основе: основа вроде «balanc» читателю непонятна. Стоп-слова отсекаются
+    словарями английского и русского; отзывы на других языках не участвуют - для них нет словарей.
+    Кэш на процесс: ответ для прошедших дат не меняется, а новые даты дают новый ключ.
+    """
+    rows = query("""
+        with docs as (
+            select f.created_at >= %(since)s as recent, to_tsvector('simple', t.review_body) as v
+            from core.fct_review f
+            join core.dim_game g on g.game_sk = f.game_sk
+            join core.review_text t on t.review_sk = f.review_sk
+            join core.dim_language l on l.language_sk = f.language_sk
+            where g.app_id = %(app)s and f.created_at >= %(base)s and f.created_at < %(until)s
+              and f.is_voted_up = %(up)s and l.language_code in ('english', 'russian')
+        ),
+        n as (select count(*) filter (where recent) as recent, count(*) filter (where not recent) as base from docs),
+        w as (
+            select w, count(*) filter (where recent) as recent, count(*) filter (where not recent) as base
+            from docs, unnest(tsvector_to_array(v)) as w
+            where length(w) > 2 and w !~ '^[0-9]+$'
+            group by w
+        )
+        select w.w as word, w.recent as reviews, n.recent as total,
+               round(100.0 * w.recent / nullif(n.recent, 0), 1) as share,
+               round(((w.recent + 1.0) / (n.recent + 1)) / ((w.base + 1.0) / (n.base + 1)), 2) as lift
+        from w, n
+        where w.recent >= greatest(5, n.recent / 100) and w.w <> all(%(common)s)
+          and length(to_tsvector('english', w.w)) > 0 and length(to_tsvector('russian', w.w)) > 0
+    """, {"app": app_id, "since": since, "until": until, "base": since - timedelta(days=WORDS_BASE_DAYS), "up": vote == "up",
+          "common": COMMON_WORDS})
+    total = rows[0]["total"] if rows else 0
+    return {
+        "reviews": total,
+        # частые - о чём пишут вообще, растущие - что изменилось: разные вопросы, поэтому два списка
+        "top": sorted(rows, key=lambda r: -r["reviews"])[:WORDS],
+        "rising": [r for r in sorted(rows, key=lambda r: -r["lift"]) if r["lift"] >= 1.3][:WORDS],
+    }
+
+
+def lengths(app_id):
+    """Медианная длина текста отзыва за 90 дней: рекомендующие и нет. Недовольные обычно пишут длиннее - и это видно."""
+    rows = query("""
+        select f.is_voted_up as up, percentile_cont(0.5) within group (order by char_length(t.review_body))::int as median
+        from core.fct_review f
+        join core.dim_game g on g.game_sk = f.game_sk
+        join core.review_text t on t.review_sk = f.review_sk
+        where g.app_id = %s and f.created_at >= (select max(created_at) from core.fct_review f2
+                                                 join core.dim_game g2 on g2.game_sk = f2.game_sk where g2.app_id = %s) - interval '90 days'
+          and char_length(btrim(coalesce(t.review_body, ''))) >= 20
+        group by f.is_voted_up
+    """, (app_id, app_id))
+    return {"up" if r["up"] else "down": r["median"] for r in rows}

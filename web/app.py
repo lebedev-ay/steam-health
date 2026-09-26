@@ -80,7 +80,7 @@ def aspect(app_id, aspect_id):
 
 @app.route("/api/game/<int:app_id>/reviews")
 def reviews(app_id):
-    """Отзывы с текстом за период: ?since=&until= (until не входит), vote=up|down, lang=, sort=helpful|recent, offset="""
+    """Отзывы с текстом за период: ?since=&until= (until не входит), vote=up|down, lang=, q=слово, sort=helpful|recent, offset="""
     until = parse_day(request.args.get("until"), date.today() + timedelta(days=1))
     since = parse_day(request.args.get("since"), (until or date.today()) - timedelta(days=30))
     vote = request.args.get("vote") or None
@@ -91,7 +91,18 @@ def reviews(app_id):
         offset = None
     if since is None or until is None or offset is None or vote not in (None, "up", "down") or sort not in ("helpful", "recent"):
         return jsonify({"error": "since/until - даты YYYY-MM-DD, vote - up или down, sort - helpful или recent"}), 400
-    return jsonify(game.reviews(app_id, since, until, vote, request.args.get("lang") or None, sort, offset))
+    text = (request.args.get("q") or "").strip()[:60] or None
+    return jsonify(game.reviews(app_id, since, until, vote, request.args.get("lang") or None, sort, offset, text))
+
+
+@app.route("/api/game/<int:app_id>/words")
+def words(app_id):
+    """Слова отзывов за [since, until) против 90 дней до since: ?since=&until=&vote=up|down"""
+    since, until = parse_day(request.args.get("since"), None), parse_day(request.args.get("until"), None)
+    vote = request.args.get("vote", "down")
+    if since is None or until is None or since >= until or vote not in ("up", "down"):
+        return jsonify({"error": "since и until - даты YYYY-MM-DD, since раньше until; vote - up или down"}), 400
+    return jsonify(game.words(app_id, since, until, vote))
 
 
 @app.route("/api/me")
