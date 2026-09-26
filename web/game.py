@@ -134,13 +134,17 @@ def game_page(app_id, smoothing, sensitivity):
 
     # все события: сколько из них поместится на график, решает браузер по ширине и приближению
     out["events"] = [{"day": e["day"], "type": e["event_type"], "title": e["title"], "weight": e["weight"],
-                      "significant": e["significant"], "responsive": e["responsive"]} for e in events]
+                      "significant": e["significant"], "responsive": e["responsive"],
+                      "tier": e["tier"], "kind": e["kind"], "future": e["is_future"], "title_ru": e["title_ru"]} for e in events]
     out["platform_events"] = [{"day": e["event_date"], "type": e["event_type"], "title": e["title"]}
                               for e in platform_events]
     # реакция на каждую новость игры, кроме фона (маркетинг, блоги, служебное): таблица для тех, кто хочет сравнить патчи между собой
+    # с разметкой фон определяет она: сезонный пост с «sale» в заголовке классификатор отправил бы в маркетинг
     out["updates"] = [{"day": e["day"], "type": e["event_type"], "title": e["title"], "weight": e["weight"],
-                       "shown": e["shown"], **around(raw_daily, e["day"])}
-                      for e in events if e["event_type"] not in NEVER_SIGNIFICANT]
+                       "shown": e["shown"], "tier": e["tier"], "kind": e["kind"], "future": e["is_future"],
+                       "title_ru": e["title_ru"], **around(raw_daily, e["day"])}
+                      for e in events
+                      if ((e["tier"] != "background") if e["tier"] else (e["event_type"] not in NEVER_SIGNIFICANT))]
     out["change_points"] = [
         {**cp, **around(raw_daily, date.fromisoformat(cp["day"])), "verdict": verdicts.get(date.fromisoformat(cp["day"]))}
         for cp in attach_events(found, smoothed, events, platform_events)

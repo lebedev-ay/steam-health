@@ -72,6 +72,10 @@ RESPONSE_SHIFT_PP = 12
 RESPONSE_MIN_REVIEWS = 30
 
 
+# порядок уровней LLM-разметки новостей: меньше - важнее
+TIER_RANK = {"milestone": 0, "major": 1, "regular": 2, "background": 3}
+
+
 def is_significant_event(e):
     if e["event_type"] in ALWAYS_SIGNIFICANT:
         return True
@@ -189,13 +193,31 @@ def build_events(app_id, raw_daily):
         order by 1
     """, (app_id, raw_daily[0]["day"], raw_daily[-1]["day"]))
 
+    # LLM-разметка новостей - отдельным запросом и по ключу (день, заголовок): сами строки событий и их порядок остаются прежними,
+    # от них зависит хэш улик у выводов. У одного анонса под несколькими gid берётся старший уровень
+    labels = {}
+    for r in query("""
+        select (p.published_at at time zone 'utc')::date as day, p.title, l.tier, l.kind, l.is_future, l.title_ru
+        from core.fct_patch p
+        join core.dim_game g on g.game_sk = p.game_sk
+        join marts.news_label_current l on l.gid = p.gid
+        where g.app_id = %s
+          and (p.published_at at time zone 'utc')::date between %s and %s
+    """, (app_id, raw_daily[0]["day"], raw_daily[-1]["day"])):
+        key = (r["day"], r["title"])
+        if key not in labels or TIER_RANK[r["tier"]] < TIER_RANK[labels[key]["tier"]]:
+            labels[key] = r
+
     day_index = {r["day"]: i for i, r in enumerate(raw_daily)}
     totals = [r["total"] for r in raw_daily]
     positives = [r["positive"] for r in raw_daily]
     for e in events:
+        label = labels.get((e["day"], e["title"])) or {}
+        e.update({k: label.get(k) for k in ("tier", "kind", "is_future", "title_ru")})
         e["significant"] = is_significant_event(e)
         e["responsive"] = has_response(day_index, totals, positives, e["day"])
-        e["shown"] = e["significant"] or e["responsive"]
+        # веха и крупное событие по разметке показываются всегда, даже если вес и тип говорят «мелочь»
+        e["shown"] = e["significant"] or e["responsive"] or e["tier"] in ("milestone", "major")
 
     # общие для всех игр, не зависят от app_id. Дата приблизительная (по публикации заметки)
     platform_events = query("""
@@ -206,6 +228,10 @@ def build_events(app_id, raw_daily):
     """, (raw_daily[0]["day"], raw_daily[-1]["day"]))
 
     return events, platform_events
+
+
+def label_fields(e):
+    return {"tier": e.get("tier"), "kind": e.get("kind"), "future": e.get("is_future"), "title_ru": e.get("title_ru")}
 
 
 def attach_events(change_points, smoothed, cp_events, platform_events):
@@ -238,13 +264,14 @@ def attach_events(change_points, smoothed, cp_events, platform_events):
         cp_out.append({
             "day": day,
             "score": round(score, 1),
+            # уровень и русское название из разметки новостей - для дашборда; выводы берут отсюда только тип, заголовок и вес
             "events": [
                 {"type": e["event_type"], "title": e["title"],
-                 "weight": float(e["weight"]) if e["weight"] is not None else None}
+                 "weight": float(e["weight"]) if e["weight"] is not None else None, **label_fields(e)}
                 for e in major
             ],
             "events_minor": [
-                {"type": e["event_type"], "title": e["title"]}
+                {"type": e["event_type"], "title": e["title"], **label_fields(e)}
                 for e in minor
             ],
             "platform_event": platform_event,

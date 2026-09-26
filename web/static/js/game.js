@@ -1,5 +1,6 @@
 import { renderChart } from './chart.js';
-import { ASPECTS, CATEGORIES, DOWN, LANGUAGES, PLATFORM_TYPES, SEGMENTS, UP, eventType, steamRating } from './labels.js';
+import { ASPECTS, CATEGORIES, DOWN, LANGUAGES, PLATFORM_TYPES, SEGMENTS, TIER_LABELS, UP, eventGroup, eventType, kindLabel,
+         steamRating } from './labels.js';
 import { $, countUp, delta, el, gauge, hours, longDate, monthBars, num, pct, plural, reviewsWord, ruDate, shiftDay,
          sparkline, truncate } from './util.js';
 import { fetchAspect, fetchReviews, fetchWords } from './api.js';
@@ -126,9 +127,16 @@ function renderKpis(data) {
 // --- переломы ---
 
 function mainEvent(c) {
+  // с разметкой новостей главное событие рядом - старшее по уровню, даже если по весу оно числилось фоном
+  const RANK = { milestone: 0, major: 1, regular: 2, background: 3 };
+  const tiered = [...c.events, ...c.events_minor].filter(e => e.tier).sort((a, b) => RANK[a.tier] - RANK[b.tier]);
+  if (tiered.length && tiered[0].tier !== 'background') {
+    const e = tiered[0];
+    return { color: eventGroup(e).color, text: `${e.tier === 'milestone' ? 'веха' : kindLabel(e.kind)}${e.future ? ' (анонс)' : ''}: ${e.title_ru}` };
+  }
   if (c.events.length) {
     const e = c.events[0];
-    return { color: eventType(e.type).color, text: `${eventType(e.type).label}: ${truncate(e.title, 90)}` };
+    return { color: eventGroup(e).color, text: `${eventType(e.type).label}: ${truncate(e.title, 90)}` };
   }
   if (c.platform_event) {
     return { color: null, text: `${PLATFORM_TYPES[c.platform_event.type] || 'Steam'}: ${truncate(c.platform_event.title, 90)}` };
@@ -584,10 +592,15 @@ function renderUpdates(updates) {
     row.onclick = () => actions.openReviews({ since: u.day, until: shiftDay(u.day, 7) });
     const type = el('td');
     const dot = el('span', 'dot');
-    dot.style.background = eventType(u.type).color;
+    dot.style.background = eventGroup(u).color;
     dot.style.display = 'inline-block';
     dot.style.marginRight = '8px';
-    type.append(dot, `${eventType(u.type).label}: ${truncate(u.title, 80)}`);
+    if (u.title_ru) {
+      type.append(dot, u.title_ru, el('span', 'muted', ` · ${TIER_LABELS[u.tier]}${u.future ? ', анонс' : ''}`));
+      type.title = u.title;
+    } else {
+      type.append(dot, `${eventType(u.type).label}: ${truncate(u.title, 80)}`);
+    }
     const d = change(u);
     const deltaCell = el('td');
     if (u.positive_after != null && u.positive_before != null) deltaCell.append(delta(d));

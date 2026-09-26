@@ -17,6 +17,7 @@ sources:
       - name: dim_platform_event
       - name: fct_change_point_verdict
       - name: fct_game_digest
+      - name: fct_news_label
       - name: fct_patch
       - name: fct_review_aspect
       - name: fct_review_labeling

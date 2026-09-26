@@ -1,4 +1,4 @@
-import { DOWN, MOON, PLATFORM_TYPES, UP, eventType } from './labels.js';
+import { DOWN, MOON, PLATFORM_TYPES, TIER_LABELS, UP, eventGroup, kindLabel } from './labels.js';
 import { esc, shiftDay, truncate } from './util.js';
 
 // цвета совпадают с токенами style.css: Plotly не читает CSS-переменные
@@ -18,7 +18,11 @@ const TICK_PX = 30, GAP_PX = 7, LABEL_PX = 190, LABELS = 6, LABEL_EDGE_PX = 150;
 // маркетинг и блоги - фон. Отклик в данных рядом поднимает любое событие: оно могло что-то сдвинуть
 const TYPE_BASE = { season_start: 9, expansion: 9, patch: 2, beta: 1.5, press: 1.2, announce: 1,
                     marketing: 0.3, blog: 0.3, service: 0.2, unknown: 0.5 };
-const importance = e => (TYPE_BASE[e.type] ?? 0.5) * (1 + Math.min(e.weight ?? 1, 10)) + (e.responsive ? 8 : 0);
+// С LLM-разметкой новостей основа - её уровень: масштаб события для игры по смыслу текста, а не по длине и заголовку
+const TIER_BASE = { milestone: 60, major: 18, regular: 5, background: 0.6 };
+const importance = e => (e.tier ? TIER_BASE[e.tier] : (TYPE_BASE[e.type] ?? 0.5) * (1 + Math.min(e.weight ?? 1, 10)))
+  + (e.responsive ? 8 : 0);
+const title = e => e.title_ru || e.title;
 
 let data = null;
 let lastSignature = '';
@@ -51,11 +55,13 @@ function pickEvents(lo, hi, width) {
   const budget = Math.max(Math.floor(width / TICK_PX), 8);
   const px = e => (Date.parse(e.day) - Date.parse(lo)) / 864e5 * width / days;
 
-  // жадно по важности: засечка, вплотную к уже взятой более важной, сливалась бы с ней в одну
-  const ticks = [];
-  for (const e of [...inRange].sort((a, b) => importance(b) - importance(a))) {
+  // вехи - всегда, мимо бюджета и зазора: это события, ради которых игру и помнят. Остальное - жадно по важности,
+  // засечка вплотную к уже взятой более важной сливалась бы с ней в одну
+  const ranked = [...inRange].sort((a, b) => importance(b) - importance(a));
+  const ticks = ranked.filter(e => e.tier === 'milestone');
+  for (const e of ranked) {
     if (ticks.length >= budget) break;
-    if (ticks.every(t => Math.abs(px(t) - px(e)) >= GAP_PX)) ticks.push(e);
+    if (!ticks.includes(e) && ticks.every(t => Math.abs(px(t) - px(e)) >= GAP_PX)) ticks.push(e);
   }
 
   const labels = [];
@@ -80,19 +86,29 @@ function draw(range) {
   const pct = data.daily.map(d => d.pct);
   const pctByDay = new Map(data.daily.map(d => [d.day, d.pct]));
 
-  // дорожка событий: засечки по типам, высота - важность. Отдельная трасса на тип даёт легенду с переключением
-  const byType = {};
-  ticks.forEach(e => (byType[e.type] = byType[e.type] || []).push(e));
-  const eventTraces = Object.entries(byType).map(([type, items]) => ({
-    x: items.map(e => e.day), y: items.map(() => 0.42), yaxis: 'y3',
-    type: 'scatter', mode: 'markers', name: eventType(type).label, legendgroup: type,
-    marker: {
-      symbol: 'line-ns', size: items.map(e => 10 + Math.min(importance(e), 24) * 0.75),
-      line: { color: eventType(type).color, width: 2.2 }
-    },
-    text: items.map(e => esc(truncate(e.title, 80)) + (e.weight ? ` · вес ${e.weight}` : '') + (e.responsive ? ' · рядом отклик в отзывах' : '')),
-    hovertemplate: '%{text}<extra>' + eventType(type).label + '</extra>'
-  }));
+  // дорожка событий: засечки по группам, высота - важность. Отдельная трасса на группу даёт легенду с переключением.
+  // Анонс будущего - бледнее: событие ещё не случилось, на кривую оно влиять не могло
+  const byGroup = {};
+  ticks.forEach(e => (byGroup[eventGroup(e).key] = byGroup[eventGroup(e).key] || []).push(e));
+  const eventTraces = Object.values(byGroup).map(items => {
+    const group = eventGroup(items[0]);
+    return {
+      x: items.map(e => e.day), y: items.map(() => 0.42), yaxis: 'y3',
+      type: 'scatter', mode: 'markers', name: group.label, legendgroup: group.key,
+      opacity: 1,
+      marker: {
+        symbol: 'line-ns', size: items.map(e => 10 + Math.min(importance(e), 26) * 0.72),
+        line: { color: items.map(e => e.future ? `${group.color}80` : group.color), width: items.map(e => e.tier === 'milestone' ? 3 : 2.2) }
+      },
+      text: items.map(e => [
+        esc(truncate(title(e), 80)),
+        e.tier ? `${TIER_LABELS[e.tier]}, ${kindLabel(e.kind)}${e.future ? ', анонс' : ''}` : (e.weight ? `вес ${e.weight}` : null),
+        e.title_ru ? `<span style="color:#736e7d">${esc(truncate(e.title, 70))}</span>` : null,
+        e.responsive ? 'рядом отклик в отзывах' : null
+      ].filter(Boolean).join('<br>')),
+      hovertemplate: '%{text}<extra></extra>'
+    };
+  });
 
   const platform = data.platform_events.filter(e => e.day >= lo && e.day <= hi);
   const platformTrace = {
@@ -146,7 +162,7 @@ function draw(range) {
   // у подписанных событий - тонкая направляющая через основную полосу: видно, куда пришлось событие на кривой
   const guides = labels.map(e => ({
     type: 'line', xref: 'x', yref: 'paper', x0: e.day, x1: e.day, y0: MAIN[0], y1: LANE[0] + 0.03,
-    line: { color: eventType(e.type).color, width: 1 }, opacity: 0.35, layer: 'below'
+    line: { color: eventGroup(e).color, width: 1 }, opacity: e.tier === 'milestone' ? 0.5 : 0.3, layer: 'below'
   }));
   // события платформы - бледная полоса ±3 дня: дата у них приблизительная, по публикации заметки
   const bands = platform.map(e => ({
@@ -157,7 +173,7 @@ function draw(range) {
                      line: { color: 'rgba(255,255,255,0.08)', width: 1 } };
   const annotations = labels.map(e => ({
     x: e.day, xref: 'x', y: LANE[1], yref: 'paper', yanchor: 'top', xanchor: 'left', xshift: 5, showarrow: false,
-    text: esc(truncate(e.title, 26)), font: { size: 10, color: INK, family: FONT }, opacity: 0.75
+    text: esc(truncate(title(e), 28)), font: { size: 10, color: INK, family: FONT }, opacity: e.tier === 'milestone' ? 0.95 : 0.7
   }));
 
   const axis = { gridcolor: GRID, zeroline: false, color: MUTED, fixedrange: true, tickfont: { family: MONO, size: 11 } };

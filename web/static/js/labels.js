@@ -16,6 +16,33 @@ export const EVENT_TYPES = {
   unknown:      { color: BACKGROUND, label: 'прочее' }
 };
 
+// вид события по LLM-разметке новостей сводится к тем же цветовым группам: цвет - «что это», высота засечки - «насколько важно»
+const KIND_TO_TYPE = {
+  release: 'expansion', expansion: 'expansion', season: 'season_start', major_update: 'patch', content_update: 'patch',
+  balance: 'patch', hotfix: 'patch', event: 'press', roadmap: 'announce', announcement: 'announce', sale: 'marketing',
+  community: 'blog', other: 'unknown'
+};
+const KIND_LABELS = {
+  release: 'релиз', expansion: 'дополнение', major_update: 'крупное обновление', season: 'сезон', content_update: 'обновление',
+  balance: 'баланс', hotfix: 'хотфикс', event: 'ивент', roadmap: 'планы', announcement: 'анонс', sale: 'распродажа',
+  community: 'сообщество', other: 'прочее'
+};
+export const TIER_LABELS = { milestone: 'веха', major: 'крупное', regular: 'обычное', background: 'фон' };
+
+// группа события для цвета и легенды: по разметке, если она есть, иначе по классификатору заголовков.
+// Дополнения и релизы в одной группе - «веха по смыслу», события игры - отдельно от прессы
+export function eventGroup(e) {
+  if (e.kind) {
+    const type = KIND_TO_TYPE[e.kind] || 'unknown';
+    const label = { expansion: 'релизы и дополнения', patch: 'обновления', season_start: 'сезоны', press: 'ивенты',
+                    announce: 'анонсы', marketing: 'фон', blog: 'фон', unknown: 'фон' }[type];
+    return { key: label, color: eventType(type).color, label };
+  }
+  return { key: e.type, color: eventType(e.type).color, label: eventType(e.type).label };
+}
+
+export const kindLabel = kind => KIND_LABELS[kind] || kind;
+
 export const PLATFORM_TYPES = {
   sale: 'распродажа Steam',
   awards: 'Steam Awards',

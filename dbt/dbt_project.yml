@@ -18,3 +18,7 @@ vars:
   # активная конфигурация выводов по переломам для dbt/models/llm_verdict_config_active.sql: модель и начало хэша промпта вывода
   llm_verdict_model: deepseek-flash
   llm_verdict_prompt_hash: af261708
+  # активная конфигурация разметки новостей для dbt/models/news_label_current.sql. Пустой хэш - разметка не выбрана,
+  # представление пустое, дашборд считает важность событий по-старому
+  llm_news_model: deepseek-flash
+  llm_news_prompt_hash: ''

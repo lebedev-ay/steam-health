@@ -116,3 +116,13 @@ models:
         data_tests:
           - unique
           - not_null
+
+  - name: news_label_current
+    description: >
+      Текущая LLM-разметка новости, одна строка на gid: самая свежая успешная разметка активной конфигурацией
+      (переменные llm_news_model и llm_news_prompt_hash). Пусто, пока разметка не выбрана.
+    columns:
+      - name: gid
+        data_tests:
+          - unique
+          - not_null
