@@ -90,6 +90,10 @@ class CheckTest(unittest.TestCase):
         self.assertTrue(any("английское название" in p for p in run(answer(what=GOOD_WHAT.replace("на цену", "на Monetization and value")))))
         self.assertTrue(any("служебный ярлык" in p for p in run(answer(what=GOOD_WHAT + " Рост размазан по темам."))))
 
+    def test_from_to_pair_is_explicit(self):
+        what = "Доля оценок «не рекомендую» снизилась с 14% до 11%. Жалобы на цену упали с 10% до 2%, игровых новостей рядом нет."
+        self.assertEqual(run(answer(what=what)), [])
+
     def test_pair_needs_before_and_after(self):
         what = "Доля оценок «не рекомендую» выросла с 11% до 14% после 23 мая. Жалобы на цену: 2% против 14%."
         self.assertTrue(any("без «до» и «после»" in p for p in run(answer(what=what))))

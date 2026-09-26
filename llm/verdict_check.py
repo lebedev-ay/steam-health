@@ -52,6 +52,7 @@ def excerpts(support, reviews, k=EXCERPTS):
 
 REF = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 SNAKE = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b")
+FROM_TO = re.compile(r"с\s+\d+(?:[.,]\d+)?\s*%\s+до\s+\d+(?:[.,]\d+)?\s*%")
 NUMBER_PAIR = re.compile(r"\d+(?:[.,]\d+)?\s*%[^%]{0,60}?\d+(?:[.,]\d+)?\s*%")
 NOT_GROWN = re.compile(r"не\s+(вы)?рос|не\s+подн|не\s+увелич", re.I)
 VOLUME = re.compile(r"опира|размеченн|объ[её]м|малом\s+числ|всего\s+\d+\s+отзыв", re.I)
@@ -109,7 +110,9 @@ def check(raw, labels, votes_pair, known_numbers, vocab):
     for m in LABEL_WORDS.finditer(what):
         problems.append(f"what_happened: служебный ярлык «{m.group(0)}»")
     for sent in sentences(what):
-        if NUMBER_PAIR.search(sent) and not (re.search(r"\bдо\b", sent) and re.search(r"\bпосле\b", sent)):
+        # «с 14% до 11%» порядок задаёт сама; иначе у пары должны быть и «до», и «после» («2% до, 8% после»)
+        rest = FROM_TO.sub("", sent)
+        if NUMBER_PAIR.search(rest) and not (re.search(r"\bдо\b", rest) and re.search(r"\bпосле\b", rest)):
             problems.append(f"what_happened: пара чисел без «до» и «после» «{sent[:60]}…»")
     if labels["main_diff"] is not None and labels["main_diff"] > 0 and NOT_GROWN.search(what):
         problems.append("what_happened: «не вырос / не поднялся» при росте главной темы")
