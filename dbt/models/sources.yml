@@ -6,8 +6,12 @@ sources:
       Ядро хранилища. Наполняется загрузчиками из collector/, схема — миграциями в db/migration/. dbt только читает.
     schema: core
     tables:
+      - name: bridge_game_company
+      - name: bridge_game_genre
       - name: dim_aspect
+      - name: dim_company
       - name: dim_game
+      - name: dim_genre
       - name: dim_language
       - name: dim_llm_config
       - name: dim_platform_event
