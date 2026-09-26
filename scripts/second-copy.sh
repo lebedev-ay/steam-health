@@ -61,7 +61,7 @@ if [ -n "$DOMAIN" ]; then
 
   domain_ip=$(getent ahostsv4 "$DOMAIN" | awk 'NR == 1 {print $1}')
   [ -n "$domain_ip" ] || stop "$DOMAIN не находится в DNS - добавь запись A на IP сервера и подожди несколько минут"
-  my_ips="$(hostname -I) $(curl -fsS --max-time 5 https://api.ipify.org || true)"
+  my_ips="$(hostname -I) $(curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
   [[ " $my_ips " == *" $domain_ip "* ]] || stop "$DOMAIN указывает на $domain_ip, а у сервера $my_ips"
   ok "$DOMAIN указывает на этот сервер ($domain_ip)"
 fi
