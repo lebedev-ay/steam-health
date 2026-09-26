@@ -66,9 +66,9 @@ export function eventFilterLabel(days, minWeight) {
   return `показаны сезоны, дополнения, события с откликом в данных и всё с весом ≥ ${limit}`;
 }
 
-export function mainEventLabel(c) {
+export function mainEventLabel(c, titleChars = 70) {
   if (c.events.length) {
-    return `${TYPES[c.events[0].type]?.label || c.events[0].type}: ${truncate(c.events[0].title, 70)}`;
+    return `${TYPES[c.events[0].type]?.label || c.events[0].type}: ${truncate(c.events[0].title, titleChars)}`;
   }
   if (c.platform_event) {
     return `платформа: ${platformEventLabel(c.platform_event)}`;

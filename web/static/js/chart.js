@@ -1,6 +1,7 @@
-import { shiftDay, esc, sameRange, dayInRange, plural, wrapText, firstWords } from './util.js';
-import { TYPES, PLATFORM_TYPES, BACKGROUND_COLOR, platformEventLabel,
-         densityFilter, densityThreshold, eventFilterLabel } from './events.js';
+import { shiftDay, esc, sameRange, dayInRange, plural, wrapText, firstSentence, cutWords } from './util.js';
+import { TYPES, PLATFORM_TYPES, BACKGROUND_COLOR,
+         densityFilter, densityThreshold, eventFilterLabel,
+         mainEventLabel, NO_EVENT_LABEL } from './events.js';
 import { renderChangePointList } from './cplist.js';
 import { focusVerdict } from './verdicts.js';
 
@@ -8,6 +9,8 @@ let lastData = null;
 // выводы по переломам: день -> карточка из /api/verdicts. Отметка над ромбом ставится только у переломов, для которых вывод есть
 let verdictsByDay = new Map();
 let verdictClickBound = false;
+// голоса по дням из /api/votes: доля «не рекомендую» в окнах вокруг перелома для анонса в подсказке
+let votesByDay = new Map();
 let cpMarkerIndices = [];
 let cpBaseMarker = null;
 let lastRenderedRange = null;
@@ -43,6 +46,13 @@ const WHEEL_SETTLE_MS = 250;
 const WHEEL_COMMIT_MS = 500;
 // сутки: зерно данных дневное, уже некуда
 const MIN_WINDOW_MS = 86400000;
+
+// анонс перелома: шрифт основного текста страницы (16 px у body) и перенос по числу символов - Plotly сам строки не переносит.
+// 38 символов при 16 px - это около 340 px, ширина подсказки держится в 360 px
+const ANNOUNCE_FONT_PX = 16;
+const ANNOUNCE_LINE_CHARS = 38;
+const ANNOUNCE_EVENT_CHARS = 60;
+const ANNOUNCE_SENTENCE_CHARS = 120;
 
 // фон подсказки Plotly берёт из цвета маркера, и светлый текст на жёлтом анонсе или на бледно-сером фоне не читается. Цвет типа остаётся в самом маркере
 const MARKER_HOVER = { bgcolor: '#262b33', bordercolor: '#3a4048', font: { color: '#c7d0d9' } };
@@ -180,6 +190,35 @@ function unhighlightChangePoint() {
   Plotly.restyle('sentiment',
     { 'marker.size': [cpBaseMarker.size], 'marker.line.width': [cpBaseMarker.lineWidth] },
     [cpTraceIndex()]);
+}
+
+// подсказка ромба - анонс, не больше пяти пунктов: дата, доля «не рекомендую», событие, начало вывода и приглашение к нему.
+// Направление и величина сдвига есть в таблице переломов и в подсказке не повторяются
+function announce(c, verdict) {
+  const lines = [`<b>${new Date(c.day + 'T00:00:00').toLocaleDateString('ru-RU')}</b>`];
+
+  // у перелома с выводом доли берутся из вывода, чтобы подсказка и карточка не расходились в округлении
+  const before = verdict ? verdict.negative_before : votesShare(shiftDay(c.day, -7), c.day);
+  const after = verdict ? verdict.negative_after : votesShare(c.day, shiftDay(c.day, 7));
+  if (before !== null && after !== null) lines.push(`не рекомендуют: ${before}% → ${after}%`);
+
+  const event = cutWords(mainEventLabel(c, Infinity), ANNOUNCE_EVENT_CHARS);
+  if (event !== NO_EVENT_LABEL) lines.push(event);
+
+  if (verdict && verdict.checked) lines.push(firstSentence(verdict.what_happened, ANNOUNCE_SENTENCE_CHARS));
+  if (verdict) lines.push('<i>Нажмите - подробнее</i>');
+
+  return lines.map((line, i) => i === 0 || line.startsWith('<i>') ? line : wrapText(line, ANNOUNCE_LINE_CHARS)).join('<br>');
+}
+
+// доля отзывов «не рекомендую» за [from, to) в целых процентах; окна те же, что в выводе
+function votesShare(from, to) {
+  let total = 0, negative = 0;
+  for (let d = from; d < to; d = shiftDay(d, 1)) {
+    const v = votesByDay.get(d);
+    if (v) { total += v.total; negative += v.negative; }
+  }
+  return total ? Math.round(100 * negative / total) : null;
 }
 
 // перерисовка по уже загруженным данным (range = null - вся история): зум и панорамирование пересчитывают слои событий без похода на сервер
@@ -336,56 +375,19 @@ export function renderChart(range) {
     cpMarkerIndices.push(myIndices);
     if (baseY === undefined || baseY === null) return;
 
-    const dir = c.score < 0 ? 'спад' : 'рост';
-    // ромб - точка на данных, и его собственное свойство это знак и величина сдвига. Тип причины виден по маркерам сверху и в тултипе, поэтому цвет здесь кодирует только направление и совпадает с таблицей
+    // ромб - точка на данных, и его собственное свойство это знак и величина сдвига. Цвет кодирует только направление и совпадает с таблицей
     const dirColor = c.score < 0 ? '#ff4d3d' : '#3ddc84';
     // уменьшен по той же причине, что треугольники выше -
     // общий размер с миниатюрой rangeslider
     const size = Math.min(7 + Math.abs(c.score) * 0.15, 11);
-
-    const minorLine = c.events_minor.length
-      ? `<br>и ещё ${c.events_minor.length} ` +
-        `${plural(c.events_minor.length, 'событие', 'события', 'событий')}`
-      : '';
-    const platformLine = c.platform_event
-      ? `<br><b>платформа:</b> ${esc(platformEventLabel(c.platform_event))}`
-      : '';
-
-    const kinds = [...new Set(c.events.map(e => e.type))];
-
-    let body;
-
-    if (kinds.length === 0) {
-      body = c.events_minor.length
-        ? `${c.events_minor.length} ` +
-          `${plural(c.events_minor.length, 'фоновое событие', 'фоновых события', 'фоновых событий')}` +
-          ' рядом'
-        : 'событий рядом нет';
-    } else {
-      // цвет строки в тултипе Plotly задаётся только через span: фон и рамки он игнорирует, поэтому маркер типа - символом
-      body = kinds.map(k => {
-        const titles = c.events.filter(e => e.type === k)
-          .map(e => esc(e.title)).join('<br>');
-        const kc = TYPES[k]?.color || BACKGROUND_COLOR;
-        return `<span style="color:${kc}">◆</span> ${TYPES[k]?.label || k}:` +
-               `<br>${titles}`;
-      }).join('<br>');
-      body += minorLine;
-    }
-
     // ромб с выводом залит, без вывода - контур: так видно, по каким переломам есть текст под графиком, без отдельного слоя точек
     const verdict = verdictsByDay.get(c.day);
-    const verdictLine = !verdict ? ''
-      : '<br><b>вывод:</b> ' + (verdict.checked
-          ? wrapText(firstWords(verdict.what_happened, 14), 70)
-          : `доля «не рекомендую» ${verdict.negative_before}% до, ${verdict.negative_after}% после`) +
-        '<br><i>клик - к выводу под графиком</i>';
 
     cpX.push(c.day); cpY.push(baseY);
     cpColor.push(dirColor); cpSize.push(size); cpLine.push('#14161a');
     cpSymbol.push(verdict ? 'diamond' : 'diamond-open');
     myIndices.push(cpX.length - 1);
-    cpText.push(`<b>${dir} ${Math.abs(c.score)} п.п.</b><br>${body}${platformLine}${verdictLine}`);
+    cpText.push(announce(c, verdict));
   });
 
   const cpLineWidth = cpX.map(() => 2.5);
@@ -420,8 +422,9 @@ export function renderChart(range) {
       line: { color: cpLine, width: cpLineWidth }
     },
     text: cpText,
-    hoverlabel: { ...MARKER_HOVER },
-    hovertemplate: '%{x|%d.%m.%Y}<br>%{text}<extra></extra>'
+    // анонс читается как абзац: слева, основным шрифтом страницы
+    hoverlabel: { ...MARKER_HOVER, align: 'left', font: { ...MARKER_HOVER.font, size: ANNOUNCE_FONT_PX } },
+    hovertemplate: '%{text}<extra></extra>'
   };
 
   Plotly.react('sentiment', [
@@ -583,6 +586,10 @@ export function renderChart(range) {
     });
   }
 
+}
+
+export function setVotes(list) {
+  votesByDay = new Map(list.map(v => [v.day, v]));
 }
 
 export function setVerdicts(list) {

@@ -54,3 +54,14 @@ export async function fetchVerdicts(appId) {
     return [];
   }
 }
+
+// голоса по дням для анонса перелома; как и выводы - дополнение, сбой не должен ронять график
+export async function fetchVotes(appId) {
+  try {
+    const res = await fetch(`/api/votes?app_id=${appId}`);
+    return res.ok ? await res.json() : [];
+  } catch {
+    return [];
+  }
+}
+

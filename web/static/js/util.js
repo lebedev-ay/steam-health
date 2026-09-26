@@ -56,7 +56,16 @@ export function wrapText(s, width) {
   return lines.map(esc).join('<br>');
 }
 
-export function firstWords(s, n) {
-  const words = String(s).split(/\s+/);
-  return words.length > n ? words.slice(0, n).join(' ') + '…' : String(s);
+// не длиннее n символов с обрезкой по границе слова; truncate выше режет по символу, им пользуется таблица переломов
+export function cutWords(s, n) {
+  s = String(s);
+  if (s.length <= n) return s;
+  const cut = s.slice(0, n - 1);
+  const space = cut.lastIndexOf(' ');
+  return (space > 0 ? cut.slice(0, space) : cut).replace(/[\s,.;:-]+$/, '') + '…';
+}
+
+// первая фраза текста, не длиннее n символов
+export function firstSentence(s, n) {
+  return cutWords(String(s).split(/(?<=[.!?])\s+/)[0], n);
 }

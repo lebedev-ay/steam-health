@@ -1,5 +1,5 @@
-import { fetchData, fetchGames, fetchVerdicts } from './api.js';
-import { setData, setVerdicts, renderChart } from './chart.js';
+import { fetchData, fetchGames, fetchVerdicts, fetchVotes } from './api.js';
+import { setData, setVerdicts, setVotes, renderChart } from './chart.js';
 import { renderVerdicts, clearVerdicts } from './verdicts.js';
 
 // полный список игр держим отдельно от select: фильтр перерисовывает его содержимое, и выбранная игра выпадать из него не должна
@@ -46,12 +46,14 @@ async function load() {
   const minWeight = document.getElementById('minWeight').value;
 
   // выводы грузятся параллельно с данными графика и не зависят от его параметров: они посчитаны заранее по детектору с настройками по умолчанию
-  const [body, verdicts] = await Promise.all([
+  const [body, verdicts, votes] = await Promise.all([
     fetchData({ appId, smoothing, minWeight, sensitivity }),
-    fetchVerdicts(appId)
+    fetchVerdicts(appId),
+    fetchVotes(appId)
   ]);
 
   setVerdicts(verdicts);
+  setVotes(votes);
   setData(body);
   renderChart(null);
   renderVerdicts(verdicts);
