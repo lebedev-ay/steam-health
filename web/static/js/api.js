@@ -1,8 +1,5 @@
-// токен есть, только если задан в окружении сервера; без него заголовок не отправляется
-const COLLECT_TOKEN = document.querySelector('meta[name="collect-token"]')?.content || '';
-
-async function getJson(url, options) {
-  const res = await fetch(url, options);
+async function request(url, options) {
+  const res = await fetch(url, { credentials: 'same-origin', ...options });
   const body = await res.json().catch(() => null);
   if (!res.ok) {
     const err = new Error(body?.error || `сервер ответил ${res.status}`);
@@ -13,15 +10,19 @@ async function getJson(url, options) {
   return body;
 }
 
+// изменения - только JSON: форма с чужого сайта такой запрос не пошлёт, а сервер ещё и сверяет Origin
+const post = (url, data) => request(url, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data || {})
+});
+
+export const fetchGames = () => request('/api/games');
 export const fetchGame = (appId, { smoothing, sensitivity }) =>
-  getJson(`/api/game/${appId}?smoothing=${smoothing}&sensitivity=${sensitivity}`);
+  request(`/api/game/${appId}?smoothing=${smoothing}&sensitivity=${sensitivity}`);
+export const fetchAspect = (appId, aspect) => request(`/api/game/${appId}/aspect/${encodeURIComponent(aspect)}`);
+export const fetchReviews = (appId, params) => request(`/api/game/${appId}/reviews?${new URLSearchParams(params)}`);
 
-export const fetchGames = () => getJson('/api/games');
-
-export const fetchTask = taskId => getJson(`/api/task/${taskId}`);
-
-export function postCollect(appId, mode) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (COLLECT_TOKEN) headers['X-Collect-Token'] = COLLECT_TOKEN;
-  return getJson('/api/collect', { method: 'POST', headers, body: JSON.stringify({ app_id: appId, mode }) });
-}
+export const fetchMe = () => request('/api/me');
+export const login = (name, password) => post('/api/login', { login: name, password });
+export const logout = () => post('/api/logout');
+export const postCollect = (appId, mode) => post('/api/collect', { app_id: appId, mode });
+export const fetchTask = taskId => request(`/api/task/${taskId}`);

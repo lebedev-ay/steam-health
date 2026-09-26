@@ -3,100 +3,243 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Steam Health</title>
-{% if collect_token %}<meta name="collect-token" content="{{ collect_token }}">{% endif %}
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<title>Steam Health - пульс игр Steam</title>
+<meta name="description" content="Как меняется настроение игроков в Steam: переломы, их причины рядом по времени, темы отзывов и аудитория.">
+<meta name="theme-color" content="#0a0910">
+<link rel="icon" href="{{ url_for('static', filename='logo.svg') }}" type="image/svg+xml">
+<link rel="preload" href="{{ url_for('static', filename='fonts/unbounded-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{ url_for('static', filename='fonts/onest-cyrillic-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
 </head>
 <body>
 
 <header class="topbar">
-  <div class="brand">{% include 'steam-icon.svg' %}<span>Steam Health</span></div>
-  <label class="picker">
-    <span>Игра</span>
-    <select id="game">
-      {% for g in games %}
-      <option value="{{ g.app_id }}"{% if g.app_id|string == default_app_id %} selected{% endif %}>{{ g.game_name }}{% if g.collection_status == 'partial' %} (неполные данные){% endif %}</option>
-      {% endfor %}
-    </select>
-  </label>
+  <a class="brand" href="/" data-nav="overview">
+    <img src="{{ url_for('static', filename='logo.svg') }}" alt="" width="30" height="30">
+    <span>Steam<b>Health</b></span>
+  </a>
+  <button id="switcher-open" class="switcher-btn" type="button" aria-haspopup="dialog">
+    <span class="switcher-icon" aria-hidden="true">⌕</span>
+    <span id="switcher-label">Найти игру</span>
+    <kbd>/</kbd>
+  </button>
+  <div id="account" class="account"></div>
 </header>
 
 <main>
   <div id="error" class="error" hidden></div>
-  {% if not games %}<p class="empty">В базе пока нет игр. Добавьте первую формой внизу страницы.</p>{% endif %}
 
-  <div id="content" hidden>
-    <section id="game-head" class="game-head"></section>
-
-    <section id="kpis" class="tiles"></section>
-
-    <section id="chart-card" class="card">
-      <div class="card-head">
-        <h2>Настроение игроков</h2>
-        <div class="settings">
-          <label>Сглаживание
-            <select id="smoothing">
-              <option value="auto" selected>авто</option>
-              <option value="off">без сглаживания</option>
-              <option value="7">7 дней</option>
-              <option value="15">15 дней</option>
-              <option value="29">29 дней</option>
-            </select>
-          </label>
-          <label>Чувствительность к переломам
-            <select id="sensitivity">
-              <option value="2.5">низкая</option>
-              <option value="1.5" selected>средняя</option>
-              <option value="1.0">высокая</option>
-              <option value="0.5">максимальная</option>
-            </select>
-          </label>
-        </div>
+  <!-- все игры -->
+  <section id="view-overview" class="view" hidden>
+    <div class="hero">
+      <p class="eyebrow">пульс игр Steam</p>
+      <h1>Как меняется настроение игроков</h1>
+      <p class="lead">Доля положительных отзывов по дням, резкие переломы и то, что случилось рядом с ними: патчи, сезоны, распродажи. Для части игр модель разбирает, о чём именно пишут.</p>
+      <div id="overview-stats" class="hero-stats"></div>
+    </div>
+    <div class="grid-head">
+      <h2>Игры</h2>
+      <div class="seg" role="group" aria-label="Сортировка">
+        <button type="button" data-sort="name" class="active">по имени</button>
+        <button type="button" data-sort="pct">по позитиву</button>
+        <button type="button" data-sort="delta">по изменению</button>
       </div>
-      <p class="card-sub">Доля положительных отзывов по дням. Ромбы - переломы: залитый значит, что по нему есть разбор отзывов ниже. Треугольники - новости игры, квадраты - события всего Steam.</p>
-      <div id="chart" class="chart"></div>
-      <p id="chart-note" class="note"></p>
-    </section>
+    </div>
+    <div id="games" class="games"></div>
+  </section>
 
-    <section class="card">
-      <h2>Переломы</h2>
-      <p id="turns-note" class="card-sub"></p>
-      <div id="turns" class="turns"></div>
-    </section>
+  <!-- страница игры -->
+  <section id="view-game" class="view" hidden>
+    <div class="game-hero">
+      <div class="game-hero-text">
+        <a class="back" href="/" data-nav="overview">← все игры</a>
+        <h1 id="game-title"></h1>
+        <p id="game-meta" class="game-meta"></p>
+        <div id="game-chips" class="chips"></div>
+      </div>
+      <div id="gauge" class="gauge"></div>
+    </div>
 
-    <section id="aspects-section" class="card" hidden>
-      <h2>О чём пишут</h2>
-      <p id="aspects-note" class="card-sub"></p>
-      <div id="aspects" class="aspects"></div>
-      <h3>Критика по месяцам</h3>
-      <p class="card-sub">Доля размеченных отзывов месяца, где тему ругают. Чем краснее клетка, тем больше жалоб.</p>
-      <div id="heat" class="heat-wrap"></div>
-    </section>
+    <div id="digest" class="digest" hidden></div>
+    <div id="kpis" class="tiles"></div>
 
-    <section id="audience-section" class="card" hidden>
-      <h2>Кто пишет</h2>
-      <p class="card-sub">Доля положительных отзывов в разных группах игроков: синим - рекомендуют, красным - нет.</p>
-      <div id="audience" class="audience"></div>
-    </section>
-  </div>
+    <nav id="tabs" class="tabs" aria-label="Разделы">
+      <button type="button" data-tab="overview" class="active">Обзор</button>
+      <button type="button" data-tab="turns">Переломы</button>
+      <button type="button" data-tab="topics">Темы</button>
+      <button type="button" data-tab="audience">Аудитория</button>
+      <button type="button" data-tab="updates">Обновления</button>
+      <button type="button" data-tab="reviews">Отзывы</button>
+    </nav>
 
-  <details id="collect" class="card collect">
-    <summary>Добавить или обновить игру</summary>
-    <form id="collect-form" class="collect-form">
-      <input id="collect-id" type="text" placeholder="ID игры или ссылка на страницу Steam" autocomplete="off">
-      <select id="collect-mode">
-        <option value="incremental" selected>только новое</option>
-        <option value="full">собрать заново</option>
-      </select>
-      <button id="collect-btn" type="submit">Собрать</button>
-    </form>
-    <div id="collect-status" class="collect-status"></div>
-    <p class="note">Сбор берёт отзывы за последние {{ review_days }} дн., но не больше {{ review_pages }} страниц по 100, и занимает несколько минут.</p>
-  </details>
+    <div class="panel" data-panel="overview">
+      <section id="chart-card" class="card">
+        <div class="card-head">
+          <div>
+            <h2>Настроение игроков</h2>
+            <p class="card-sub">Доля положительных отзывов по дням. Ромбы - переломы, треугольники - новости игры, квадраты - события всего Steam.</p>
+          </div>
+          <div class="settings">
+            <label>сглаживание
+              <select id="smoothing">
+                <option value="auto" selected>авто</option>
+                <option value="off">нет</option>
+                <option value="7">7 дней</option>
+                <option value="15">15 дней</option>
+                <option value="29">29 дней</option>
+              </select>
+            </label>
+            <label>чувствительность
+              <select id="sensitivity">
+                <option value="2.5">низкая</option>
+                <option value="1.5" selected>средняя</option>
+                <option value="1.0">высокая</option>
+                <option value="0.5">максимальная</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div id="chart" class="chart"></div>
+        <p id="chart-note" class="note"></p>
+      </section>
+      <div class="split-2">
+        <section class="card">
+          <div class="card-head"><h2>Последние переломы</h2><button type="button" class="link" data-goto="turns">все →</button></div>
+          <div id="turns-latest" class="turns turns-compact"></div>
+        </section>
+        <section class="card">
+          <div class="card-head"><h2>Коротко</h2></div>
+          <div id="highlights" class="highlights"></div>
+        </section>
+      </div>
+    </div>
+
+    <div class="panel" data-panel="turns" hidden>
+      <section class="card">
+        <h2>Переломы</h2>
+        <p id="turns-note" class="card-sub"></p>
+        <div id="turns" class="turns"></div>
+      </section>
+    </div>
+
+    <div class="panel" data-panel="topics" hidden>
+      <section id="topics-empty" class="card empty-card" hidden>
+        <h2>Темы отзывов</h2>
+        <p>Эта игра пока не размечается моделью. Темы, сводки месяца и разбор переломов появятся, когда её включат в LLM-разметку.</p>
+      </section>
+      <div id="topics">
+        <section class="card">
+          <h2>О чём пишут</h2>
+          <p id="aspects-note" class="card-sub"></p>
+          <div id="callouts" class="callouts"></div>
+          <div id="aspects" class="aspects"></div>
+        </section>
+        <section class="card">
+          <h2>Критика по месяцам</h2>
+          <p class="card-sub">Доля размеченных отзывов месяца, где тему ругают. Чем ярче клетка, тем больше жалоб. Наведите на клетку - там точные числа.</p>
+          <div id="heat" class="heat-wrap"></div>
+        </section>
+        <section id="digests-card" class="card">
+          <h2>Сводки по месяцам</h2>
+          <p class="card-sub">Пишет модель по числам разметки - без текстов отзывов. Каждое число в сводке проверено кодом по данным.</p>
+          <div id="digests" class="digests"></div>
+        </section>
+      </div>
+    </div>
+
+    <div class="panel" data-panel="audience" hidden>
+      <section class="card">
+        <h2>Кто пишет</h2>
+        <p class="card-sub">Доля положительных отзывов в разных группах игроков.</p>
+        <div id="audience" class="audience"></div>
+      </section>
+    </div>
+
+    <div class="panel" data-panel="updates" hidden>
+      <section class="card">
+        <h2>Реакция на обновления</h2>
+        <p class="card-sub">Каждая новость игры, кроме маркетинга и блогов: доля позитива и число отзывов за неделю до и неделю после. Совпадение по времени - не доказательство причины. Щелчок по строке - отзывы недели после.</p>
+        <div id="updates" class="table-wrap"></div>
+      </section>
+    </div>
+
+    <div class="panel" data-panel="reviews" hidden>
+      <section class="card">
+        <h2>Отзывы</h2>
+        <form id="review-filters" class="filters">
+          <label>с <input type="date" name="since"></label>
+          <label>по <input type="date" name="until"></label>
+          <label>оценка
+            <select name="vote">
+              <option value="">любая</option>
+              <option value="up">рекомендуют</option>
+              <option value="down">не рекомендуют</option>
+            </select>
+          </label>
+          <label>язык <select name="lang"><option value="">любой</option></select></label>
+          <label>порядок
+            <select name="sort">
+              <option value="helpful">полезные</option>
+              <option value="recent">свежие</option>
+            </select>
+          </label>
+        </form>
+        <div id="reviews" class="reviews"></div>
+        <button id="reviews-more" type="button" class="ghost" hidden>Показать ещё</button>
+      </section>
+    </div>
+  </section>
 </main>
 
-<footer class="legal">Данные получены через публичный Steam Web API. Steam и логотип Steam - товарные знаки Valve Corporation. Проект к Valve отношения не имеет.</footer>
+<footer class="footer">
+  <span>Данные - публичный Steam Web API. Steam - товарный знак Valve Corporation, проект к Valve отношения не имеет.</span>
+</footer>
+
+<!-- быстрый выбор игры -->
+<dialog id="switcher" class="modal switcher">
+  <input id="switcher-input" type="search" placeholder="Название игры…" autocomplete="off" aria-label="Название игры">
+  <ul id="switcher-list" class="switcher-list" role="listbox"></ul>
+</dialog>
+
+<!-- вход -->
+<dialog id="login" class="modal">
+  <form id="login-form" class="modal-form">
+    <h2>Вход</h2>
+    <p class="card-sub">Учётки выдаёт владелец стенда. После входа можно добавлять и обновлять игры.</p>
+    <input name="login" autocomplete="username" placeholder="логин" required>
+    <input name="password" type="password" autocomplete="current-password" placeholder="пароль" required>
+    <p id="login-error" class="form-error"></p>
+    <div class="modal-actions">
+      <button type="button" class="ghost" data-close>Отмена</button>
+      <button type="submit" class="primary">Войти</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- сбор игры -->
+<dialog id="collect" class="modal">
+  <form id="collect-form" class="modal-form">
+    <h2>Добавить или обновить игру</h2>
+    <input id="collect-id" placeholder="ID игры или ссылка на страницу Steam" autocomplete="off" required>
+    <select id="collect-mode">
+      <option value="incremental" selected>только новое</option>
+      <option value="full">собрать заново</option>
+    </select>
+    <p class="card-sub">Отзывы за последние {{ review_days }} дн., но не больше {{ review_pages }} страниц по 100. Сбор занимает несколько минут, страницу можно закрыть.</p>
+    <div id="collect-status" class="collect-status"></div>
+    <div class="modal-actions">
+      <button type="button" class="ghost" data-close>Закрыть</button>
+      <button id="collect-btn" type="submit" class="primary">Собрать</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- тема отзывов: по месяцам и цитаты -->
+<dialog id="aspect" class="modal modal-wide">
+  <div id="aspect-body"></div>
+  <div class="modal-actions"><button type="button" class="ghost" data-close>Закрыть</button></div>
+</dialog>
 
 <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

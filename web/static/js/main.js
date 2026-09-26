@@ -1,67 +1,126 @@
+import { initAccount } from './account.js';
 import { fetchGame, fetchGames } from './api.js';
-import { renderChart, zoomTo } from './chart.js';
-import { initCollect } from './collect.js';
-import { focusTurn, renderAspects, renderAudience, renderHeader, renderKpis, renderTurns } from './sections.js';
+import { zoomTo } from './chart.js';
+import { renderGame } from './game.js';
+import { renderOverview } from './overview.js';
+import { initReviews, loadReviews, resetReviews, showReviews } from './reviews.js';
+import { initSwitcher, setGames } from './switcher.js';
+import { $ } from './util.js';
 
-const $ = id => document.getElementById(id);
+// одна страница, два вида: все игры (/) и игра (/?app=ID&tab=...). Адрес - единственный источник состояния, им можно поделиться
+const TABS = ['overview', 'turns', 'topics', 'audience', 'updates', 'reviews'];
+let loadedApp = null;
+let reviewsLoaded = false;
 
-// выбранная игра живёт в адресе (?app=), чтобы ссылкой на страницу можно было поделиться
-function setAppInUrl(appId) {
-  const url = new URL(location.href);
-  url.searchParams.set('app', appId);
-  history.replaceState(null, '', url);
+function url(params) {
+  const u = new URL(location.href);
+  u.search = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+  return u;
 }
 
-function showOnChart(day) {
-  zoomTo(day);
-  $('chart').scrollIntoView({ behavior: 'smooth', block: 'center' });
+function showError(err) {
+  $('error').textContent = err ? `Не удалось загрузить: ${err.message}` : '';
+  $('error').hidden = !err;
 }
 
-async function load() {
-  const appId = $('game').value;
-  if (!appId) return;
-  setAppInUrl(appId);
+function show(view) {
+  $('view-overview').hidden = view !== 'overview';
+  $('view-game').hidden = view !== 'game';
+}
 
-  const main = $('content');
-  main.classList.add('loading');
-  $('error').hidden = true;
-  try {
-    const data = await fetchGame(appId, { smoothing: $('smoothing').value, sensitivity: $('sensitivity').value });
-    main.hidden = false;
-    renderHeader(data.game);
-    renderKpis(data);
-    // у только что заведённой игры отзывов ещё нет: пустой график ничего не говорит, остаётся заметка в переломах
-    $('chart-card').hidden = !data.daily.length;
-    if (data.daily.length) {
-      renderChart(data, { onPointClick: focusTurn });
-      $('chart-note').textContent = `Сглаживание - окно ${data.window} дн. Серая линия - обычный для игры уровень, ` +
-        'медиана за 90 дней. Колесо мыши - приблизить, перетаскивание - сдвинуть, двойной щелчок - вернуть весь период.';
-    }
-    renderTurns(data, showOnChart);
-    renderAspects(data.aspects);
-    renderAudience(data.segments);
-  } catch (err) {
-    main.hidden = true;
-    $('error').textContent = `Не удалось загрузить игру: ${err.message}`;
-    $('error').hidden = false;
-  } finally {
-    main.classList.remove('loading');
+// --- вкладки ---
+
+function selectTab(tab, { push = false } = {}) {
+  if (!TABS.includes(tab)) tab = 'overview';
+  document.querySelectorAll('#tabs [data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.panel').forEach(p => { p.hidden = p.dataset.panel !== tab; });
+  const params = { app: loadedApp, tab: tab === 'overview' ? null : tab };
+  history[push ? 'pushState' : 'replaceState'](null, '', url(params));
+  // график рисовался, пока его вкладка могла быть скрыта: ширину он узнаёт только теперь
+  if (tab === 'overview' && window.Plotly && $('chart').data) Plotly.Plots.resize('chart');
+  if (tab === 'reviews' && !reviewsLoaded) {
+    reviewsLoaded = true;
+    loadReviews();
   }
 }
 
-async function reloadGames(appId) {
-  const games = await fetchGames();
-  const select = $('game');
-  const current = appId || select.value;
-  select.replaceChildren(...games.map(g =>
-    new Option(g.game_name + (g.collection_status === 'partial' ? ' (неполные данные)' : ''), g.app_id)));
-  select.value = String(current);
-  load();
+// --- виды ---
+
+async function openOverview({ push = false } = {}) {
+  loadedApp = null;
+  $('switcher-label').textContent = 'Найти игру';
+  document.title = 'Steam Health - пульс игр Steam';
+  if (push) history.pushState(null, '', url({}));
+  show('overview');
+  window.scrollTo({ top: 0 });
+  try {
+    const games = await fetchGames();
+    setGames(games);
+    renderOverview(games, appId => openGame(appId, { push: true }));
+    showError(null);
+  } catch (err) {
+    showError(err);
+  }
 }
 
-['game', 'smoothing', 'sensitivity'].forEach(id => $(id).addEventListener('change', load));
-initCollect(reloadGames);
+async function openGame(appId, { push = false, tab = 'overview' } = {}) {
+  const view = $('view-game');
+  view.classList.add('loading');
+  showError(null);
+  try {
+    const data = await fetchGame(appId, { smoothing: $('smoothing').value, sensitivity: $('sensitivity').value });
+    const firstVisit = loadedApp !== data.game.app_id;
+    loadedApp = data.game.app_id;
+    if (push) history.pushState(null, '', url({ app: loadedApp }));
+    show('game');
+    if (firstVisit) {
+      window.scrollTo({ top: 0 });
+      resetReviews(data.game, (data.segments.language || []).map(s => s.segment), data.daily.at(-1)?.day);
+      reviewsLoaded = false;
+    }
+    $('switcher-label').textContent = data.game.game_name;
+    document.title = `${data.game.game_name} - Steam Health`;
+    // вкладку выбираем до отрисовки, чтобы график считал ширину по видимой панели
+    selectTab(firstVisit ? tab : document.querySelector('#tabs .active')?.dataset.tab);
+    renderGame(data, {
+      selectTab: t => selectTab(t),
+      showOnChart: day => { selectTab('overview'); zoomTo(day); $('chart').scrollIntoView({ behavior: 'smooth', block: 'center' }); },
+      openReviews: filter => { selectTab('reviews'); reviewsLoaded = true; showReviews(filter); $('tabs').scrollIntoView({ behavior: 'smooth' }); }
+    });
+  } catch (err) {
+    show(null);
+    showError(err);
+  } finally {
+    view.classList.remove('loading');
+  }
+}
 
-const fromUrl = new URLSearchParams(location.search).get('app');
-if (fromUrl && [...$('game').options].some(o => o.value === fromUrl)) $('game').value = fromUrl;
-load();
+function route() {
+  const params = new URLSearchParams(location.search);
+  const app = Number(params.get('app'));
+  if (app) openGame(app, { tab: params.get('tab') || 'overview' });
+  else openOverview();
+}
+
+// --- связки ---
+
+document.querySelectorAll('[data-nav="overview"]').forEach(a => a.addEventListener('click', e => {
+  e.preventDefault();
+  openOverview({ push: true });
+}));
+document.querySelectorAll('#tabs [data-tab]').forEach(b => b.addEventListener('click', () => selectTab(b.dataset.tab)));
+document.querySelectorAll('[data-goto]').forEach(b => b.addEventListener('click', () => selectTab(b.dataset.goto)));
+['smoothing', 'sensitivity'].forEach(id => $(id).addEventListener('change', () => openGame(loadedApp)));
+window.addEventListener('popstate', route);
+
+initSwitcher(appId => openGame(appId, { push: true }));
+initReviews();
+initAccount(appId => {
+  // после сбора список игр изменился; собранную игру открываем, чужую - только обновляем список
+  fetchGames().then(setGames);
+  if (appId) openGame(appId, { push: true });
+  else if (!loadedApp) openOverview();
+});
+// список игр нужен поиску и на странице игры, куда можно прийти сразу по ссылке
+fetchGames().then(setGames).catch(() => {});
+route();

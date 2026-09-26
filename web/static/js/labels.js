@@ -1,15 +1,15 @@
 // Подписи и цвета: всё, что переводит коды из базы в то, что видит читатель.
 
-// типы событий игры. Цвета - категориальная палитра, проверенная на тёмном фоне (контраст, различимость при дальтонизме);
-// синий и красный в неё не входят - они заняты ростом и спадом. Маркетинг, блоги и служебное - фон, одним серым
-const BACKGROUND = '#8b929b';
+// типы событий игры. Категориальная палитра проверена на тёмном фоне: яркость, контраст, различимость при дальтонизме.
+// Зелёный и красный в неё не входят - они заняты ростом и спадом. Маркетинг, блоги и служебное - фон, одним серым
+const BACKGROUND = '#7f7893';
 export const EVENT_TYPES = {
-  patch:        { color: '#d95926', label: 'патчи' },
-  season_start: { color: '#199e70', label: 'сезоны' },
-  expansion:    { color: '#c98500', label: 'дополнения' },
-  press:        { color: '#d55181', label: 'пресса' },
-  announce:     { color: '#9085e9', label: 'анонсы' },
-  beta:         { color: '#008300', label: 'бета' },
+  patch:        { color: '#9d52f0', label: 'патчи' },
+  season_start: { color: '#1a9ac4', label: 'сезоны' },
+  expansion:    { color: '#b87a14', label: 'дополнения' },
+  press:        { color: '#d64fbd', label: 'пресса' },
+  beta:         { color: '#979420', label: 'бета' },
+  announce:     { color: '#6572f0', label: 'анонсы' },
   marketing:    { color: BACKGROUND, label: 'маркетинг' },
   blog:         { color: BACKGROUND, label: 'блоги' },
   service:      { color: BACKGROUND, label: 'служебное' },
@@ -26,9 +26,11 @@ export function eventType(type) {
   return EVENT_TYPES[type] || { color: BACKGROUND, label: type };
 }
 
-// рост и спад доли позитива, похвала и критика в темах - одна полярность, одна пара цветов на всей странице
-export const UP = '#3987e5';
-export const DOWN = '#e66767';
+// рост и спад, похвала и критика - одна полярность на всей странице. Яркость выше рекомендованной для категорий сознательно:
+// это акцент бренда, а не набор из многих цветов; рядом всегда стоят стрелки или сторона полосы, цвет один смысл не несёт
+export const UP = '#8dff4f';
+export const DOWN = '#ff5a6e';
+export const ARCANE = '#b86bff';
 
 export const CATEGORIES = {
   monetization_and_value: 'Цена и монетизация',
