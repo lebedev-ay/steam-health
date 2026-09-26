@@ -122,6 +122,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* выводы по переломам: карточки под таблицей переломов, в тех же цветах, что таблица и панели */
 .verdicts { margin-top: 20px; font-size: 14px; }
 .verdicts[hidden] { display: none; }
+.verdicts-caption { color: #8a95a3; font-size: 12px; margin: 0 0 6px; }
 .verdicts-title { font-size: 15px; font-weight: 600; color: #c7d0d9; margin: 0 0 4px; }
 .verdicts-note { color: #778391; font-size: 12px; margin: 0 0 10px; }
 .verdict {

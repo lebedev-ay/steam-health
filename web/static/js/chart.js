@@ -1,4 +1,4 @@
-import { shiftDay, esc, sameRange, dayInRange, plural, wrapText } from './util.js';
+import { shiftDay, esc, sameRange, dayInRange, plural, wrapText, firstWords } from './util.js';
 import { TYPES, PLATFORM_TYPES, BACKGROUND_COLOR, platformEventLabel,
          densityFilter, densityThreshold, eventFilterLabel } from './events.js';
 import { renderChangePointList } from './cplist.js';
@@ -327,7 +327,7 @@ export function renderChart(range) {
 
   // один ромб на перелом: разрешение внутри суток данными не подкреплено, зерно дневное. 
   // Цвет - по событию с наибольшим весом, остальные типы перечисляются в тултипе цветными строками
-  const cpX = [], cpY = [], cpColor = [], cpSize = [], cpLine = [], cpText = [];
+  const cpX = [], cpY = [], cpColor = [], cpSize = [], cpLine = [], cpText = [], cpSymbol = [];
   cpMarkerIndices = [];
 
   cps.forEach(c => {
@@ -373,39 +373,20 @@ export function renderChart(range) {
       body += minorLine;
     }
 
+    // ромб с выводом залит, без вывода - контур: так видно, по каким переломам есть текст под графиком, без отдельного слоя точек
+    const verdict = verdictsByDay.get(c.day);
+    const verdictLine = !verdict ? ''
+      : '<br><b>вывод:</b> ' + (verdict.checked
+          ? wrapText(firstWords(verdict.what_happened, 14), 70)
+          : `доля «не рекомендую» ${verdict.negative_before}% до, ${verdict.negative_after}% после`) +
+        '<br><i>клик - к выводу под графиком</i>';
+
     cpX.push(c.day); cpY.push(baseY);
     cpColor.push(dirColor); cpSize.push(size); cpLine.push('#14161a');
+    cpSymbol.push(verdict ? 'diamond' : 'diamond-open');
     myIndices.push(cpX.length - 1);
-    cpText.push(`<b>${dir} ${Math.abs(c.score)} п.п.</b><br>${body}${platformLine}`);
+    cpText.push(`<b>${dir} ${Math.abs(c.score)} п.п.</b><br>${body}${platformLine}${verdictLine}`);
   });
-
-  // отметка вывода - отдельный слой над ромбом: сам ромб, его тултип и подсветка из таблицы остаются прежними.
-  // Группа та же, что у переломов, поэтому клик по «Переломы» в легенде прячет и отметки
-  const vX = [], vY = [], vText = [];
-  cps.forEach(c => {
-    const v = verdictsByDay.get(c.day);
-    const baseY = values[cpIndex[c.day]];
-    if (!v || baseY === undefined || baseY === null) return;
-    vX.push(c.day);
-    vY.push(baseY + span * 0.05);
-    const body = v.checked
-      ? wrapText(v.what_happened, 70)
-      : `доля «не рекомендую»: ${v.negative_before}% до, ${v.negative_after}% после`;
-    vText.push(`<b>вывод${v.preliminary ? ', предварительный' : ''}</b><br>${body}` +
-               '<br><i>клик - к выводу под графиком</i>');
-  });
-  const verdictMarks = {
-    x: vX, y: vY,
-    mode: 'markers',
-    name: 'Выводы',
-    legendgroup: 'cp',
-    visible: groupVisible('cp') ? true : 'legendonly',
-    showlegend: false,
-    marker: { size: 7, symbol: 'circle', color: '#4aa3e0', line: { color: '#14161a', width: 1.5 } },
-    text: vText,
-    hoverlabel: { ...MARKER_HOVER },
-    hovertemplate: '%{x|%d.%m.%Y}<br>%{text}<extra></extra>'
-  };
 
   const cpLineWidth = cpX.map(() => 2.5);
   cpBaseMarker = { size: cpSize.slice(), lineWidth: cpLineWidth.slice() };
@@ -434,7 +415,7 @@ export function renderChart(range) {
     showlegend: false,
     marker: {
       size: cpSize,
-      symbol: 'diamond',
+      symbol: cpSymbol,
       color: cpColor,
       line: { color: cpLine, width: cpLineWidth }
     },
@@ -475,8 +456,7 @@ export function renderChart(range) {
     ...eventTraces,
     ...(showPlatform ? [platformMarkerTrace] : []),
     changePointsLegend,
-    changePoints,
-    ...(vX.length ? [verdictMarks] : [])
+    changePoints
   ], {
     shapes: shapes,
     height: 640,
@@ -531,7 +511,9 @@ export function renderChart(range) {
     verdictClickBound = true;
     document.getElementById('sentiment').on('plotly_click', ev => {
       const pt = ev.points && ev.points[0];
-      if (pt && pt.data.name === 'Выводы') focusVerdict(String(pt.x).slice(0, 10));
+      if (!pt || pt.data.name !== 'Переломы') return;
+      const day = String(pt.x).slice(0, 10);
+      if (verdictsByDay.has(day)) focusVerdict(day);
     });
   }
 

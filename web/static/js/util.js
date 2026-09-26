@@ -55,3 +55,8 @@ export function wrapText(s, width) {
   if (line) lines.push(line);
   return lines.map(esc).join('<br>');
 }
+
+export function firstWords(s, n) {
+  const words = String(s).split(/\s+/);
+  return words.length > n ? words.slice(0, n).join(' ') + '…' : String(s);
+}
