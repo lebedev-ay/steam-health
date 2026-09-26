@@ -132,8 +132,9 @@ def game_page(app_id, smoothing, sensitivity):
         from marts.change_point_verdict_current where app_id = %s
     """, (app_id,))}
 
-    out["events"] = [{"day": e["day"], "type": e["event_type"], "title": e["title"], "weight": e["weight"]}
-                     for e in events if e["shown"]]
+    # все события: сколько из них поместится на график, решает браузер по ширине и приближению
+    out["events"] = [{"day": e["day"], "type": e["event_type"], "title": e["title"], "weight": e["weight"],
+                      "significant": e["significant"], "responsive": e["responsive"]} for e in events]
     out["platform_events"] = [{"day": e["event_date"], "type": e["event_type"], "title": e["title"]}
                               for e in platform_events]
     # реакция на каждую новость игры, кроме фона (маркетинг, блоги, служебное): таблица для тех, кто хочет сравнить патчи между собой

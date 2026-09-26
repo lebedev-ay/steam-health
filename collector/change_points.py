@@ -170,7 +170,8 @@ def build_series(app_id, smoothing):
 def build_events(app_id, raw_daily):
     """События игры и платформы в границах ряда отзывов: событию вне его нечего объяснять.
 
-    У события игры флаг shown - место на графике: значимое по правилу is_significant_event или с откликом в данных рядом.
+    У события игры флаги significant (правило is_significant_event), responsive (рядом данные повели себя необычно)
+    и shown - одно из двух: такое событие стоит показать даже на общем виде.
     Совпадение по времени причиной не является: всплеск объёма бывает от чего угодно. Это правило показа, а не утверждение о влиянии.
     Детектору и выводам нужны все события, включая фоновые: скрытый на графике слабый патч тоже может оказаться рядом с переломом.
     """
@@ -192,7 +193,9 @@ def build_events(app_id, raw_daily):
     totals = [r["total"] for r in raw_daily]
     positives = [r["positive"] for r in raw_daily]
     for e in events:
-        e["shown"] = is_significant_event(e) or has_response(day_index, totals, positives, e["day"])
+        e["significant"] = is_significant_event(e)
+        e["responsive"] = has_response(day_index, totals, positives, e["day"])
+        e["shown"] = e["significant"] or e["responsive"]
 
     # общие для всех игр, не зависят от app_id. Дата приблизительная (по публикации заметки)
     platform_events = query("""

@@ -4,34 +4,101 @@ import { esc, shiftDay, truncate } from './util.js';
 // цвета совпадают с токенами style.css: Plotly не читает CSS-переменные
 const INK = '#e6e2d9', MUTED = '#736e7d', GRID = 'rgba(255,255,255,0.05)', SURFACE = '#141319';
 const FONT = 'Onest, system-ui, sans-serif';
+const MONO = 'JetBrains Mono, monospace';
 
-// две панели с общей осью дат: сверху доля позитива, снизу объём. Одна шкала на панель - на общей объём и доля
-// выглядели бы связанными, хотя их совмещение произвольно
-const TOP = [0.3, 1], BOTTOM = [0, 0.2];
+// три полосы с общей осью дат: сверху дорожка событий, посередине доля позитива, снизу объём.
+// Одна шкала на полосу - на общей объём и доля выглядели бы связанными, хотя их совмещение произвольно
+const LANE = [0.88, 1], MAIN = [0.27, 0.84], VOLUME = [0, 0.18];
 
-// маркеры событий - на скрытой оси 0..1 поверх верхней панели: так они всегда у верхнего края, как бы ни шла кривая
-const EVENTS_Y = 0.97, PLATFORM_Y = 0.03;
+// плотность событий: засечка на каждые TICK_PX пикселей ширины и не ближе GAP_PX к более важной соседке,
+// подпись - не чаще LABEL_PX, не больше LABELS и не у самого правого края, где она обрезалась бы
+const TICK_PX = 30, GAP_PX = 7, LABEL_PX = 190, LABELS = 6, LABEL_EDGE_PX = 150;
 
-export function renderChart(data, { onPointClick, animate = false }) {
+// важность события для отбора: сезон и дополнение редки и заметны сами по себе, у патча - вес (длина патчноута к медиане),
+// маркетинг и блоги - фон. Отклик в данных рядом поднимает любое событие: оно могло что-то сдвинуть
+const TYPE_BASE = { season_start: 9, expansion: 9, patch: 2, beta: 1.5, press: 1.2, announce: 1,
+                    marketing: 0.3, blog: 0.3, service: 0.2, unknown: 0.5 };
+const importance = e => (TYPE_BASE[e.type] ?? 0.5) * (1 + Math.min(e.weight ?? 1, 10)) + (e.responsive ? 8 : 0);
+
+let data = null;
+let lastSignature = '';
+
+export function renderChart(gameData, { onPointClick, animate = false }) {
+  data = gameData;
+  lastSignature = '';
+  draw(null);
+  const chart = document.getElementById('chart');
+  if (animate) drawIn(chart);
+
+  chart.removeAllListeners?.('plotly_click');
+  chart.removeAllListeners?.('plotly_relayout');
+  chart.on('plotly_click', ev => {
+    const pt = ev.points?.find(p => p.data.name === 'переломы');
+    if (pt) onPointClick(String(pt.x).slice(0, 10));
+  });
+  // зум и сдвиг меняют видимый период - набор событий на дорожке пересчитывается под него
+  let timer = null;
+  chart.on('plotly_relayout', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => draw(chart.layout.xaxis.autorange ? null : chart.layout.xaxis.range), 150);
+  });
+}
+
+// какие события видны: не больше бюджета по ширине, самые важные первыми; подписи - у самых важных, не внахлёст
+function pickEvents(lo, hi, width) {
+  const days = Math.max((Date.parse(hi) - Date.parse(lo)) / 864e5, 1);
+  const inRange = data.events.filter(e => e.day >= lo && e.day <= hi);
+  const budget = Math.max(Math.floor(width / TICK_PX), 8);
+  const px = e => (Date.parse(e.day) - Date.parse(lo)) / 864e5 * width / days;
+
+  // жадно по важности: засечка, вплотную к уже взятой более важной, сливалась бы с ней в одну
+  const ticks = [];
+  for (const e of [...inRange].sort((a, b) => importance(b) - importance(a))) {
+    if (ticks.length >= budget) break;
+    if (ticks.every(t => Math.abs(px(t) - px(e)) >= GAP_PX)) ticks.push(e);
+  }
+
+  const labels = [];
+  for (const e of ticks) {
+    if (labels.length >= LABELS) break;
+    if (importance(e) < 6 || px(e) > width - LABEL_EDGE_PX) continue;
+    if (labels.every(l => Math.abs(px(l) - px(e)) >= LABEL_PX)) labels.push(e);
+  }
+  return { ticks, labels };
+}
+
+function draw(range) {
+  const chart = document.getElementById('chart');
+  const width = Math.max(chart.clientWidth - 60, 300);
+  const [lo, hi] = range ? range.map(v => String(v).slice(0, 10)) : [data.daily[0].day, data.daily.at(-1).day];
+  const { ticks, labels } = pickEvents(lo, hi, width);
+  const signature = ticks.map(e => e.day + e.title).join('|') + '#' + labels.map(e => e.day).join('|');
+  if (signature === lastSignature) return;
+  lastSignature = signature;
+
   const days = data.daily.map(d => d.day);
   const pct = data.daily.map(d => d.pct);
   const pctByDay = new Map(data.daily.map(d => [d.day, d.pct]));
 
+  // дорожка событий: засечки по типам, высота - важность. Отдельная трасса на тип даёт легенду с переключением
   const byType = {};
-  data.events.forEach(e => (byType[e.type] = byType[e.type] || []).push(e));
+  ticks.forEach(e => (byType[e.type] = byType[e.type] || []).push(e));
   const eventTraces = Object.entries(byType).map(([type, items]) => ({
-    x: items.map(e => e.day), y: items.map(() => EVENTS_Y), yaxis: 'y3',
-    type: 'scatter', mode: 'markers', name: eventType(type).label,
-    marker: { symbol: 'triangle-down', size: 10, color: eventType(type).color, line: { color: SURFACE, width: 2 } },
-    text: items.map(e => esc(truncate(e.title, 70)) + (e.weight ? ` · вес ${e.weight}` : '')),
+    x: items.map(e => e.day), y: items.map(() => 0.42), yaxis: 'y3',
+    type: 'scatter', mode: 'markers', name: eventType(type).label, legendgroup: type,
+    marker: {
+      symbol: 'line-ns', size: items.map(e => 10 + Math.min(importance(e), 24) * 0.75),
+      line: { color: eventType(type).color, width: 2.2 }
+    },
+    text: items.map(e => esc(truncate(e.title, 80)) + (e.weight ? ` · вес ${e.weight}` : '') + (e.responsive ? ' · рядом отклик в отзывах' : '')),
     hovertemplate: '%{text}<extra>' + eventType(type).label + '</extra>'
   }));
 
-  const platform = data.platform_events;
+  const platform = data.platform_events.filter(e => e.day >= lo && e.day <= hi);
   const platformTrace = {
-    x: platform.map(e => e.day), y: platform.map(() => PLATFORM_Y), yaxis: 'y3',
+    x: platform.map(e => e.day), y: platform.map(() => 0.42), yaxis: 'y3',
     type: 'scatter', mode: 'markers', name: 'события Steam',
-    marker: { symbol: 'square', size: 9, color: MUTED, line: { color: SURFACE, width: 2 } },
+    marker: { symbol: 'line-ns', size: 12, line: { color: 'rgba(236,230,214,0.35)', width: 1.5 } },
     text: platform.map(e => `${PLATFORM_TYPES[e.type] || 'Steam'}: ${esc(truncate(e.title, 60))}`),
     hovertemplate: '%{text}<extra></extra>'
   };
@@ -41,20 +108,18 @@ export function renderChart(data, { onPointClick, animate = false }) {
   const cpTrace = {
     x: cps.map(c => c.day), y: cps.map(c => pctByDay.get(c.day)),
     type: 'scatter', mode: 'markers', name: 'переломы', showlegend: false,
-    // залитый ромб - по перелому есть проверенный разбор отзывов, контур - нет
+    // залитый ромб - по перелому есть проверенный разбор отзывов, контур - нет; кольцо цвета фона отделяет ромб от линии
     marker: {
       symbol: cps.map(c => c.verdict?.checked ? 'diamond' : 'diamond-open'),
-      // у залитого ромба - кольцо цвета фона, чтобы зелёный ромб не сливался с зелёной линией
-      size: 14, color: cps.map(colorOf), line: { color: cps.map(c => c.verdict?.checked ? SURFACE : colorOf(c)), width: 2.5 }
+      size: 13, color: cps.map(colorOf), line: { color: cps.map(c => c.verdict?.checked ? SURFACE : colorOf(c)), width: 2 }
     },
     text: cps.map(c => `${c.score < 0 ? '▼' : '▲'} ${Math.abs(c.score)} п.п.` +
       (c.positive_before != null ? ` · за неделю ${c.positive_before}% → ${c.positive_after}%` : '')),
     hovertemplate: '%{text}<extra>перелом</extra>'
   };
-  // цвет ромба - направление; в легенде нужен нейтральный свотч, а не цвет первого попавшегося перелома
   const cpLegend = {
     x: [null], y: [null], type: 'scatter', mode: 'markers', name: 'переломы', hoverinfo: 'skip',
-    marker: { symbol: 'diamond', size: 12, color: INK }
+    marker: { symbol: 'diamond', size: 11, color: INK }
   };
 
   const traces = [
@@ -74,34 +139,46 @@ export function renderChart(data, { onPointClick, animate = false }) {
     ...(platform.length ? [platformTrace] : []),
     {
       x: days, y: data.daily.map(d => d.total), type: 'bar', yaxis: 'y2', name: 'отзывов в день', showlegend: false,
-      marker: { color: 'rgba(236,230,214,0.22)' }, hovertemplate: '%{y}<extra>отзывов</extra>'
+      marker: { color: 'rgba(236,230,214,0.2)' }, hovertemplate: '%{y}<extra>отзывов</extra>'
     }
   ];
 
-  // полоса ±3 дня у события платформы: дата у них приблизительная, по публикации заметки
-  const shapes = platform.map(e => ({
-    type: 'rect', xref: 'x', yref: 'paper', x0: shiftDay(e.day, -3), x1: shiftDay(e.day, 4), y0: TOP[0], y1: TOP[1],
-    fillcolor: '#ffffff', opacity: 0.025, line: { width: 0 }, layer: 'below'
+  // у подписанных событий - тонкая направляющая через основную полосу: видно, куда пришлось событие на кривой
+  const guides = labels.map(e => ({
+    type: 'line', xref: 'x', yref: 'paper', x0: e.day, x1: e.day, y0: MAIN[0], y1: LANE[0] + 0.03,
+    line: { color: eventType(e.type).color, width: 1 }, opacity: 0.35, layer: 'below'
+  }));
+  // события платформы - бледная полоса ±3 дня: дата у них приблизительная, по публикации заметки
+  const bands = platform.map(e => ({
+    type: 'rect', xref: 'x', yref: 'paper', x0: shiftDay(e.day, -3), x1: shiftDay(e.day, 4), y0: MAIN[0], y1: MAIN[1],
+    fillcolor: '#ffffff', opacity: 0.022, line: { width: 0 }, layer: 'below'
+  }));
+  const laneLine = { type: 'line', xref: 'paper', yref: 'paper', x0: 0, x1: 1, y0: LANE[0] + 0.012, y1: LANE[0] + 0.012,
+                     line: { color: 'rgba(255,255,255,0.08)', width: 1 } };
+  const annotations = labels.map(e => ({
+    x: e.day, xref: 'x', y: LANE[1], yref: 'paper', yanchor: 'top', xanchor: 'left', xshift: 5, showarrow: false,
+    text: esc(truncate(e.title, 26)), font: { size: 10, color: INK, family: FONT }, opacity: 0.75
   }));
 
-  const axis = { gridcolor: GRID, zeroline: false, color: MUTED, fixedrange: true, tickfont: { family: 'JetBrains Mono, monospace', size: 11 } };
-  const chart = document.getElementById('chart');
+  const axis = { gridcolor: GRID, zeroline: false, color: MUTED, fixedrange: true, tickfont: { family: MONO, size: 11 } };
   Plotly.react(chart, traces, {
-    height: 500,
-    margin: { t: 10, r: 12, b: 30, l: 46 },
+    height: 520,
+    // зум сохраняется между перерисовками дорожки событий: react с тем же uirevision не сбрасывает ось
+    uirevision: data.game.app_id,
+    margin: { t: 34, r: 12, b: 30, l: 46 },
     paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
     font: { color: INK, family: FONT, size: 12 },
     legend: { orientation: 'h', y: -0.1, font: { color: MUTED } },
     hovermode: 'x unified',
     hoverlabel: { bgcolor: '#1a1920', bordercolor: 'rgba(255,255,255,0.14)', font: { color: INK, family: FONT } },
     dragmode: 'pan',
-    shapes,
+    shapes: [laneLine, ...bands, ...guides],
+    annotations,
     xaxis: {
-      anchor: 'y2', gridcolor: GRID, color: MUTED, hoverformat: '%d.%m.%Y', type: 'date',
-      tickfont: { family: 'JetBrains Mono, monospace', size: 11 },
+      anchor: 'y2', gridcolor: GRID, color: MUTED, hoverformat: '%d.%m.%Y', type: 'date', tickfont: { family: MONO, size: 11 },
       spikecolor: 'rgba(236,230,214,0.35)', spikethickness: 1, spikedash: 'solid',
       rangeselector: {
-        x: 0, y: 1.0, yanchor: 'bottom', bgcolor: '#1a1920', activecolor: '#2c2b35', bordercolor: 'rgba(255,255,255,0.1)',
+        x: 0, y: 1.02, yanchor: 'bottom', bgcolor: '#1a1920', activecolor: '#2c2b35', bordercolor: 'rgba(255,255,255,0.1)',
         borderwidth: 1, font: { color: INK, size: 11 },
         buttons: [
           { count: 3, label: '3 мес', step: 'month', stepmode: 'backward' },
@@ -111,18 +188,10 @@ export function renderChart(data, { onPointClick, animate = false }) {
         ]
       }
     },
-    yaxis: { ...axis, domain: TOP, ticksuffix: '%' },
-    yaxis2: { ...axis, domain: BOTTOM, nticks: 3, title: { text: 'отзывов', font: { size: 11, color: MUTED } } },
-    yaxis3: { domain: TOP, range: [0, 1], visible: false, fixedrange: true, overlaying: 'y' }
+    yaxis: { ...axis, domain: MAIN, ticksuffix: '%' },
+    yaxis2: { ...axis, domain: VOLUME, nticks: 3, title: { text: 'отзывов', font: { size: 11, color: MUTED } } },
+    yaxis3: { domain: LANE, range: [0, 1], visible: false, fixedrange: true }
   }, { responsive: true, displayModeBar: false, scrollZoom: true, doubleClick: 'reset' });
-
-  if (animate) drawIn(chart);
-
-  chart.removeAllListeners?.('plotly_click');
-  chart.on('plotly_click', ev => {
-    const pt = ev.points?.find(p => p.data.name === 'переломы');
-    if (pt) onPointClick(String(pt.x).slice(0, 10));
-  });
 }
 
 // приблизить график ко дню: полтора месяца до и после

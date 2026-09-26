@@ -77,6 +77,35 @@ body::before {
 }
 main, .topbar, .footer { position: relative; z-index: 1; }
 
+/* ---------- фон: сетка монитора и бегущая развёртка по кардиограмме ---------- */
+.bg { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+.bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(236, 230, 214, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(236, 230, 214, 0.028) 1px, transparent 1px);
+  background-size: 44px 44px;
+  /* сетка видна у верха и растворяется к середине экрана - за карточками её нет */
+  mask-image: radial-gradient(120% 60% at 50% 0%, #000 0%, transparent 75%);
+  -webkit-mask-image: radial-gradient(120% 60% at 50% 0%, #000 0%, transparent 75%);
+}
+.bg svg {
+  position: absolute; left: 0; width: 100%; top: 84px; height: 200px; overflow: visible;
+  /* слева заголовки: кардиограмма там гаснет, чтобы не проходить сквозь текст */
+  mask-image: linear-gradient(90deg, transparent 0%, transparent 30%, #000 60%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 30%, #000 60%);
+}
+.bg path { fill: none; stroke-linejoin: round; stroke-linecap: round; }
+.bg-line { stroke: rgba(236, 230, 214, 0.06); stroke-width: 1.2; }
+/* развёртка: хвост и яркая голова одного отрезка; голова опережает хвост на его длину минус себя */
+.bg-trail { stroke: rgba(166, 227, 110, 0.2); stroke-width: 1.6; stroke-dasharray: 0.22 0.78; animation: sweep-trail 9s linear infinite; }
+.bg-head { stroke: rgba(166, 227, 110, 0.55); stroke-width: 1.8; stroke-dasharray: 0.02 0.98; animation: sweep-head 9s linear infinite;
+           filter: drop-shadow(0 0 4px rgba(166, 227, 110, 0.6)); }
+@keyframes sweep-trail { from { stroke-dashoffset: 0.22; } to { stroke-dashoffset: -0.78; } }
+@keyframes sweep-head { from { stroke-dashoffset: 0.02; } to { stroke-dashoffset: -0.98; } }
+
 main { max-width: 1240px; margin: 0 auto; padding: 8px 20px 48px; }
 h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
 h2 { font-size: 17px; }
@@ -478,5 +507,6 @@ blockquote { margin: 8px 0; padding: 2px 12px; border-left: 2px solid var(--line
   .games.list .row { flex-basis: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .bg-trail, .bg-head { display: none; }
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
