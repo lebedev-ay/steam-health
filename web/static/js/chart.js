@@ -1,4 +1,4 @@
-import { shiftDay, esc, sameRange, dayInRange, plural, wrapText, firstSentence, cutWords } from './util.js';
+import { shiftDay, esc, sameRange, dayInRange, plural, wrapText, firstSentence, nthSentence, cutWords } from './util.js';
 import { TYPES, PLATFORM_TYPES, BACKGROUND_COLOR,
          densityFilter, densityThreshold, eventFilterLabel,
          mainEventLabel, NO_EVENT_LABEL } from './events.js';
@@ -192,7 +192,7 @@ function unhighlightChangePoint() {
     [cpTraceIndex()]);
 }
 
-// подсказка ромба - анонс, не больше пяти пунктов: дата, доля «не рекомендую», событие, начало вывода и приглашение к нему.
+// подсказка ромба - анонс, не больше пяти пунктов: дата, доля «не рекомендую», событие, фраза из вывода и приглашение к нему.
 // Направление и величина сдвига есть в таблице переломов и в подсказке не повторяются
 function announce(c, verdict) {
   const lines = [`<b>${new Date(c.day + 'T00:00:00').toLocaleDateString('ru-RU')}</b>`];
@@ -205,7 +205,13 @@ function announce(c, verdict) {
   const event = cutWords(mainEventLabel(c, Infinity), ANNOUNCE_EVENT_CHARS);
   if (event !== NO_EVENT_LABEL) lines.push(event);
 
-  if (verdict && verdict.checked) lines.push(firstSentence(verdict.what_happened, ANNOUNCE_SENTENCE_CHARS));
+  // «о чём пишут игроки» - то, чего нет в цифрах выше; у шаблона этой части нет, и берётся вторая фраза «что случилось», первая повторяет доли
+  if (verdict && verdict.checked) {
+    const phrase = verdict.what_players_say
+      ? firstSentence(verdict.what_players_say, ANNOUNCE_SENTENCE_CHARS)
+      : nthSentence(verdict.what_happened, 1, ANNOUNCE_SENTENCE_CHARS);
+    if (phrase) lines.push(phrase);
+  }
   if (verdict) lines.push('<i>Нажмите - подробнее</i>');
 
   return lines.map((line, i) => i === 0 || line.startsWith('<i>') ? line : wrapText(line, ANNOUNCE_LINE_CHARS)).join('<br>');

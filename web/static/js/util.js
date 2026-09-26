@@ -65,7 +65,12 @@ export function cutWords(s, n) {
   return (space > 0 ? cut.slice(0, space) : cut).replace(/[\s,.;:-]+$/, '') + '…';
 }
 
-// первая фраза текста, не длиннее n символов
+// i-я фраза текста (с нуля), не длиннее n символов; null, если столько фраз нет
+export function nthSentence(s, i, n) {
+  const sentence = String(s).split(/(?<=[.!?])\s+/).filter(Boolean)[i];
+  return sentence ? cutWords(sentence, n) : null;
+}
+
 export function firstSentence(s, n) {
-  return cutWords(String(s).split(/(?<=[.!?])\s+/)[0], n);
+  return nthSentence(s, 0, n) || '';
 }
