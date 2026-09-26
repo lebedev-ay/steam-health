@@ -364,6 +364,17 @@ def generate(prompt, text, ev, vocab, price):
     return problems, what or raw, talk, attempt, spend
 
 
+def review_languages(conn, reviews):
+    """{номер опоры: код языка}. Язык берётся из core.fct_review при выборе отрывков и в улики не входит - хэш от него не зависит."""
+    ids = {r["recommendation_id"]: r["number"] for r in reviews}
+    rows = conn.execute("""
+        select f.recommendation_id, l.language_code
+        from core.fct_review f join core.dim_language l on l.language_sk = f.language_sk
+        where f.recommendation_id = any(%s)
+    """, (list(ids),)).fetchall()
+    return {ids[r["recommendation_id"]]: r["language_code"] for r in rows}
+
+
 def save(conn, ev, h, point, cfg_sk, author, what, talk, problems, attempts, spend, run_id, today):
     reviews = {r["number"]: r for r in ev["reviews"]}
     support = sorted(set(refs(talk or "")) & set(reviews))
@@ -375,7 +386,7 @@ def save(conn, ev, h, point, cfg_sk, author, what, talk, problems, attempts, spe
         values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """, (ev["app_id"], ev["change_date"], ev["before_from"], ev["after_to"], cfg_sk, ev["labeling_config_sk"],
           Jsonb(ev), h, point["shift_pp"], author, what, talk, support,
-          Jsonb(excerpts(support, reviews)), Jsonb(problems), not problems, attempts, status(point["day"], today), run_id,
+          Jsonb(excerpts(support, reviews, review_languages(conn, ev["reviews"]))), Jsonb(problems), not problems, attempts, status(point["day"], today), run_id,
           spend["input"], spend["cached"], spend["output"], spend["reasoning"], spend["cost"]))
     conn.commit()
 
@@ -417,7 +428,7 @@ def main():
             (cfg["codebook_version"],)) for x in r.values()} - {"other", "Other", "overall", "Overall"}, key=len, reverse=True)
         marts = load_marts(conn, args.app_id, cfg["llm_config_sk"], cfg["codebook_version"])
 
-        counts = {"new": 0, "changed": 0, "same": 0, "finalized": 0, "model": 0, "template": 0, "flagged": 0}
+        counts = {"new": 0, "changed": 0, "same": 0, "finalized": 0, "excerpts": 0, "model": 0, "template": 0, "flagged": 0}
         spend_total = {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}
         est_total = 0.0
         started = time.monotonic()
@@ -428,7 +439,8 @@ def main():
             ev = evidence(conn, args.app_id, point, cfg, marts)
             h = evidence_hash(ev)
             existing = conn.execute("""
-                select verdict_sk, evidence_hash, status from core.fct_change_point_verdict
+                select verdict_sk, evidence_hash, status, support_numbers, excerpts, evidence -> 'reviews' as reviews
+                from core.fct_change_point_verdict
                 where app_id = %s and change_date = %s and llm_config_sk = %s order by created_at desc
             """, (args.app_id, point["day"], cfg_sk)).fetchall() if cfg_sk else []
             same = next((r for r in existing if r["evidence_hash"] == h), None)
@@ -440,6 +452,14 @@ def main():
                                  (same["verdict_sk"],))
                     conn.commit()
                     counts["finalized"] += 1
+                # отрывки - представление вывода, а не его улики: при смене правила отбора обновляются без генерации
+                fresh = excerpts(same["support_numbers"], {r["number"]: r for r in same["reviews"]},
+                                 review_languages(conn, same["reviews"]))
+                if fresh != same["excerpts"] and not args.dry_run:
+                    conn.execute("update core.fct_change_point_verdict set excerpts = %s where verdict_sk = %s",
+                                 (Jsonb(fresh), same["verdict_sk"]))
+                    conn.commit()
+                    counts["excerpts"] += 1
                 continue
             counts["changed" if existing else "new"] += 1
             templated = not ev["labels"]["significant"]
@@ -467,7 +487,8 @@ def main():
             print(f"  {point['day']}: {'шаблон' if templated else 'модель'}{', замечания: ' + str(problems) if problems else ''}")
 
     print(f"новых {counts['new']}, изменившихся {counts['changed']}, без изменений {counts['same']}"
-          + (f" (переведено в итоговые {counts['finalized']})" if counts["finalized"] else ""))
+          + (f" (переведено в итоговые {counts['finalized']})" if counts["finalized"] else "")
+          + (f", обновлены отрывки {counts['excerpts']}" if counts["excerpts"] else ""))
     if args.dry_run:
         print(f"оценка: {'цена неизвестна' if est_total is None else f'${est_total:.4f}'}")
         return

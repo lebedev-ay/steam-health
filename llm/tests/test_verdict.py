@@ -63,12 +63,25 @@ class ExcerptTest(unittest.TestCase):
     def test_short_text_kept_and_whitespace_folded(self):
         self.assertEqual(excerpt_text("Дорого.\n\nНе  берите"), "Дорого. Не берите")
 
+    REVIEWS = {1: {"votes_up": 5, "text": "a"}, 2: {"votes_up": 500, "text": "b"}, 3: {"votes_up": 50, "text": "c"},
+               4: {"votes_up": 9, "text": "d"}, 5: {"votes_up": 900, "text": "e"}, 9: {"votes_up": 10_000, "text": "не опора"}}
+
     def test_top_votes_among_support_only(self):
-        reviews = {1: {"votes_up": 5, "text": "a"}, 2: {"votes_up": 500, "text": "b"},
-                   3: {"votes_up": 50, "text": "c"}, 4: {"votes_up": 9, "text": "d"}, 9: {"votes_up": 10_000, "text": "не опора"}}
-        got = excerpts([1, 2, 3, 4, 4], reviews)
+        langs = {n: "russian" for n in self.REVIEWS}
+        got = excerpts([1, 2, 3, 4, 4], self.REVIEWS, langs)
         self.assertEqual([e["number"] for e in got], [2, 3, 4])
         self.assertNotIn("recommendation_id", got[0])
+
+    def test_russian_then_english_other_languages_dropped(self):
+        langs = {1: "russian", 2: "english", 3: "russian", 4: "english", 5: "schinese"}
+        got = excerpts([1, 2, 3, 4, 5], self.REVIEWS, langs)
+        # китайский с наибольшим votes_up не берётся, пока есть русские и английские опоры
+        self.assertEqual([e["number"] for e in got], [3, 1, 2])
+
+    def test_other_languages_only_without_russian_and_english(self):
+        langs = {1: "french", 2: "german", 5: "schinese"}
+        got = excerpts([1, 2, 5], self.REVIEWS, langs)
+        self.assertEqual([e["number"] for e in got], [5, 2, 1])
 
 
 class CheckTest(unittest.TestCase):

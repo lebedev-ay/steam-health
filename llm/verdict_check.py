@@ -46,9 +46,20 @@ def excerpt_text(text, limit=EXCERPT_CHARS):
     return cut.rstrip(" ,.;:-") + "…"
 
 
-def excerpts(support, reviews, k=EXCERPTS):
-    """До k отрывков из отзывов-опор с наибольшим votes_up. reviews - {номер: {votes_up, text, ...}}."""
-    chosen = sorted((n for n in set(support) if n in reviews), key=lambda n: (-reviews[n]["votes_up"], n))[:k]
+# дашборд русскоязычный: сначала русские опоры, затем английские; прочие языки - только если ни тех, ни других нет
+EXCERPT_LANGUAGES = ("russian", "english")
+
+
+def excerpts(support, reviews, languages, k=EXCERPTS):
+    """До k отрывков из отзывов-опор: по языку в порядке EXCERPT_LANGUAGES, внутри языка - по votes_up.
+
+    reviews - {номер: {votes_up, text, ...}}, languages - {номер: код языка Steam}.
+    """
+    pool = [n for n in set(support) if n in reviews]
+    preferred = [n for n in pool if languages.get(n) in EXCERPT_LANGUAGES]
+    rank = {lang: i for i, lang in enumerate(EXCERPT_LANGUAGES)}
+    chosen = sorted(preferred or pool,
+                    key=lambda n: (rank.get(languages.get(n), len(rank)), -reviews[n]["votes_up"], n))[:k]
     return [{"number": n, "votes_up": reviews[n]["votes_up"], "text": excerpt_text(reviews[n]["text"])} for n in chosen]
 
 
