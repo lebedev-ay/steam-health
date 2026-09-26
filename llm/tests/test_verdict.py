@@ -112,6 +112,13 @@ class CheckTest(unittest.TestCase):
         what = "Доля оценок «не рекомендую» снизилась с 14% до 11%. Жалобы на цену упали с 10% до 2%, игровых новостей рядом нет."
         self.assertEqual(run(answer(what=what)), [])
 
+    def test_foreign_scripts_flagged_names_in_latin_allowed(self):
+        self.assertEqual(run(answer(talk="Не могут привязать аккаунт Battle.net, проверка зависает [1].")), [])
+        for text in ("Battle.net:验证 зависает [1].", "Пишут, что это ゲーム [1].", "Жалуются на 서버 [1].", "Пишут «δύσκολο» [1]."):
+            problems = run(answer(talk=text))
+            self.assertTrue(any("не кириллицы и не латиницы" in p for p in problems), text)
+        self.assertTrue(any("не кириллицы" in p for p in run(answer(what=GOOD_WHAT + " 验证"))))
+
     def test_pair_needs_before_and_after(self):
         what = "Доля оценок «не рекомендую» выросла с 11% до 14% после 23 мая. Жалобы на цену: 2% против 14%."
         self.assertTrue(any("без «до» и «после»" in p for p in run(answer(what=what))))

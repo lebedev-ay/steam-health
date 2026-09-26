@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import re
+import unicodedata
 from datetime import timedelta
 
 WINDOW = 7
@@ -81,6 +82,12 @@ COMPLAINT_WORD = re.compile(r"жалоб|критик", re.I)
 PAIR = re.compile(r"(\d+)\s*%\s*(?:до|->|→|-)\s*(\d+)\s*%|с\s+(\d+)\s*%\s+до\s+(\d+)\s*%")
 
 
+def foreign_letters(text):
+    """Буквы вне кириллицы и латиницы: иероглифы, кана, хангыль и прочие письменности, скопированные из отзывов-опор."""
+    return sorted({ch for ch in text if unicodedata.category(ch).startswith("L")
+                   and not unicodedata.name(ch, "").startswith(("LATIN", "CYRILLIC"))})
+
+
 def parse(raw):
     """(what_happened, what_players_say) из JSON-ответа; (None, None), если JSON не тот."""
     text = (raw or "").strip()
@@ -140,6 +147,10 @@ def check(raw, labels, votes_pair, known_numbers, vocab):
     if re.search(r"повод", what + " " + talk, re.I) and (labels["news"] == "нет" or labels["character"] == "сфокусированный"):
         problems.append("«повод» при отсутствии новостей или сфокусированном характере")
     for part, text in (("what_happened", what), ("what_players_say", talk)):
+        # вывод пишется по-русски; из других языков допустимы только собственные названия латиницей (Battle.net, Vessel of Hatred)
+        letters = foreign_letters(text)
+        if letters:
+            problems.append(f"{part}: буквы не кириллицы и не латиницы «{''.join(letters)}»")
         for m in SNAKE.finditer(text):
             problems.append(f"{part}: id справочника «{m.group(0)}»")
         for name in vocab:
