@@ -1,16 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
   <!-- ромб - как маркер перелома на графике, через него пульс: «здоровье» игры -->
-  <defs>
-    <linearGradient id="rim" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8dff4f"/>
-      <stop offset="0.55" stop-color="#b86bff"/>
-      <stop offset="1" stop-color="#ff4fd8"/>
-    </linearGradient>
-    <linearGradient id="fill" x1="32" y1="4" x2="32" y2="60" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8dff4f" stop-opacity="0.16"/>
-      <stop offset="1" stop-color="#b86bff" stop-opacity="0.06"/>
-    </linearGradient>
-  </defs>
-  <path d="M32 4 L60 32 L32 60 L4 32 Z" fill="url(#fill)" stroke="url(#rim)" stroke-width="3.5" stroke-linejoin="round"/>
-  <path d="M10 33 H22 L26 24 L32 43 L37 18 L41 33 H54" stroke="#f1eefb" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M32 5 L59 32 L32 59 L5 32 Z" stroke="#ece6d6" stroke-opacity="0.9" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M11 33 H22 L26 24 L32 43 L37 18 L41 33 H53" stroke="#a6e36e" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

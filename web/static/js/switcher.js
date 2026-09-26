@@ -8,7 +8,10 @@ let onPick = () => {};
 
 function filtered() {
   const q = $('switcher-input').value.trim().toLowerCase();
-  return games.filter(g => g.game_name.toLowerCase().includes(q));
+  // сначала совпадения в названии, затем в жанре или разработчике
+  const inName = games.filter(g => g.game_name.toLowerCase().includes(q));
+  const inMeta = games.filter(g => !inName.includes(g) && [g.genres, g.developers].some(x => (x || '').toLowerCase().includes(q)));
+  return [...inName, ...inMeta];
 }
 
 function render() {
@@ -20,7 +23,9 @@ function render() {
     li.setAttribute('aria-selected', String(i === selected));
     const now = pct(g.positive_30, g.reviews_30);
     const before = pct(g.positive_prev, g.reviews_prev);
-    li.append(el('span', null, g.game_name),
+    const name = el('span', null, g.game_name);
+    name.append(el('small', null, [g.genres, g.developers].filter(Boolean).join(' · ')));
+    li.append(name,
               sparkline(g.spark, now != null && before != null && now < before ? DOWN : UP),
               el('span', 'num', now == null ? '—' : `${now}%`));
     li.onclick = () => pick(g);

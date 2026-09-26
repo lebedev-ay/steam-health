@@ -85,47 +85,49 @@ function svg(tag, attrs = {}) {
 
 // линия с заливкой до низа; пропуски (null) разрывают линию, а не тянут её к нулю
 export function sparkline(values, color, { lo = null, hi = null } = {}) {
-  const box = svg('svg', { class: 'spark', viewBox: '0 0 100 30', preserveAspectRatio: 'none', 'aria-hidden': 'true' });
+  // ширина в координатах близка к настоящей: растяжение по горизонтали небольшое, и линия не искажается
+  const box = svg('svg', { class: 'spark', viewBox: '0 0 300 40', preserveAspectRatio: 'none', 'aria-hidden': 'true' });
   const known = values.filter(v => v != null);
   if (known.length < 2) return box;
   const min = lo ?? Math.min(...known), max = hi ?? Math.max(...known);
-  const x = i => (i / (values.length - 1)) * 100;
-  const y = v => 28 - ((v - min) / (max - min || 1)) * 24;
+  const x = i => (i / (values.length - 1)) * 300;
+  const y = v => 37 - ((v - min) / (max - min || 1)) * 32;
   const points = values.map((v, i) => v == null ? null : [x(i), y(v)]);
   const line = points.map((p, i) => p ? `${points[i - 1] ? 'L' : 'M'}${p[0].toFixed(2)},${p[1].toFixed(2)}` : '').join('');
   const id = `sg${++gradientId}`;
   const defs = svg('defs');
   const grad = svg('linearGradient', { id, x1: 0, y1: 0, x2: 0, y2: 1 });
-  grad.append(svg('stop', { offset: 0, 'stop-color': color, 'stop-opacity': 0.35 }),
+  grad.append(svg('stop', { offset: 0, 'stop-color': color, 'stop-opacity': 0.18 }),
               svg('stop', { offset: 1, 'stop-color': color, 'stop-opacity': 0 }));
   defs.append(grad);
   const first = points.find(Boolean), last = [...points].reverse().find(Boolean);
+  // pathLength=1 - линия прорисовывается слева направо одной CSS-анимацией, какой бы длины она ни была
   box.append(defs,
-    svg('path', { d: `${line}L${last[0]},30L${first[0]},30Z`, fill: `url(#${id})`, stroke: 'none' }),
-    svg('path', { d: line, fill: 'none', stroke: color, 'stroke-width': 1.6, 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }));
+    svg('path', { class: 'area', d: `${line}L${last[0]},40L${first[0]},40Z`, fill: `url(#${id})`, stroke: 'none' }),
+    svg('path', { class: 'line', pathLength: 1, d: line, fill: 'none', stroke: color, 'stroke-width': 1.6,
+                  'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
   return box;
 }
 
-// кольцо «здоровья»: доля положительных за 30 дней, дуга в 270 градусов от красного к зелёному
+// кольцо «здоровья»: доля положительных за 30 дней, дуга в 270 градусов молочно-лунным по тусклой дорожке
 export function gauge(value, label) {
   const box = svg('svg', { viewBox: '0 0 200 200', role: 'img', 'aria-label': `${label}: ${value}%` });
-  const r = 78, c = 2 * Math.PI * r, arc = c * 0.75;
-  const id = `gg${++gradientId}`;
-  const defs = svg('defs');
-  const grad = svg('linearGradient', { id, x1: 0, y1: 1, x2: 1, y2: 0 });
-  grad.append(svg('stop', { offset: 0, 'stop-color': '#ff5a6e' }), svg('stop', { offset: 0.55, 'stop-color': '#b86bff' }),
-              svg('stop', { offset: 1, 'stop-color': '#8dff4f' }));
-  defs.append(grad);
-  const ring = { cx: 100, cy: 100, r, fill: 'none', 'stroke-width': 12, 'stroke-linecap': 'round', transform: 'rotate(135 100 100)' };
+  const r = 80, c = 2 * Math.PI * r, arc = c * 0.75;
+  const ring = { cx: 100, cy: 100, r, fill: 'none', 'stroke-width': 6, 'stroke-linecap': 'round', transform: 'rotate(135 100 100)' };
   const track = svg('circle', { ...ring, stroke: 'rgba(255,255,255,0.07)', 'stroke-dasharray': `${arc} ${c}` });
-  const bar = svg('circle', { ...ring, stroke: `url(#${id})`, 'stroke-dasharray': `0 ${c}` });
-  bar.style.transition = 'stroke-dasharray 0.9s cubic-bezier(.2,.8,.2,1)';
-  bar.style.filter = 'drop-shadow(0 0 6px rgba(184,107,255,0.45))';
-  const text = svg('text', { x: 100, y: 106, 'text-anchor': 'middle', fill: '#f1eefb', 'font-size': 34, 'font-weight': 600, 'font-family': 'Unbounded, sans-serif' });
+  const bar = svg('circle', { ...ring, stroke: '#ece6d6', 'stroke-dasharray': `0 ${c}` });
+  bar.style.transition = 'stroke-dasharray 1.1s cubic-bezier(.2,.8,.2,1)';
+  // метки 50% и 80%: на глаз видно, где «смешанные» и где «очень положительные»
+  const ticks = [50, 80].map(p => {
+    const a = (135 + 270 * p / 100) * Math.PI / 180;
+    return svg('line', { x1: 100 + (r - 11) * Math.cos(a), y1: 100 + (r - 11) * Math.sin(a), x2: 100 + (r - 5) * Math.cos(a),
+                         y2: 100 + (r - 5) * Math.sin(a), stroke: 'rgba(255,255,255,0.25)', 'stroke-width': 1.5 });
+  });
+  const text = svg('text', { x: 100, y: 108, 'text-anchor': 'middle', fill: '#ece6d6', 'font-size': 38, 'font-weight': 500, 'font-family': 'Onest, sans-serif' });
   text.textContent = value == null ? '—' : `${value}%`;
-  const sub = svg('text', { x: 100, y: 132, 'text-anchor': 'middle', fill: '#7f7893', 'font-size': 13, 'font-family': 'Onest, sans-serif' });
+  const sub = svg('text', { x: 100, y: 132, 'text-anchor': 'middle', fill: '#736e7d', 'font-size': 12, 'font-family': 'Onest, sans-serif' });
   sub.textContent = label;
-  box.append(defs, track, bar, text, sub);
+  box.append(track, ...ticks, bar, text, sub);
   requestAnimationFrame(() => requestAnimationFrame(() => {
     bar.setAttribute('stroke-dasharray', `${arc * (value || 0) / 100} ${c}`);
   }));
@@ -150,12 +152,29 @@ export function monthBars(months, up, down) {
       `ругают ${Math.round(100 * s.n)}% из ${s.labeled} размеченных`;
     // прозрачная полоса во всю высоту - цель для наведения шире самих столбиков
     g.append(title, svg('rect', { x: i * w, y: 0, width: w, height: 160, fill: 'transparent' }),
-      svg('rect', { x, y: 78 - hp, width: bw, height: Math.max(hp, 0.5), rx: 3, fill: up, 'fill-opacity': 0.8 }),
-      svg('rect', { x, y: 82, width: bw, height: Math.max(hn, 0.5), rx: 3, fill: down, 'fill-opacity': 0.8 }));
+      svg('rect', { x, y: 78 - hp, width: bw, height: Math.max(hp, 0.5), rx: 2, fill: up, 'fill-opacity': 0.85 }),
+      svg('rect', { x, y: 82, width: bw, height: Math.max(hn, 0.5), rx: 2, fill: down, 'fill-opacity': 0.85 }));
     box.append(g);
   });
   const labels = el('div', 'months-labels');
   months.forEach(m => labels.append(el('span', null, ruDate(m.month, { month: 'short' }).replace('.', ''))));
   wrap.append(box, labels);
   return wrap;
+}
+
+// текст с подсвеченными вхождениями слова; только textContent и <mark> - текст отзыва пишет кто угодно
+export function highlighted(text, word) {
+  const node = document.createDocumentFragment();
+  if (!word) {
+    node.append(text);
+    return node;
+  }
+  const lower = text.toLowerCase(), needle = word.toLowerCase();
+  let at = 0;
+  for (let i = lower.indexOf(needle); i !== -1; i = lower.indexOf(needle, at)) {
+    node.append(text.slice(at, i), el('mark', null, text.slice(i, i + word.length)));
+    at = i + word.length;
+  }
+  node.append(text.slice(at));
+  return node;
 }

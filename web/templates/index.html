@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Steam Health - пульс игр Steam</title>
 <meta name="description" content="Как меняется настроение игроков в Steam: переломы, их причины рядом по времени, темы отзывов и аудитория.">
-<meta name="theme-color" content="#0a0910">
+<meta name="theme-color" content="#0c0b10">
 <link rel="icon" href="{{ url_for('static', filename='logo.svg') }}" type="image/svg+xml">
 <link rel="preload" href="{{ url_for('static', filename='fonts/unbounded-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="{{ url_for('static', filename='fonts/onest-cyrillic-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
@@ -16,7 +16,7 @@
 
 <header class="topbar">
   <a class="brand" href="/" data-nav="overview">
-    <img src="{{ url_for('static', filename='logo.svg') }}" alt="" width="30" height="30">
+    {% include 'logo.svg' %}
     <span>Steam<b>Health</b></span>
   </a>
   <button id="switcher-open" class="switcher-btn" type="button" aria-haspopup="dialog">
@@ -38,14 +38,27 @@
       <p class="lead">Доля положительных отзывов по дням, резкие переломы и то, что случилось рядом с ними: патчи, сезоны, распродажи. Для части игр модель разбирает, о чём именно пишут.</p>
       <div id="overview-stats" class="hero-stats"></div>
     </div>
-    <div class="grid-head">
-      <h2>Игры</h2>
-      <div class="seg" role="group" aria-label="Сортировка">
-        <button type="button" data-sort="name" class="active">по имени</button>
-        <button type="button" data-sort="pct">по позитиву</button>
-        <button type="button" data-sort="delta">по изменению</button>
+    <div class="toolbar" id="filters">
+      <input id="game-search" class="search" type="search" placeholder="Название, жанр или разработчик" autocomplete="off" aria-label="Поиск игры">
+      <select id="filter-genre" aria-label="Жанр"><option value="">все жанры</option></select>
+      <div class="seg" id="filter-trend" role="group" aria-label="Тренд за 30 дней">
+        <button type="button" data-trend="" class="active">все</button>
+        <button type="button" data-trend="up">растут</button>
+        <button type="button" data-trend="down">падают</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="filter-llm"> с разбором модели</label>
+      <select id="sort" aria-label="Порядок">
+        <option value="name">по имени</option>
+        <option value="pct">по позитиву</option>
+        <option value="delta">по изменению</option>
+        <option value="reviews">по числу отзывов</option>
+      </select>
+      <div class="seg" id="view-mode" role="group" aria-label="Вид">
+        <button type="button" data-view="grid" class="active" title="карточки">▦</button>
+        <button type="button" data-view="list" title="список">☰</button>
       </div>
     </div>
+    <p id="games-count" class="games-count"></p>
     <div id="games" class="games"></div>
   </section>
 
@@ -54,7 +67,12 @@
     <div class="game-hero">
       <div class="game-hero-text">
         <a class="back" href="/" data-nav="overview">← все игры</a>
-        <h1 id="game-title"></h1>
+        <div class="title-row">
+          <h1 id="game-title"></h1>
+          <a id="game-steam" class="steam" target="_blank" rel="noopener" title="Страница игры в Steam" aria-label="Страница игры в Steam">
+            <img src="{{ url_for('static', filename='steam.svg') }}" alt="" width="16" height="16">
+          </a>
+        </div>
         <p id="game-meta" class="game-meta"></p>
         <div id="game-chips" class="chips"></div>
       </div>
@@ -71,6 +89,7 @@
       <button type="button" data-tab="audience">Аудитория</button>
       <button type="button" data-tab="updates">Обновления</button>
       <button type="button" data-tab="reviews">Отзывы</button>
+      <span class="tabs-indicator" aria-hidden="true"></span>
     </nav>
 
     <div class="panel" data-panel="overview">
@@ -113,6 +132,16 @@
           <div id="highlights" class="highlights"></div>
         </section>
       </div>
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>Самые полезные отзывы месяца</h2>
+            <p class="card-sub">По голосам «полезно» за последние 30 дней ряда: один из рекомендующих и один из недовольных.</p>
+          </div>
+          <button type="button" class="link" data-goto="reviews">все отзывы →</button>
+        </div>
+        <div id="picks" class="picks"></div>
+      </section>
     </div>
 
     <div class="panel" data-panel="turns" hidden>
@@ -124,20 +153,36 @@
     </div>
 
     <div class="panel" data-panel="topics" hidden>
-      <section id="topics-empty" class="card empty-card" hidden>
-        <h2>Темы отзывов</h2>
-        <p>Эта игра пока не размечается моделью. Темы, сводки месяца и разбор переломов появятся, когда её включат в LLM-разметку.</p>
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>Слова отзывов</h2>
+            <p class="card-sub">Какие слова стали встречаться чаще, чем за 90 дней до периода, и о чём пишут вообще. Считается по отзывам на английском и русском, без модели. Щелчок по слову - отзывы с ним.</p>
+          </div>
+          <div class="seg" id="words-period" role="group" aria-label="Период">
+            <button type="button" data-days="30" class="active">30 дней</button>
+            <button type="button" data-days="90">90 дней</button>
+          </div>
+        </div>
+        <div id="words" class="words-grid"></div>
+      </section>
+
+      <section id="topics-empty" class="card" hidden>
+        <div class="llm-note">
+          <div class="highlight-mark">◇</div>
+          <p>Эта игра не размечается моделью, поэтому тем по справочнику, сводок месяца и разборов переломов у неё нет. Всё остальное - график, переломы, слова, аудитория, обновления и сами отзывы - считается без модели.</p>
+        </div>
       </section>
       <div id="topics">
         <section class="card">
-          <h2>О чём пишут</h2>
+          <h2>Темы по разметке модели</h2>
           <p id="aspects-note" class="card-sub"></p>
           <div id="callouts" class="callouts"></div>
           <div id="aspects" class="aspects"></div>
         </section>
         <section class="card">
           <h2>Критика по месяцам</h2>
-          <p class="card-sub">Доля размеченных отзывов месяца, где тему ругают. Чем ярче клетка, тем больше жалоб. Наведите на клетку - там точные числа.</p>
+          <p class="card-sub">Доля размеченных отзывов месяца, где тему ругают. Чем насыщеннее клетка, тем больше жалоб. Наведите на клетку - там точные числа.</p>
           <div id="heat" class="heat-wrap"></div>
         </section>
         <section id="digests-card" class="card">
@@ -178,6 +223,7 @@
             </select>
           </label>
           <label>язык <select name="lang"><option value="">любой</option></select></label>
+          <label>слово <input name="q" type="search" placeholder="например, crash" autocomplete="off"></label>
           <label>порядок
             <select name="sort">
               <option value="helpful">полезные</option>
@@ -198,7 +244,8 @@
 
 <!-- быстрый выбор игры -->
 <dialog id="switcher" class="modal switcher">
-  <input id="switcher-input" type="search" placeholder="Название игры…" autocomplete="off" aria-label="Название игры">
+  <input id="switcher-input" type="search" placeholder="Название, жанр или разработчик…" autocomplete="off" aria-label="Поиск игры">
+  <p class="switcher-hint">↑↓ - выбрать, Enter - открыть, Esc - закрыть</p>
   <ul id="switcher-list" class="switcher-list" role="listbox"></ul>
 </dialog>
 

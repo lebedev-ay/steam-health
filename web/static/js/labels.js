@@ -1,15 +1,15 @@
 // Подписи и цвета: всё, что переводит коды из базы в то, что видит читатель.
 
-// типы событий игры. Категориальная палитра проверена на тёмном фоне: яркость, контраст, различимость при дальтонизме.
-// Зелёный и красный в неё не входят - они заняты ростом и спадом. Маркетинг, блоги и служебное - фон, одним серым
-const BACKGROUND = '#7f7893';
+// типы событий игры. Категориальная палитра проверена на тёмном фоне: яркость, насыщенность, контраст, различимость
+// при дальтонизме. Синий и красный в неё не входят - они заняты ростом и спадом. Анонсы, маркетинг, блоги и служебное - фон
+const BACKGROUND = '#6f6a7a';
 export const EVENT_TYPES = {
   patch:        { color: '#9d52f0', label: 'патчи' },
-  season_start: { color: '#1a9ac4', label: 'сезоны' },
+  season_start: { color: '#2a9d74', label: 'сезоны' },
   expansion:    { color: '#b87a14', label: 'дополнения' },
-  press:        { color: '#d64fbd', label: 'пресса' },
-  beta:         { color: '#979420', label: 'бета' },
-  announce:     { color: '#6572f0', label: 'анонсы' },
+  press:        { color: '#c24fa8', label: 'пресса' },
+  beta:         { color: '#8f8c22', label: 'бета' },
+  announce:     { color: BACKGROUND, label: 'анонсы' },
   marketing:    { color: BACKGROUND, label: 'маркетинг' },
   blog:         { color: BACKGROUND, label: 'блоги' },
   service:      { color: BACKGROUND, label: 'служебное' },
@@ -26,11 +26,11 @@ export function eventType(type) {
   return EVENT_TYPES[type] || { color: BACKGROUND, label: type };
 }
 
-// рост и спад, похвала и критика - одна полярность на всей странице. Яркость выше рекомендованной для категорий сознательно:
-// это акцент бренда, а не набор из многих цветов; рядом всегда стоят стрелки или сторона полосы, цвет один смысл не несёт
-export const UP = '#8dff4f';
-export const DOWN = '#ff5a6e';
-export const ARCANE = '#b86bff';
+// рост и спад, похвала и критика - одна полярность на всей странице: синий и розово-красный различимы при любом зрении.
+// Рядом всегда стоят стрелки или сторона полосы, цвет один смысл не несёт. Сами данные - молочно-лунным
+export const UP = '#5d8fe6';
+export const DOWN = '#d9646f';
+export const MOON = '#ece6d6';
 
 export const CATEGORIES = {
   monetization_and_value: 'Цена и монетизация',

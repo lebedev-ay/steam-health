@@ -1,8 +1,8 @@
-import { ARCANE, DOWN, PLATFORM_TYPES, UP, eventType } from './labels.js';
+import { DOWN, MOON, PLATFORM_TYPES, UP, eventType } from './labels.js';
 import { esc, shiftDay, truncate } from './util.js';
 
 // цвета совпадают с токенами style.css: Plotly не читает CSS-переменные
-const INK = '#f1eefb', MUTED = '#7f7893', GRID = 'rgba(255,255,255,0.06)', SURFACE = '#14121d';
+const INK = '#e6e2d9', MUTED = '#736e7d', GRID = 'rgba(255,255,255,0.05)', SURFACE = '#141319';
 const FONT = 'Onest, system-ui, sans-serif';
 
 // две панели с общей осью дат: сверху доля позитива, снизу объём. Одна шкала на панель - на общей объём и доля
@@ -12,7 +12,7 @@ const TOP = [0.3, 1], BOTTOM = [0, 0.2];
 // маркеры событий - на скрытой оси 0..1 поверх верхней панели: так они всегда у верхнего края, как бы ни шла кривая
 const EVENTS_Y = 0.97, PLATFORM_Y = 0.03;
 
-export function renderChart(data, { onPointClick }) {
+export function renderChart(data, { onPointClick, animate = false }) {
   const days = data.daily.map(d => d.day);
   const pct = data.daily.map(d => d.pct);
   const pctByDay = new Map(data.daily.map(d => [d.day, d.pct]));
@@ -22,7 +22,7 @@ export function renderChart(data, { onPointClick }) {
   const eventTraces = Object.entries(byType).map(([type, items]) => ({
     x: items.map(e => e.day), y: items.map(() => EVENTS_Y), yaxis: 'y3',
     type: 'scatter', mode: 'markers', name: eventType(type).label,
-    marker: { symbol: 'triangle-down', size: 12, color: eventType(type).color, line: { color: SURFACE, width: 2 } },
+    marker: { symbol: 'triangle-down', size: 10, color: eventType(type).color, line: { color: SURFACE, width: 2 } },
     text: items.map(e => esc(truncate(e.title, 70)) + (e.weight ? ` · вес ${e.weight}` : '')),
     hovertemplate: '%{text}<extra>' + eventType(type).label + '</extra>'
   }));
@@ -45,7 +45,7 @@ export function renderChart(data, { onPointClick }) {
     marker: {
       symbol: cps.map(c => c.verdict?.checked ? 'diamond' : 'diamond-open'),
       // у залитого ромба - кольцо цвета фона, чтобы зелёный ромб не сливался с зелёной линией
-      size: 16, color: cps.map(colorOf), line: { color: cps.map(c => c.verdict?.checked ? SURFACE : colorOf(c)), width: 2.5 }
+      size: 14, color: cps.map(colorOf), line: { color: cps.map(c => c.verdict?.checked ? SURFACE : colorOf(c)), width: 2.5 }
     },
     text: cps.map(c => `${c.score < 0 ? '▼' : '▲'} ${Math.abs(c.score)} п.п.` +
       (c.positive_before != null ? ` · за неделю ${c.positive_before}% → ${c.positive_after}%` : '')),
@@ -60,16 +60,12 @@ export function renderChart(data, { onPointClick }) {
   const traces = [
     {
       x: days, y: data.daily.map(d => d.base), type: 'scatter', mode: 'lines', name: 'норма игры',
-      line: { color: ARCANE, width: 1.5 }, opacity: 0.8, hovertemplate: '%{y}<extra>норма</extra>'
-    },
-    // свечение под основной линией - широкий полупрозрачный след того же ряда, без подсказки и легенды
-    {
-      x: days, y: pct, type: 'scatter', mode: 'lines', showlegend: false, hoverinfo: 'skip',
-      line: { color: 'rgba(141,255,79,0.16)', width: 9, shape: 'spline', smoothing: 0.5 }
+      line: { color: '#7d7596', width: 1.2 }, hovertemplate: '%{y}<extra>норма</extra>'
     },
     {
-      x: days, y: pct, type: 'scatter', mode: 'lines', name: 'позитивных, %',
-      line: { color: UP, width: 2.2, shape: 'spline', smoothing: 0.5 },
+      // uid даёт трассе постоянный класс в SVG: по нему находится линия для прорисовки
+      uid: 'pulse', x: days, y: pct, type: 'scatter', mode: 'lines', name: 'позитивных, %',
+      line: { color: MOON, width: 1.8, shape: 'spline', smoothing: 0.4 },
       hovertemplate: '<b>%{y}</b><extra>позитивных</extra>'
     },
     cpTrace,
@@ -78,7 +74,7 @@ export function renderChart(data, { onPointClick }) {
     ...(platform.length ? [platformTrace] : []),
     {
       x: days, y: data.daily.map(d => d.total), type: 'bar', yaxis: 'y2', name: 'отзывов в день', showlegend: false,
-      marker: { color: 'rgba(184,107,255,0.42)' }, hovertemplate: '%{y}<extra>отзывов</extra>'
+      marker: { color: 'rgba(236,230,214,0.22)' }, hovertemplate: '%{y}<extra>отзывов</extra>'
     }
   ];
 
@@ -97,15 +93,15 @@ export function renderChart(data, { onPointClick }) {
     font: { color: INK, family: FONT, size: 12 },
     legend: { orientation: 'h', y: -0.1, font: { color: MUTED } },
     hovermode: 'x unified',
-    hoverlabel: { bgcolor: '#1b1826', bordercolor: 'rgba(184,107,255,0.5)', font: { color: INK, family: FONT } },
+    hoverlabel: { bgcolor: '#1a1920', bordercolor: 'rgba(255,255,255,0.14)', font: { color: INK, family: FONT } },
     dragmode: 'pan',
     shapes,
     xaxis: {
       anchor: 'y2', gridcolor: GRID, color: MUTED, hoverformat: '%d.%m.%Y', type: 'date',
       tickfont: { family: 'JetBrains Mono, monospace', size: 11 },
-      spikecolor: 'rgba(184,107,255,0.6)', spikethickness: 1, spikedash: 'solid',
+      spikecolor: 'rgba(236,230,214,0.35)', spikethickness: 1, spikedash: 'solid',
       rangeselector: {
-        x: 0, y: 1.0, yanchor: 'bottom', bgcolor: '#1b1826', activecolor: '#2e2942', bordercolor: 'rgba(255,255,255,0.1)',
+        x: 0, y: 1.0, yanchor: 'bottom', bgcolor: '#1a1920', activecolor: '#2c2b35', bordercolor: 'rgba(255,255,255,0.1)',
         borderwidth: 1, font: { color: INK, size: 11 },
         buttons: [
           { count: 3, label: '3 мес', step: 'month', stepmode: 'backward' },
@@ -120,6 +116,8 @@ export function renderChart(data, { onPointClick }) {
     yaxis3: { domain: TOP, range: [0, 1], visible: false, fixedrange: true, overlaying: 'y' }
   }, { responsive: true, displayModeBar: false, scrollZoom: true, doubleClick: 'reset' });
 
+  if (animate) drawIn(chart);
+
   chart.removeAllListeners?.('plotly_click');
   chart.on('plotly_click', ev => {
     const pt = ev.points?.find(p => p.data.name === 'переломы');
@@ -130,4 +128,23 @@ export function renderChart(data, { onPointClick }) {
 // приблизить график ко дню: полтора месяца до и после
 export function zoomTo(day) {
   Plotly.relayout('chart', { 'xaxis.range': [shiftDay(day, -45), shiftDay(day, 45)] });
+}
+
+// линия пульса прорисовывается слева направо - только при открытии игры, не при каждом зуме.
+// После анимации стили снимаются: следующую перерисовку Plotly делает сам, и чужой dasharray ему бы мешал
+function drawIn(chart) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const path = chart.querySelector('.tracepulse .js-line');
+  if (!path || !path.getTotalLength) return;
+  const length = path.getTotalLength();
+  path.style.strokeDasharray = `${length}`;
+  path.style.strokeDashoffset = `${length}`;
+  path.getBoundingClientRect();
+  path.style.transition = 'stroke-dashoffset 1.6s cubic-bezier(.2,.8,.2,1)';
+  path.style.strokeDashoffset = '0';
+  path.addEventListener('transitionend', () => {
+    path.style.removeProperty('stroke-dasharray');
+    path.style.removeProperty('stroke-dashoffset');
+    path.style.removeProperty('transition');
+  }, { once: true });
 }

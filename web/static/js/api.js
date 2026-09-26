@@ -20,6 +20,8 @@ export const fetchGame = (appId, { smoothing, sensitivity }) =>
   request(`/api/game/${appId}?smoothing=${smoothing}&sensitivity=${sensitivity}`);
 export const fetchAspect = (appId, aspect) => request(`/api/game/${appId}/aspect/${encodeURIComponent(aspect)}`);
 export const fetchReviews = (appId, params) => request(`/api/game/${appId}/reviews?${new URLSearchParams(params)}`);
+export const fetchWords = (appId, since, until, vote) =>
+  request(`/api/game/${appId}/words?${new URLSearchParams({ since, until, vote })}`);
 
 export const fetchMe = () => request('/api/me');
 export const login = (name, password) => post('/api/login', { login: name, password });

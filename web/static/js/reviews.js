@@ -1,6 +1,6 @@
 import { fetchReviews } from './api.js';
 import { ASPECTS, LANGUAGES } from './labels.js';
-import { $, el, hours, longDate, num, shiftDay } from './util.js';
+import { $, el, highlighted, hours, longDate, num, shiftDay } from './util.js';
 
 // обозреватель отзывов игры: период, оценка, язык, порядок; страницами по 20
 let appId = null;
@@ -28,7 +28,8 @@ function reviewCard(r) {
   if (r.votes_up) head.append(el('span', null, `полезно ${num(r.votes_up)}`));
   if (r.answered) head.append(el('span', null, 'есть ответ разработчика'));
 
-  const text = el('p', 'review-text clamped', r.text);
+  const text = el('p', 'review-text clamped');
+  text.append(highlighted(r.text, form().elements.q.value.trim()));
   text.title = 'щелчок - показать целиком';
   text.onclick = () => text.classList.toggle('clamped');
   node.append(head, text);
@@ -68,6 +69,9 @@ async function load(append) {
 
 export function initReviews() {
   form().addEventListener('change', () => load(false));
+  // слово ищется по мере ввода, но не на каждую букву
+  let typing = null;
+  form().elements.q.addEventListener('input', () => { clearTimeout(typing); typing = setTimeout(() => load(false), 350); });
   form().addEventListener('submit', e => e.preventDefault());
   $('reviews-more').onclick = () => load(true);
 }
@@ -79,6 +83,7 @@ export function resetReviews(game, languages, lastDay) {
   const select = f.elements.lang;
   select.replaceChildren(new Option('любой', ''), ...languages.map(code => new Option(LANGUAGES[code] || code, code)));
   f.elements.vote.value = '';
+  f.elements.q.value = '';
   f.elements.sort.value = 'helpful';
   f.elements.until.value = lastDay || '';
   f.elements.since.value = lastDay ? shiftDay(lastDay, -29) : '';
@@ -87,11 +92,12 @@ export function resetReviews(game, languages, lastDay) {
 }
 
 // открыть с условиями снаружи: неделя перелома или обновления
-export function showReviews({ since, until, vote = '' }) {
+export function showReviews({ since, until, vote = '', q = '' }) {
   const f = form();
   f.elements.since.value = since;
   f.elements.until.value = shiftDay(until, -1);
   f.elements.vote.value = vote;
+  f.elements.q.value = q;
   load(false);
 }
 

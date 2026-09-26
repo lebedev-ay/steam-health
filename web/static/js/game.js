@@ -1,8 +1,8 @@
 import { renderChart } from './chart.js';
 import { ASPECTS, CATEGORIES, DOWN, LANGUAGES, PLATFORM_TYPES, SEGMENTS, UP, eventType, steamRating } from './labels.js';
-import { $, countUp, delta, el, gauge, longDate, monthBars, num, pct, plural, reviewsWord, ruDate, shiftDay,
+import { $, countUp, delta, el, gauge, hours, longDate, monthBars, num, pct, plural, reviewsWord, ruDate, shiftDay,
          sparkline, truncate } from './util.js';
-import { fetchAspect } from './api.js';
+import { fetchAspect, fetchReviews, fetchWords } from './api.js';
 
 const RECENT_DAYS = 30;
 const TOP_ASPECTS = 12;
@@ -23,12 +23,14 @@ export function renderGame(data, handlers) {
 
   $('chart-card').hidden = !data.daily.length;
   if (data.daily.length) {
-    renderChart(data, { onPointClick: day => focusTurn(day) });
-    $('chart-note').textContent = `Сглаживание - окно ${data.window} дн. Фиолетовая линия - норма игры, медиана за 90 дней. ` +
+    renderChart(data, { onPointClick: day => focusTurn(day), animate: handlers.firstVisit });
+    $('chart-note').textContent = `Сглаживание - окно ${data.window} дн. Серая линия - норма игры, медиана за 90 дней. ` +
       'Колесо мыши - приблизить, перетаскивание - сдвинуть, двойной щелчок - весь период.';
   }
   renderTurns(data);
-  renderHighlights(data);
+  renderHighlights(data, handlers.games || []);
+  renderPicks(data);
+  renderWords(30);
   renderTopics(data);
   renderAudience(data.segments);
   renderUpdates(data.updates);
@@ -53,11 +55,8 @@ function renderHero(data) {
   const chips = (g.genres || '').split(', ').filter(Boolean).map(x => el('span', 'chip', x));
   if (g.metacritic_score) chips.push(el('span', 'chip', `Metacritic ${g.metacritic_score}`));
   if (g.collection_status === 'partial') chips.push(el('span', 'chip warn', 'данные неполные'));
-  const steam = el('a', 'chip', 'Steam ↗');
-  steam.href = `https://store.steampowered.com/app/${g.app_id}/`;
-  steam.target = '_blank';
-  steam.rel = 'noopener';
-  $('game-chips').replaceChildren(...chips, steam);
+  $('game-chips').replaceChildren(...chips);
+  $('game-steam').href = `https://store.steampowered.com/app/${g.app_id}/`;
 
   const recent = share(data.daily.slice(-RECENT_DAYS));
   const box = $('gauge');
@@ -174,6 +173,14 @@ function turnCard(c, { full }) {
   card.append(event);
 
   const v = c.verdict;
+  // без проверенного разбора модели карточку дополняют слова недели после перелома - они считаются для любой игры
+  if (!v?.checked) {
+    const words = el('p', 'turn-words', ' ');
+    words.dataset.day = c.day;
+    words.dataset.vote = down ? 'down' : 'up';
+    wordsObserver.observe(words);
+    card.append(words);
+  }
   if (v?.checked) {
     card.append(el('p', 'turn-text', v.what_happened));
     if (full && v.what_players_say) card.append(el('p', 'turn-text', v.what_players_say));
@@ -198,6 +205,24 @@ function turnCard(c, { full }) {
   card.append(buttons);
   return card;
 }
+
+// слова недели грузятся, только когда карточка показалась на экране: у игры бывает десяток переломов
+const wordsObserver = new IntersectionObserver(entries => entries.forEach(async entry => {
+  if (!entry.isIntersecting) return;
+  const node = entry.target;
+  wordsObserver.unobserve(node);
+  const { day, vote } = node.dataset;
+  try {
+    const w = await fetchWords(current.game.app_id, day, shiftDay(day, 7), vote);
+    const list = (w.rising.length ? w.rising : w.top).slice(0, 5).map(x => x.word);
+    node.replaceChildren(list.length ? `${vote === 'down' ? 'Недовольные' : 'Довольные'} чаще писали: `
+      : w.reviews < 20 ? `За неделю всего ${w.reviews} ${reviewsWord(w.reviews)} на английском и русском - слов не выделить.`
+      : 'Слов с заметным ростом за неделю нет.');
+    if (list.length) node.append(el('b', null, list.join(', ')));
+  } catch {
+    node.remove();
+  }
+}), { rootMargin: '200px' });
 
 function renderTurns(data) {
   const cps = [...data.change_points].reverse();
@@ -225,39 +250,132 @@ function segmentShare(list, code) {
   return r && r.reviews >= MIN_SEGMENT ? { pct: pct(r.positive, r.reviews), reviews: r.reviews } : null;
 }
 
-function renderHighlights(data) {
+function renderHighlights(data, games) {
   const items = [];
-  const add = (mark, color, title, text) => items.push({ mark, color, title, text });
+  const add = (mark, title, text) => items.push({ mark, title, text });
+  const daily = data.daily;
+  const recent = share(daily.slice(-RECENT_DAYS));
+
+  // место среди игр стенда по доле позитива за 30 дней
+  const ranked = games.filter(g => g.reviews_30).map(g => ({ id: g.app_id, p: g.positive_30 / g.reviews_30 })).sort((a, b) => b.p - a.p);
+  const place = ranked.findIndex(g => g.id === data.game.app_id);
+  if (ranked.length > 2 && place >= 0) {
+    add('#', `${place + 1}-е место из ${ranked.length} по позитиву за 30 дней`, 'среди игр на стенде');
+  }
   const cps = data.change_points;
   if (cps.length) {
     const worst = cps.reduce((a, c) => (c.score < a.score ? c : a));
-    if (worst.score < 0) add('▼', DOWN, `Самый резкий спад - ${longDate(worst.day)}`, `${Math.abs(worst.score)} п.п.; ${mainEvent(worst).text}`);
+    if (worst.score < 0) add('▼', `Самый резкий спад - ${longDate(worst.day)}`, `${Math.abs(worst.score)} п.п.; ${mainEvent(worst).text}`);
+  }
+  const fresh = segmentShare(data.segments.playtime, 'h0_2');
+  if (fresh && recent.pct != null) {
+    add('◷', `До 2 часов игры - ${fresh.pct}% положительных`, 'это те, кто ещё может вернуть игру; в среднем по игре ' +
+        `${pct(daily.reduce((a, d) => a + d.positive, 0), daily.reduce((a, d) => a + d.total, 0))}%`);
+  }
+  const answered = (data.segments.dev_response || []).find(s => s.segment === 'answered');
+  const allDev = (data.segments.dev_response || []).reduce((a, s) => a + s.reviews, 0);
+  if (answered && allDev) add('↩', `Разработчик ответил на ${pct(answered.reviews, allDev) || '<1'}% отзывов`, `${num(answered.reviews)} ${reviewsWord(answered.reviews)} с ответом`);
+  const len = data.lengths || {};
+  if (len.up && len.down) {
+    const ratio = len.down / len.up;
+    add('¶', ratio >= 1.2 ? `Недовольные пишут в ${ratio.toFixed(1).replace('.', ',')} раза длиннее` : 'Довольные и недовольные пишут примерно одинаково',
+        `медиана ${num(len.down)} и ${num(len.up)} знаков за 90 дней`);
   }
   const a = data.aspects;
   if (a?.items.length) {
     const pain = [...a.items].sort((x, y) => y.negative - x.negative)[0];
-    const love = [...a.items].sort((x, y) => y.positive - x.positive)[0];
-    add('✕', DOWN, `Чаще всего ругают: ${ASPECTS[pain.aspect_id] || pain.aspect_id}`, `в ${pct(pain.negative, a.labeled)}% размеченных отзывов`);
-    add('♥', UP, `Чаще всего хвалят: ${ASPECTS[love.aspect_id] || love.aspect_id}`, `в ${pct(love.positive, a.labeled)}% размеченных отзывов`);
+    add('✕', `Чаще всего ругают: ${ASPECTS[pain.aspect_id] || pain.aspect_id}`, `в ${pct(pain.negative, a.labeled)}% размеченных отзывов`);
   }
-  const fresh = segmentShare(data.segments.playtime, 'h0_2');
-  const veteran = segmentShare(data.segments.playtime, 'h200');
-  if (fresh && veteran) {
-    add('◷', '#b86bff', `До 2 часов - ${fresh.pct}%, после 200 часов - ${veteran.pct}%`,
-        'доля положительных у тех, кто ещё может вернуть игру, и у ветеранов');
-  }
-  const ru = segmentShare(data.segments.language, 'russian');
-  if (ru && items.length < 4) add('Р', '#b86bff', `Русскоязычные отзывы: ${ru.pct}% положительных`, `${num(ru.reviews)} ${reviewsWord(ru.reviews)}`);
 
-  $('highlights').replaceChildren(...(items.length ? items.map(i => {
+  $('highlights').replaceChildren(...(items.length ? items.map((i, n) => {
     const node = el('div', 'highlight');
-    const mark = el('div', 'highlight-mark', i.mark);
-    mark.style.color = i.color;
+    node.style.animationDelay = `${n * 60}ms`;
     const text = el('div');
     text.append(el('b', null, i.title), el('span', null, i.text));
-    node.append(mark, text);
+    node.append(el('div', 'highlight-mark', i.mark), text);
     return node;
   }) : [el('p', 'muted', 'Пока нечего сказать - мало данных.')]));
+}
+
+// самые полезные отзывы месяца: по голосам «полезно», по одному с каждой стороны
+async function renderPicks(data) {
+  const box = $('picks');
+  const last = data.daily.at(-1)?.day;
+  box.replaceChildren();
+  if (!last) return;
+  const period = { since: shiftDay(last, -29), until: shiftDay(last, 1), sort: 'helpful' };
+  const appId = data.game.app_id;
+  const [good, bad] = await Promise.all(['up', 'down'].map(vote =>
+    fetchReviews(appId, { ...period, vote }).then(r => r.items[0]).catch(() => null)));
+  if (current.game.app_id !== appId) return;
+  box.replaceChildren(...[[bad, 'не рекомендует', DOWN], [good, 'рекомендует', UP]].filter(([r]) => r).map(([r, label, color]) => {
+    const node = el('article', 'pick');
+    const head = el('div', 'review-head');
+    const vote = el('span', 'vote', `${color === UP ? '▲' : '▼'} ${label}`);
+    vote.style.color = color;
+    head.append(vote, el('span', null, longDate(r.day)));
+    if (r.minutes != null) head.append(el('span', null, `наиграно ${hours(r.minutes)}`));
+    if (r.votes_up) head.append(el('span', null, `полезно ${num(r.votes_up)}`));
+    node.append(head, el('p', 'review-text clamped', r.text));
+    return node;
+  }));
+  if (!box.children.length) box.append(el('p', 'muted', 'За последние 30 дней отзывов с текстом нет.'));
+}
+
+// --- слова отзывов: работают без модели, для любой игры ---
+
+let wordsDays = 30;
+
+async function renderWords(days) {
+  wordsDays = days;
+  document.querySelectorAll('#words-period [data-days]').forEach(b => {
+    b.classList.toggle('active', Number(b.dataset.days) === days);
+    b.onclick = () => renderWords(Number(b.dataset.days));
+  });
+  const box = $('words');
+  const last = current.daily.at(-1)?.day;
+  if (!last) {
+    box.replaceChildren(el('p', 'muted', 'отзывов пока нет'));
+    return;
+  }
+  const since = shiftDay(last, -(days - 1)), until = shiftDay(last, 1);
+  const appId = current.game.app_id;
+  box.classList.add('loading');
+  const [down, up] = await Promise.all(['down', 'up'].map(v => fetchWords(appId, since, until, v).catch(() => null)));
+  box.classList.remove('loading');
+  if (current.game.app_id !== appId || wordsDays !== days) return;
+
+  const column = (w, vote, title, color) => {
+    const col = el('div', 'words-col');
+    col.style.setProperty('--word-color', color);
+    const h = el('h3', null, title);
+    col.append(h, el('p', 'card-sub', w ? `${num(w.reviews)} ${reviewsWord(w.reviews)} на английском и русском за ${days} дней` : 'не удалось посчитать'));
+    const chip = (x, rising) => {
+      const b = el('button', rising ? 'word rising' : 'word');
+      b.type = 'button';
+      b.title = `${x.reviews} ${reviewsWord(x.reviews)} (${String(x.share).replace('.', ',')}%), ` +
+        `в ${String(x.lift).replace('.', ',')} раза чаще, чем за 90 дней до периода. Щелчок - эти отзывы`;
+      b.append(x.word, el('small', null, rising ? `×${String(x.lift).replace('.', ',')}` : `${Math.round(x.share)}%`));
+      b.onclick = () => actions.openReviews({ since, until: shiftDay(last, 1), vote, q: x.word });
+      return b;
+    };
+    if (w?.rising.length) {
+      col.append(el('p', 'words-title', 'стали писать чаще'));
+      const list = el('div', 'words');
+      w.rising.forEach((x, i) => { const c = chip(x, true); c.style.animationDelay = `${i * 30}ms`; list.append(c); });
+      col.append(list);
+    }
+    if (w?.top.length) {
+      col.append(el('p', 'words-title', 'пишут чаще всего'));
+      const list = el('div', 'words');
+      w.top.forEach((x, i) => { const c = chip(x, false); c.style.animationDelay = `${i * 30}ms`; list.append(c); });
+      col.append(list);
+    } else if (w) {
+      col.append(el('p', 'muted', 'мало отзывов для подсчёта'));
+    }
+    return col;
+  };
+  box.replaceChildren(column(down, 'down', '▼ Недовольные', DOWN), column(up, 'up', '▲ Довольные', UP));
 }
 
 // --- темы ---

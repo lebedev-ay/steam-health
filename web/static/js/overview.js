@@ -1,62 +1,137 @@
-import { UP, DOWN, steamRating } from './labels.js';
-import { $, countUp, delta, el, num, pct, plural, sparkline } from './util.js';
+import { DOWN, UP, steamRating } from './labels.js';
+import { $, countUp, delta, el, num, pct, plural, reviewsWord, sparkline } from './util.js';
 
+// главная: все игры с поиском, фильтрами и сортировкой. Состояние фильтров - в адресе, как и всё остальное
 let games = [];
-let sortKey = 'name';
+let onOpen = () => {};
+const state = { q: '', genre: '', trend: '', llm: false, sort: 'name', view: 'grid' };
+const TREND_PP = 2;   // меньше двух пунктов за 30 дней - не рост и не падение, а шум
 
-// карточка игры: доля позитива за последние 30 дней, изменение к прошлым 30 и полгода по неделям
-function card(g, onOpen) {
-  const now = pct(g.positive_30, g.reviews_30);
-  const before = pct(g.positive_prev, g.reviews_prev);
-  const node = el('a', 'game-card');
-  node.href = `/?app=${g.app_id}`;
-  node.addEventListener('click', e => { e.preventDefault(); onOpen(g.app_id); });
+const now = g => pct(g.positive_30, g.reviews_30);
+const before = g => pct(g.positive_prev, g.reviews_prev);
+const change = g => (now(g) != null && before(g) != null ? now(g) - before(g) : null);
+const genresOf = g => (g.genres || '').split(', ').filter(Boolean);
 
-  node.append(el('h3', null, g.game_name));
+export function steamLink(appId, size = 14) {
+  const a = el('a', 'steam');
+  a.href = `https://store.steampowered.com/app/${appId}/`;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.title = 'Страница игры в Steam';
+  a.setAttribute('aria-label', 'Страница игры в Steam');
+  const img = el('img');
+  img.src = '/static/steam.svg';
+  img.alt = '';
+  img.width = img.height = size;
+  a.append(img);
+  // щелчок по ссылке на Steam не должен заодно открывать игру на стенде
+  a.addEventListener('click', e => e.stopPropagation());
+  return a;
+}
+
+function card(g, i) {
+  // карточка целиком - цель щелчка, ссылка - название: так внутри может жить отдельная ссылка на Steam
+  const node = el('article', 'game-card');
+  node.style.animationDelay = `${Math.min(i * 35, 420)}ms`;
+  node.addEventListener('click', () => onOpen(g.app_id));
+  const title = el('h3');
+  const link = el('a', null, g.game_name);
+  link.href = `/?app=${g.app_id}`;
+  link.style.textDecoration = 'none';
+  link.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); onOpen(g.app_id); });
+  title.append(link);
+  node.append(title, steamLink(g.app_id));
   if (g.genres) node.append(el('div', 'genres', g.genres));
 
   const row = el('div', 'row');
   const big = el('div', 'big');
-  big.textContent = now == null ? '—' : String(now);
-  if (now != null) big.append(el('small', null, '%'));
+  big.textContent = now(g) == null ? '—' : String(now(g));
+  if (now(g) != null) big.append(el('small', null, '%'));
   const side = el('div');
   side.style.textAlign = 'right';
-  if (now != null && before != null) side.append(delta(now - before));
-  side.append(el('div', 'rating', now == null ? 'нет свежих отзывов' : steamRating(now, g.reviews_30)));
+  if (change(g) != null) side.append(delta(change(g)));
+  side.append(el('div', 'rating', now(g) == null ? 'нет свежих отзывов' : steamRating(now(g), g.reviews_30)));
   row.append(big, side);
   node.append(row);
 
   // цвет кривой - тот же знак, что у стрелки: последние 30 дней к прошлым
-  node.append(sparkline(g.spark, now != null && before != null && now < before ? DOWN : UP));
-  node.append(el('div', 'rating', `${num(g.reviews)} ${plural(g.reviews, 'отзыв', 'отзыва', 'отзывов')} · полгода по неделям`));
-  if (g.collection_status === 'partial') node.append(el('span', 'chip warn', 'данные неполные'));
+  node.append(sparkline(g.spark, change(g) != null && change(g) < 0 ? DOWN : UP));
+  const foot = el('div', 'rating foot', `${num(g.reviews)} ${reviewsWord(g.reviews)}`);
+  if (g.has_llm) foot.append(' · ', el('span', 'llm-mark', 'разбор модели'));
+  if (g.collection_status === 'partial') foot.append(' · ', el('span', 'delta down', 'данные неполные'));
+  node.append(foot);
   return node;
 }
 
-function sorted() {
-  const now = g => pct(g.positive_30, g.reviews_30) ?? -1;
-  const change = g => (pct(g.positive_30, g.reviews_30) ?? 0) - (pct(g.positive_prev, g.reviews_prev) ?? 0);
-  const by = {
-    name: (a, b) => a.game_name.localeCompare(b.game_name, 'ru'),
-    pct: (a, b) => now(b) - now(a),
-    delta: (a, b) => Math.abs(change(b)) - Math.abs(change(a))
-  };
-  return [...games].sort(by[sortKey]);
+function matches(g) {
+  const q = state.q.toLowerCase();
+  if (q && ![g.game_name, g.genres, g.developers].some(x => (x || '').toLowerCase().includes(q))) return false;
+  if (state.genre && !genresOf(g).includes(state.genre)) return false;
+  if (state.llm && !g.has_llm) return false;
+  if (state.trend === 'up' && !(change(g) >= TREND_PP)) return false;
+  if (state.trend === 'down' && !(change(g) <= -TREND_PP)) return false;
+  return true;
 }
 
-function renderGrid(onOpen) {
-  $('games').replaceChildren(...sorted().map((g, i) => {
-    const node = card(g, onOpen);
-    node.style.animationDelay = `${Math.min(i * 40, 400)}ms`;
-    return node;
-  }));
+const SORTS = {
+  name: (a, b) => a.game_name.localeCompare(b.game_name, 'ru'),
+  pct: (a, b) => (now(b) ?? -1) - (now(a) ?? -1),
+  delta: (a, b) => Math.abs(change(b) ?? 0) - Math.abs(change(a) ?? 0),
+  reviews: (a, b) => b.reviews - a.reviews
+};
+
+function render() {
+  const list = games.filter(matches).sort(SORTS[state.sort]);
+  const box = $('games');
+  box.className = `games ${state.view}`;
+  box.replaceChildren(...list.map(card));
+  $('games-count').textContent = list.length === games.length
+    ? `${games.length} ${plural(games.length, 'игра', 'игры', 'игр')}`
+    : `показано ${list.length} из ${games.length}`;
+  if (!list.length) box.append(el('p', 'muted', 'Под эти условия игр нет - ослабьте фильтры.'));
+
+  // адрес - без пустых и значений по умолчанию, чтобы ссылка оставалась короткой
+  const params = new URLSearchParams();
+  Object.entries(state).forEach(([k, v]) => {
+    if (v && !(k === 'sort' && v === 'name') && !(k === 'view' && v === 'grid')) params.set(k, v === true ? '1' : v);
+  });
+  history.replaceState(null, '', params.toString() ? `/?${params}` : '/');
 }
 
-export function renderOverview(list, onOpen) {
+function sync() {
+  $('game-search').value = state.q;
+  $('filter-genre').value = state.genre;
+  $('filter-llm').checked = state.llm;
+  $('sort').value = state.sort;
+  document.querySelectorAll('[data-trend]').forEach(b => b.classList.toggle('active', b.dataset.trend === state.trend));
+  document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === state.view));
+}
+
+export function initOverview(openGame) {
+  onOpen = openGame;
+  $('game-search').addEventListener('input', e => { state.q = e.target.value.trim(); render(); });
+  $('filter-genre').addEventListener('change', e => { state.genre = e.target.value; render(); });
+  $('filter-llm').addEventListener('change', e => { state.llm = e.target.checked; render(); });
+  $('sort').addEventListener('change', e => { state.sort = e.target.value; render(); });
+  document.querySelectorAll('[data-trend]').forEach(b => b.addEventListener('click', () => { state.trend = b.dataset.trend; sync(); render(); }));
+  document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => { state.view = b.dataset.view; sync(); render(); }));
+}
+
+export function renderOverview(list) {
   games = list;
+  const params = new URLSearchParams(location.search);
+  Object.assign(state, {
+    q: params.get('q') || '', genre: params.get('genre') || '', trend: params.get('trend') || '',
+    llm: params.get('llm') === '1', sort: SORTS[params.get('sort')] ? params.get('sort') : 'name',
+    view: params.get('view') === 'list' ? 'list' : 'grid'
+  });
+
+  const genres = [...new Set(list.flatMap(genresOf))].sort((a, b) => a.localeCompare(b));
+  $('filter-genre').replaceChildren(new Option('все жанры', ''), ...genres.map(g => new Option(g, g)));
+  $('filter-llm').closest('label').hidden = !list.some(g => g.has_llm);
+
   const reviews = list.reduce((a, g) => a + g.reviews, 0);
   const last = list.map(g => g.last_day).filter(Boolean).sort().pop();
-
   const stat = (value, label) => {
     const node = el('div', 'hero-stat');
     node.append(value, el('span', null, label));
@@ -69,18 +144,10 @@ export function renderOverview(list, onOpen) {
   };
   $('overview-stats').replaceChildren(
     stat(counted(list.length), plural(list.length, 'игра', 'игры', 'игр') + ' под наблюдением'),
-    stat(counted(reviews), plural(reviews, 'отзыв', 'отзыва', 'отзывов') + ' в базе'),
+    stat(counted(reviews), reviewsWord(reviews) + ' в базе'),
     ...(last ? [stat(el('b', null, new Date(last + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })),
                      'последний день с отзывами')] : [])
   );
-
-  document.querySelectorAll('[data-sort]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.sort === sortKey);
-    btn.onclick = () => {
-      sortKey = btn.dataset.sort;
-      document.querySelectorAll('[data-sort]').forEach(b => b.classList.toggle('active', b === btn));
-      renderGrid(onOpen);
-    };
-  });
-  renderGrid(onOpen);
+  sync();
+  render();
 }

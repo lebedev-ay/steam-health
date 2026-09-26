@@ -19,6 +19,7 @@ WORDS_BASE_DAYS = 90
 COMMON_WORDS = [
     "game", "games", "play", "playing", "played", "every", "since", "also", "would", "really", "even", "much", "get", "got",
     "one", "like", "just", "still", "make", "made", "lot", "lots", "thing", "things", "way", "time", "good", "bad", "well",
+    "gets", "never", "old", "new", "takes", "take", "keep", "keeps", "since", "many", "first", "back", "need",
     "игра", "игры", "игре", "игру", "игрой", "играть", "очень", "просто", "это", "всё", "все", "ещё", "еще", "может", "которые",
 ]
 
@@ -321,15 +322,21 @@ def words(app_id, since, until, vote):
             where length(w) > 2 and w !~ '^[0-9]+$'
             group by w
         )
-        select w.w as word, w.recent as reviews, n.recent as total,
-               round(100.0 * w.recent / nullif(n.recent, 0), 1) as share,
-               round(((w.recent + 1.0) / (n.recent + 1)) / ((w.base + 1.0) / (n.base + 1)), 2) as lift
-        from w, n
-        where w.recent >= greatest(5, n.recent / 100) and w.w <> all(%(common)s)
-          and length(to_tsvector('english', w.w)) > 0 and length(to_tsvector('russian', w.w)) > 0
+        -- lateral, чтобы число отзывов пришло и тогда, когда ни одно слово не прошло порог
+        select n.recent as total, x.*
+        from n
+        left join lateral (
+            select w.w as word, w.recent as reviews,
+                   round(100.0 * w.recent / nullif(n.recent, 0), 1) as share,
+                   round(((w.recent + 1.0) / (n.recent + 1)) / ((w.base + 1.0) / (n.base + 1)), 2) as lift
+            from w
+            where w.recent >= greatest(5, n.recent / 100) and w.w <> all(%(common)s)
+              and length(to_tsvector('english', w.w)) > 0 and length(to_tsvector('russian', w.w)) > 0
+        ) x on true
     """, {"app": app_id, "since": since, "until": until, "base": since - timedelta(days=WORDS_BASE_DAYS), "up": vote == "up",
           "common": COMMON_WORDS})
     total = rows[0]["total"] if rows else 0
+    rows = [r for r in rows if r["word"] is not None]
     return {
         "reviews": total,
         # частые - о чём пишут вообще, растущие - что изменилось: разные вопросы, поэтому два списка
