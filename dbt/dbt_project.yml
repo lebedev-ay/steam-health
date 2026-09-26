@@ -21,4 +21,4 @@ vars:
   # активная конфигурация разметки новостей для dbt/models/news_label_current.sql. Пустой хэш - разметка не выбрана,
   # представление пустое, дашборд считает важность событий по-старому
   llm_news_model: deepseek-flash
-  llm_news_prompt_hash: ''
+  llm_news_prompt_hash: '4924afbb'
