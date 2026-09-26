@@ -103,7 +103,9 @@ copied=$(sql dst "select count(*) from core.fct_review")
 ok "отзывов перенесено: $copied"
 
 echo "== запуск"
-dst up -d --build
+# образ собирается заранее: иначе compose пытается скачать его для web, worker и dbt из Docker Hub, где его нет
+dst build
+dst up -d
 sql dst "drop table if exists marts.review_flat" > /dev/null
 for _ in $(seq 30); do curl -fsS -o /dev/null "http://127.0.0.1:$WEB_PORT/" && break; sleep 2; done
 curl -fsS -o /dev/null "http://127.0.0.1:$WEB_PORT/" || stop "дашборд не отвечает на порту $WEB_PORT - смотри docker compose logs web"
