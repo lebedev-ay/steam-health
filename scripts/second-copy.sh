@@ -116,6 +116,13 @@ if [ -n "$DOMAIN" ]; then
   backup="$SRC/Caddyfile.bak-$(date +%Y%m%d-%H%M%S)"
   cp "$SRC/Caddyfile" "$backup"
   printf '\n%s {\n    # вторая копия проекта: %s\n    reverse_proxy exp-web:5000\n}\n' "$DOMAIN" "$DST" >> "$SRC/Caddyfile"
+  # файл смонтирован в контейнер по отдельности: если его когда-то заменили (git pull), контейнер смотрит на прежнюю версию
+  if ! src_prod exec -T caddy grep -q "^$DOMAIN" /etc/caddy/Caddyfile; then
+    cat "$backup" > "$SRC/Caddyfile"
+    stop "caddy не видит изменений в $SRC/Caddyfile - он работает по его прежней версии. Файл возвращён как был; сравни
+  diff <(docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T caddy cat /etc/caddy/Caddyfile) Caddyfile
+и пересоздай caddy: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate caddy"
+  fi
   if ! src_prod exec -T caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile > /dev/null 2>&1; then
     cat "$backup" > "$SRC/Caddyfile"
     stop "caddy не принял новый Caddyfile - вернул прежний"
