@@ -23,8 +23,8 @@ flowchart TD
         C_PLATFORM[("dim_platform_event")]
     end
     subgraph martsschema["marts"]
-        M_FLAT[("review_flat")]
         M_DAILY[("review_daily")]
+        M_SEG[("review_segment")]
         M_CUR[("dim_game_current")]
     end
     WEB["web/app.py"]
@@ -41,13 +41,15 @@ flowchart TD
     RAW_NEWS -->|"load_fct_patch.py"| C_PATCH
     RAW_NEWS -->|"fetch_platform_events.load_all()"| C_PLATFORM
 
-    C_REVIEW --> M_FLAT
-    C_GAME --> M_FLAT
-    C_LANG --> M_FLAT
+    C_REVIEW --> M_DAILY
+    C_GAME --> M_DAILY
+    C_REVIEW --> M_SEG
+    C_LANG --> M_SEG
     C_GAME --> M_CUR
-    M_FLAT --> M_DAILY
+    C_REF --> M_CUR
 
     M_DAILY --> WEB
+    M_SEG --> WEB
     M_CUR --> WEB
     C_PATCH -->|"события для графика"| WEB
     C_PLATFORM -->|"напрямую, мимо marts"| WEB
@@ -135,9 +137,10 @@ erDiagram
 
 Описаны моделями в `dbt/models/`, точные определения смотреть там.
 
-- **review_flat** - таблица, плоский список отзывов с натуральными ключами вместо суррогатных: `app_id`, `review_id`, `created_at`, `voted_up`, `language_code`, `created_date`. Заглушка `app_id = -1` отфильтрована.
-- **review_daily** - таблица, дневной агрегат по игре: `app_id`, `day`, `review_count`, `positive_count`. Дашборд берёт ряд отсюда, а не пересчитывает его на каждый запрос.
-- **dim_game_current** - представление, по строке на игру, текущая версия без заглушки. Нужна потому, что `app_id` в SCD2 не уникален (запись 012).
+- **review_daily** - таблица, дневной агрегат по игре прямо из ядра: `app_id`, `day`, `review_count`, `positive_count`. Заглушка `app_id = -1` отфильтрована. Отсюда берут ряд дашборд, детектор переломов и доли «не рекомендую» в выводах.
+- **review_segment** - таблица, доля позитива в разрезах аудитории: `app_id`, `dimension`, `segment`, `sort_order`, `review_count`, `positive_count`. Разрезы - наигранные часы к отзыву, язык, способ получения игры, ранний доступ, ответ разработчика. Сегменты хранятся кодами, подписи к ним - в `web/static/js/labels.js`.
+- **dim_game_current** - представление, по строке на игру, текущая версия без заглушки, с разработчиками, издателями и жанрами через запятую. Нужна потому, что `app_id` в SCD2 не уникален (запись 012).
+- **Витрины LLM-разметки** - `review_labeled`, `review_labeling_daily`, `review_aspect_tag`, `review_aspect_daily`, `review_category_daily`, `change_point_verdict_current` и активные конфигурации `llm_config_active`, `llm_verdict_config_active`. Дашборд читает из них темы отзывов и выводы по переломам.
 
 Витрин окон больше нет: `patch_impact` и `dim_window` удалены в V33 и V35 вместе с таблицей влияния событий. События для графика дашборд читает прямо из `core.fct_patch`.
 
@@ -164,7 +167,6 @@ erDiagram
 | `core.review_text` | `load_fct_review.py` | 1 441 824 |
 | `core.fct_patch` | `load_fct_patch.py` | 13 419 |
 | `core.dim_platform_event` | `fetch_platform_events.py` | 80 |
-| `marts.review_flat` | dbt | 1 441 824 |
 | `marts.review_daily` | dbt | 10 592 |
 | `marts.dim_game_current` | dbt | 21 |
 
@@ -173,7 +175,7 @@ erDiagram
 - **Собирается не вся история отзывов, а свежий хвост.** Глубина задаётся днями - `COLLECT_REVIEW_DAYS`, по умолчанию 365, - при пределе `COLLECT_REVIEW_PAGES` в 200 страниц по 100 отзывов, и у популярных игр предел срабатывает раньше даты (запись 036). Разброс собранного по 21 игре - от 50 099 до 161 565 отзывов, медиана 50 564. Задаче нужна плотность отзывов рядом с патчем, а не полный архив с релиза.
 - **Связь патча и отзыва вычисляется по времени, а не через внешний ключ** (запись 010): игрок мог написать через год после десяти патчей подряд.
 - **Доли не хранятся, только числитель и знаменатель** (запись 008): среднее от долей по дням искажает картину, когда дни отличаются по объёму на порядки.
-- **`web/app.py` читает `core.dim_platform_event` напрямую, минуя marts.** Единственное исключение из правила «дашборд читает витрины»: витрина агрегировала бы то, что и так готово к чтению.
+- **Детектор переломов (`collector/change_points.py`) читает `core.fct_patch` и `core.dim_platform_event` напрямую, минуя marts.** Исключение из правила «дашборд читает витрины»: витрина агрегировала бы то, что и так готово к чтению.
 
 ## Запуск локально
 
