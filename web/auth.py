@@ -92,5 +92,7 @@ def login(redis_client):
 
 
 def logout():
-    session.clear()
+    # без ключа сессии нет вовсе, а менять её Flask в таком случае не даёт
+    if SECRET_KEY:
+        session.clear()
     return jsonify({"login": None})

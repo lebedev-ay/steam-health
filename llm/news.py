@@ -74,12 +74,8 @@ def batch_text(items):
 
 def parse(content, size):
     """Вернуть ({номер: разметка}, ошибки). Кривой объект бракует только свою новость: соседние в пачке от него не зависят."""
-    text = (content or "").strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
-    try:
-        items = json.loads(text)
-    except json.JSONDecodeError:
+    items = client.load_json(content)
+    if items is None:
         return {}, ["ответ не JSON"]
     if not isinstance(items, list):
         return {}, ["ответ не массив"]
@@ -203,16 +199,6 @@ def run(conn, todo, prompt, config_sk, run_id):
     return len(todo) - len(still), len(still), spend
 
 
-def estimate(prompt, chars, n, price):
-    """Цена разметки n новостей до вызова; системный промпт после первой пачки обычно берётся из кэша провайдера."""
-    if price is None:
-        return None
-    batches = -(-n // BATCH)
-    prompt_tokens = len(prompt) / client.PROMPT_CHARS_PER_TOKEN
-    n_in = batches * prompt_tokens + (chars + n * 60) / client.TEXT_CHARS_PER_TOKEN
-    return client.price_of(n_in, max(batches - 1, 0) * prompt_tokens, n * OUTPUT_TOKENS_PER_NEWS, price)
-
-
 # =============================================================================
 # Эталон
 # =============================================================================
@@ -302,7 +288,9 @@ def main():
               f"уже размечено {len(rows) - len(todo)} | в работу {len(todo)}")
         if args.dry_run:
             chars = sum(len(r["title"] or "") + len(clean(r["body"])) for r in todo)
-            print(f"оценка: {client.money(estimate(prompt, chars, len(todo), client.prices()))}, текста {chars} символов")
+            est = client.estimate(prompt, chars, len(todo), client.prices(), batch_size=BATCH,
+                                  output_per_item=OUTPUT_TOKENS_PER_NEWS, tag_chars=60)
+            print(f"оценка: {client.money(est)}, текста {chars} символов")
             return
 
         run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S") + f"-n{args.app_id or 'all'}"

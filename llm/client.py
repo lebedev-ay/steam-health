@@ -1,5 +1,6 @@
 """Вызов модели в OpenAI-совместимом формате. Адрес, модель и ключ - из окружения."""
 
+import json
 import os
 import time
 
@@ -75,11 +76,16 @@ def new_spend():
     return {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}
 
 
+def add_cost(a, b):
+    """Сумма цен, где None - неизвестна: одна неизвестная делает неизвестной всю сумму."""
+    return None if a is None or b is None else a + b
+
+
 def add_spend(total, part):
-    """Прибавить расход part к total. Цена None заразна: одна неизвестная делает неизвестной всю сумму."""
+    """Прибавить расход part к total."""
     for key in ("input", "cached", "output", "reasoning"):
         total[key] += part[key]
-    total["cost"] = None if part["cost"] is None or total["cost"] is None else total["cost"] + part["cost"]
+    total["cost"] = add_cost(total["cost"], part["cost"])
 
 
 def spend_of(usage, price):
@@ -93,16 +99,31 @@ def money(value):
     return "цена неизвестна" if value is None else f"${value:.4f}"
 
 
-def estimate(prompt, text_chars, n, price):
-    """Оценка цены разметки n отзывов до вызова; None - цены не заданы."""
+def estimate(prompt, text_chars, n, price, batch_size=None, output_per_item=OUTPUT_TOKENS_PER_REVIEW,
+             tag_chars=REVIEW_TAG_CHARS):
+    """Оценка цены n вызываемых единиц (отзывов, новостей, выводов) до вызова; None - цены не заданы.
+
+    batch_size - сколько единиц в одном вызове (по умолчанию - пачка разметки отзывов), tag_chars - обёртка единицы в тексте.
+    """
     if price is None or n == 0:
         return None if price is None else 0.0
-    batches = -(-n // GENERATION["batch_size"])
+    batches = -(-n // (batch_size or GENERATION["batch_size"]))
     prompt_tokens = len(prompt) / PROMPT_CHARS_PER_TOKEN
-    n_in = batches * prompt_tokens + (text_chars + n * REVIEW_TAG_CHARS) / TEXT_CHARS_PER_TOKEN
-    # системный промпт общий у всех пачек: после первой он обычно берётся из кэша провайдера
+    n_in = batches * prompt_tokens + (text_chars + n * tag_chars) / TEXT_CHARS_PER_TOKEN
+    # системный промпт общий у всех вызовов: после первого он обычно берётся из кэша провайдера
     n_cached = (batches - 1) * prompt_tokens
-    return price_of(n_in, n_cached, n * OUTPUT_TOKENS_PER_REVIEW, price)
+    return price_of(n_in, n_cached, n * output_per_item, price)
+
+
+def load_json(content):
+    """JSON из ответа модели, в том числе обёрнутый в ```json; None - это не JSON."""
+    text = (content or "").strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
 
 
 def provider_fields(base_url):

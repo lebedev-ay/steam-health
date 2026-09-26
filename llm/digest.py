@@ -10,7 +10,6 @@
 """
 
 import argparse
-import json
 import re
 import time
 from datetime import date, datetime, timezone
@@ -189,13 +188,7 @@ def known_numbers(ev):
 
 
 def parse(raw):
-    text = (raw or "").strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        return None, None
+    data = client.load_json(raw)
     if not isinstance(data, dict) or not all(isinstance(data.get(f), str) and data[f].strip() for f in ("headline", "summary")):
         return None, None
     return data["headline"].strip(), data["summary"].strip()
@@ -265,9 +258,8 @@ def process_game(conn, app_id, ctx, counts):
             continue
         text = as_text(game, ev)
         if ctx["dry_run"]:
-            est = None if ctx["price"] is None else client.price_of(
-                len(ctx["prompt"]) / client.PROMPT_CHARS_PER_TOKEN + len(text) / client.TEXT_CHARS_PER_TOKEN, 0, OUTPUT_TOKENS, ctx["price"])
-            ctx["estimate"] = None if est is None or ctx["estimate"] is None else ctx["estimate"] + est
+            est = client.estimate(ctx["prompt"], len(text), 1, ctx["price"], batch_size=1, output_per_item=OUTPUT_TOKENS, tag_chars=0)
+            ctx["estimate"] = client.add_cost(ctx["estimate"], est)
             print(f"  {month:%Y-%m}: к генерации")
             continue
         problems, headline, summary, attempts, spend = generate(ctx["prompt"], text, ev, ctx["vocab"], ctx["price"])
@@ -316,9 +308,7 @@ def main():
             ctx["cfg_sk"] = codebook.ensure_config(conn, model, prompt, PARAMS, cfg["codebook_version"], PROMPT_NAME)
             conn.commit()
         ctx["cfg"] = cfg
-        ctx["vocab"] = sorted({x for r in conn.execute(
-            "select aspect_id, aspect_name, category_id, category_name from core.dim_aspect where codebook_version = %s",
-            (cfg["codebook_version"],)) for x in r.values()} - {"other", "Other", "overall", "Overall"}, key=len, reverse=True)
+        ctx["vocab"] = codebook.vocab(conn, cfg["codebook_version"])
         games = [args.app_id] if args.app_id else [r["app_id"] for r in conn.execute(
             "select app_id from core.llm_game where enabled order by app_id").fetchall()]
         for app_id in games:

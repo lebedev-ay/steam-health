@@ -47,10 +47,10 @@
       <p class="lead">Доля положительных отзывов по дням, резкие переломы и то, что случилось рядом с ними: патчи, сезоны, распродажи. Для части игр модель разбирает, о чём именно пишут.</p>
       <div id="overview-stats" class="hero-stats"></div>
     </div>
-    <div class="toolbar" id="filters">
+    <div class="toolbar">
       <input id="game-search" class="search" type="search" placeholder="Название, жанр или разработчик" autocomplete="off" aria-label="Поиск игры">
       <select id="filter-genre" aria-label="Жанр"><option value="">все жанры</option></select>
-      <div class="seg" id="filter-trend" role="group" aria-label="Тренд за 30 дней">
+      <div class="seg" role="group" aria-label="Тренд за 30 дней">
         <button type="button" data-trend="" class="active">все</button>
         <button type="button" data-trend="up">растут</button>
         <button type="button" data-trend="down">падают</button>
@@ -62,7 +62,7 @@
         <option value="delta">по изменению</option>
         <option value="reviews">по числу отзывов</option>
       </select>
-      <div class="seg" id="view-mode" role="group" aria-label="Вид">
+      <div class="seg" role="group" aria-label="Вид">
         <button type="button" data-view="grid" class="active" title="карточки">▦</button>
         <button type="button" data-view="list" title="список">☰</button>
       </div>

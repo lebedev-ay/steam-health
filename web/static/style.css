@@ -332,6 +332,7 @@ a.chip:hover { color: var(--text); border-color: rgba(255, 255, 255, 0.25); }
 .turn-words b { color: var(--text-2); font-weight: 500; }
 .turn-actions { display: flex; gap: 16px; margin-top: auto; padding-top: 4px; }
 .dot { width: 8px; height: 8px; border-radius: 1px; flex: none; transform: translateY(0) rotate(45deg); display: inline-block; }
+td .dot { margin-right: 8px; }
 .excerpts summary { cursor: pointer; color: var(--text-2); font-size: 13px; }
 blockquote { margin: 8px 0; padding: 2px 12px; border-left: 2px solid var(--line-2); color: var(--text-2); font-size: 14px; }
 

@@ -7,6 +7,8 @@ import re
 import unicodedata
 from datetime import timedelta
 
+from llm.client import load_json
+
 WINDOW = 7
 LATE_REVIEWS_DAYS = 3        # запас на поздние отзывы: окно «после» считается закрытым через 3 дня после конца
 FIELDS = ("what_happened", "what_players_say")
@@ -90,13 +92,7 @@ def foreign_letters(text):
 
 def parse(raw):
     """(what_happened, what_players_say) из JSON-ответа; (None, None), если JSON не тот."""
-    text = (raw or "").strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        return None, None
+    data = load_json(raw)
     if not isinstance(data, dict) or not all(isinstance(data.get(f), str) and data[f].strip() for f in FIELDS):
         return None, None
     return data["what_happened"].strip(), data["what_players_say"].strip()

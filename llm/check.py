@@ -1,7 +1,6 @@
 """Пачка для модели и проверка её ответа. Без сети и базы - это и тестируется."""
 
-import json
-
+from llm.client import load_json
 from llm.codebook import MAX_ASPECTS
 
 SIGNS = ("+", "-", "±")
@@ -19,12 +18,8 @@ def parse(content, size, allowed_ids):
     Аспект - {"id", "sentiment", "note"}; note только у other. Кривой аспект бракует весь отзыв: частичная разметка исказила бы доли.
     Повтор аспекта отбрасывается, больше MAX_ASPECTS - остаются первые, они по важности.
     """
-    text = (content or "").strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
-    try:
-        items = json.loads(text)
-    except json.JSONDecodeError:
+    items = load_json(content)
+    if items is None:
         return {}, ["ответ не JSON"]
     if not isinstance(items, list):
         return {}, ["ответ не массив"]

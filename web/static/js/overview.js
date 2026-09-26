@@ -12,7 +12,7 @@ const before = g => pct(g.positive_prev, g.reviews_prev);
 const change = g => (now(g) != null && before(g) != null ? now(g) - before(g) : null);
 const genresOf = g => (g.genres || '').split(', ').filter(Boolean);
 
-export function steamLink(appId, size = 14) {
+function steamLink(appId, size = 14) {
   const a = el('a', 'steam');
   a.href = `https://store.steampowered.com/app/${appId}/`;
   a.target = '_blank';

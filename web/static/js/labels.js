@@ -3,7 +3,7 @@
 // типы событий игры. Категориальная палитра проверена на тёмном фоне: яркость, насыщенность, контраст, различимость
 // при дальтонизме. Синий и красный в неё не входят - они заняты ростом и спадом. Анонсы, маркетинг, блоги и служебное - фон
 const BACKGROUND = '#6f6a7a';
-export const EVENT_TYPES = {
+const EVENT_TYPES = {
   patch:        { color: '#9d52f0', label: 'патчи' },
   season_start: { color: '#2a9d74', label: 'сезоны' },
   expansion:    { color: '#b87a14', label: 'дополнения' },
@@ -28,6 +28,7 @@ const KIND_LABELS = {
   community: 'сообщество', other: 'прочее'
 };
 export const TIER_LABELS = { milestone: 'веха', major: 'крупное', regular: 'обычное', background: 'фон' };
+export const TIER_ORDER = { milestone: 0, major: 1, regular: 2, background: 3 };
 
 // группа события для цвета и легенды: по разметке, если она есть, иначе по классификатору заголовков.
 // Дополнения и релизы в одной группе - «веха по смыслу», события игры - отдельно от прессы

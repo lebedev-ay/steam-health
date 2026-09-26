@@ -384,13 +384,6 @@ def save(conn, ev, h, point, cfg_sk, author, what, talk, problems, attempts, spe
     conn.commit()
 
 
-def estimate(prompt, text, price):
-    if price is None:
-        return None
-    n_in = len(prompt) / client.PROMPT_CHARS_PER_TOKEN + len(text) / client.TEXT_CHARS_PER_TOKEN
-    return client.price_of(n_in, 0, OUTPUT_TOKENS, price)
-
-
 def process_game(conn, app_id, ctx, acc):
     """Выводы по точкам детектора одной игры. ctx - общие настройки запуска, acc - общие счётчики и расход."""
     counts, spend_total = acc["counts"], acc["spend"]
@@ -431,8 +424,8 @@ def process_game(conn, app_id, ctx, acc):
         text = None if templated else as_text(game, ev)
         if ctx["dry_run"]:
             if text:
-                e = estimate(ctx["prompt"], text, ctx["price"])
-                acc["estimate"] = None if e is None or acc["estimate"] is None else acc["estimate"] + e
+                e = client.estimate(ctx["prompt"], len(text), 1, ctx["price"], batch_size=1, output_per_item=OUTPUT_TOKENS, tag_chars=0)
+                acc["estimate"] = client.add_cost(acc["estimate"], e)
             print(f"  {point['day']}: {'изменились улики' if existing else 'новая'}, {'шаблон' if templated else 'модель'}")
             continue
 
@@ -479,9 +472,7 @@ def main():
             cfg_sk = codebook.ensure_config(conn, model, prompt, PARAMS, cfg["codebook_version"], PROMPT_NAME)
             conn.commit()
         ctx.update(cfg=cfg, cfg_sk=cfg_sk)
-        ctx["vocab"] = sorted({x for r in conn.execute(
-            "select aspect_id, aspect_name, category_id, category_name from core.dim_aspect where codebook_version = %s",
-            (cfg["codebook_version"],)) for x in r.values()} - {"other", "Other", "overall", "Overall"}, key=len, reverse=True)
+        ctx["vocab"] = codebook.vocab(conn, cfg["codebook_version"])
 
         games = [args.app_id] if args.app_id else [r["app_id"] for r in conn.execute(
             "select app_id from core.llm_game where enabled order by app_id").fetchall()]

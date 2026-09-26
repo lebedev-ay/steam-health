@@ -91,6 +91,17 @@ def sync_aspects(conn, codebook):
     return {aspect_id: r["aspect_sk"] for aspect_id, r in by_id.items()}
 
 
+def vocab(conn, version):
+    """Английские названия и id справочника, которых не должно быть в русском тексте модели; длинные первыми.
+
+    other и overall - служебные слова, совпадающие с обычными английскими, их не ищем.
+    """
+    names = {x for r in conn.execute(
+        "select aspect_id, aspect_name, category_id, category_name from core.dim_aspect where codebook_version = %s",
+        (version,)) for x in r.values()}
+    return sorted(names - {"other", "Other", "overall", "Overall"}, key=len, reverse=True)
+
+
 def find_config(conn, model, prompt, params):
     row = conn.execute(
         "select llm_config_sk from core.dim_llm_config where prompt_hash = %s and model = %s and params = %s",
