@@ -1,6 +1,7 @@
 """Выводы по точкам перелома: короткий текст из двух частей по уликам из витрин разметки.
 
     python -m llm.verdict --app-id 892970 [--dry-run]
+    python -m llm.verdict --all-enabled [--dry-run]      - все игры, включённые в core.llm_game
 
 Точки - детектор дашборда (collector/change_points.py), не больше MAX_POINTS самых сильных на игру.
 Для каждой точки собираются улики и их хэш: хэш не изменился - вывод не пересчитывается. Решения (направление, характер,
@@ -398,9 +399,72 @@ def estimate(prompt, text, price):
     return client.price_of(n_in, 0, OUTPUT_TOKENS, price)
 
 
+def process_game(conn, app_id, ctx, acc):
+    """Выводы по точкам детектора одной игры. ctx - общие настройки запуска, acc - общие счётчики и расход."""
+    counts, spend_total = acc["counts"], acc["spend"]
+    game = conn.execute("select game_name from marts.dim_game_current where app_id = %s", (app_id,)).fetchone()
+    game = game["game_name"] if game else str(app_id)
+    marts = load_marts(conn, app_id, ctx["cfg"]["llm_config_sk"], ctx["cfg"]["codebook_version"])
+    pts = points(app_id)
+    print(f"{game}: точек детектора {len(pts)}")
+
+    for point in pts:
+        ev = evidence(conn, app_id, point, ctx["cfg"], marts)
+        h = evidence_hash(ev)
+        existing = conn.execute("""
+            select verdict_sk, evidence_hash, status, support_numbers, excerpts, evidence -> 'reviews' as reviews
+            from core.fct_change_point_verdict
+            where app_id = %s and change_date = %s and llm_config_sk = %s order by created_at desc
+        """, (app_id, point["day"], ctx["cfg_sk"])).fetchall() if ctx["cfg_sk"] else []
+        same = next((r for r in existing if r["evidence_hash"] == h), None)
+        if same:
+            counts["same"] += 1
+            # улики не изменились, а окно «после» уже закрыто - вывод становится итоговым без генерации
+            if same["status"] == "preliminary" and status(point["day"], ctx["today"]) == "final" and not ctx["dry_run"]:
+                conn.execute("update core.fct_change_point_verdict set status = 'final' where verdict_sk = %s",
+                             (same["verdict_sk"],))
+                conn.commit()
+                counts["finalized"] += 1
+            # отрывки - представление вывода, а не его улики: при смене правила отбора обновляются без генерации
+            fresh = excerpts(same["support_numbers"], {r["number"]: r for r in same["reviews"]},
+                             review_languages(conn, same["reviews"]))
+            if fresh != same["excerpts"] and not ctx["dry_run"]:
+                conn.execute("update core.fct_change_point_verdict set excerpts = %s where verdict_sk = %s",
+                             (Jsonb(fresh), same["verdict_sk"]))
+                conn.commit()
+                counts["excerpts"] += 1
+            continue
+        counts["changed" if existing else "new"] += 1
+        templated = not ev["labels"]["significant"]
+        text = None if templated else as_text(game, ev)
+        if ctx["dry_run"]:
+            if text:
+                e = estimate(ctx["prompt"], text, ctx["price"])
+                acc["estimate"] = None if e is None or acc["estimate"] is None else acc["estimate"] + e
+            print(f"  {point['day']}: {'изменились улики' if existing else 'новая'}, {'шаблон' if templated else 'модель'}")
+            continue
+
+        if templated:
+            problems, what, talk, attempts = [], template(ev), None, 1
+            spend = {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}
+            counts["template"] += 1
+        else:
+            problems, what, talk, attempts, spend = generate(ctx["prompt"], text, ev, ctx["vocab"], ctx["price"])
+            counts["model"] += 1
+            counts["flagged"] += bool(problems)
+        save(conn, ev, h, point, ctx["cfg_sk"], "template" if templated else "model", what, talk, problems, attempts,
+             spend, ctx["run_id"], ctx["today"])
+        for key in ("input", "cached", "output", "reasoning"):
+            spend_total[key] += spend[key]
+        spend_total["cost"] = None if spend["cost"] is None or spend_total["cost"] is None else spend_total["cost"] + spend["cost"]
+        print(f"  {point['day']}: {'шаблон' if templated else 'модель'}{', замечания: ' + str(problems) if problems else ''}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Выводы по точкам перелома")
-    parser.add_argument("--app-id", type=int, required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--app-id", type=int)
+    source.add_argument("--all-enabled", action="store_true", help="все игры, включённые в core.llm_game")
     parser.add_argument("--dry-run", action="store_true", help="посчитать точки, новые и изменившиеся, и цену - без модели и записи")
     args = parser.parse_args()
 
@@ -408,9 +472,12 @@ def main():
     if not args.dry_run:
         client.api_key()   # без ключа выход до любой записи в базу
     prompt = PROMPT.read_text(encoding="utf-8").strip()
-    price = client.prices()
-    today = datetime.now(timezone.utc).date()
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S") + f"-v{args.app_id}"
+    started = time.monotonic()
+    now = datetime.now(timezone.utc)
+    ctx = {"prompt": prompt, "price": client.prices(), "today": now.date(), "dry_run": args.dry_run,
+           "run_id": now.strftime("%Y%m%d-%H%M%S") + (f"-v{args.app_id}" if args.app_id else "-vall")}
+    acc = {"counts": {"new": 0, "changed": 0, "same": 0, "finalized": 0, "excerpts": 0, "model": 0, "template": 0, "flagged": 0},
+           "spend": {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}, "estimate": 0.0}
 
     with psycopg.connect(DSN, row_factory=dict_row) as conn:
         cfg = conn.execute("select llm_config_sk, codebook_version from marts.llm_config_active").fetchone()
@@ -421,81 +488,28 @@ def main():
         else:
             cfg_sk = codebook.ensure_config(conn, model, prompt, PARAMS, cfg["codebook_version"], PROMPT_NAME)
             conn.commit()
-        game = conn.execute("select game_name from marts.dim_game_current where app_id = %s", (args.app_id,)).fetchone()
-        game = game["game_name"] if game else str(args.app_id)
-        vocab = sorted({x for r in conn.execute(
+        ctx.update(cfg=cfg, cfg_sk=cfg_sk)
+        ctx["vocab"] = sorted({x for r in conn.execute(
             "select aspect_id, aspect_name, category_id, category_name from core.dim_aspect where codebook_version = %s",
             (cfg["codebook_version"],)) for x in r.values()} - {"other", "Other", "overall", "Overall"}, key=len, reverse=True)
-        marts = load_marts(conn, args.app_id, cfg["llm_config_sk"], cfg["codebook_version"])
 
-        counts = {"new": 0, "changed": 0, "same": 0, "finalized": 0, "excerpts": 0, "model": 0, "template": 0, "flagged": 0}
-        spend_total = {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}
-        est_total = 0.0
-        started = time.monotonic()
-        pts = points(args.app_id)
-        print(f"{game}: точек детектора {len(pts)} | промпт {PROMPT_NAME} ({codebook.prompt_hash(prompt)[:8]}) | {model}")
+        games = [args.app_id] if args.app_id else [r["app_id"] for r in conn.execute(
+            "select app_id from core.llm_game where enabled order by app_id").fetchall()]
+        print(f"игр: {len(games)} | промпт {PROMPT_NAME} ({codebook.prompt_hash(prompt)[:8]}) | {model}")
+        for app_id in games:
+            process_game(conn, app_id, ctx, acc)
 
-        for point in pts:
-            ev = evidence(conn, args.app_id, point, cfg, marts)
-            h = evidence_hash(ev)
-            existing = conn.execute("""
-                select verdict_sk, evidence_hash, status, support_numbers, excerpts, evidence -> 'reviews' as reviews
-                from core.fct_change_point_verdict
-                where app_id = %s and change_date = %s and llm_config_sk = %s order by created_at desc
-            """, (args.app_id, point["day"], cfg_sk)).fetchall() if cfg_sk else []
-            same = next((r for r in existing if r["evidence_hash"] == h), None)
-            if same:
-                counts["same"] += 1
-                # улики не изменились, а окно «после» уже закрыто - вывод становится итоговым без генерации
-                if same["status"] == "preliminary" and status(point["day"], today) == "final" and not args.dry_run:
-                    conn.execute("update core.fct_change_point_verdict set status = 'final' where verdict_sk = %s",
-                                 (same["verdict_sk"],))
-                    conn.commit()
-                    counts["finalized"] += 1
-                # отрывки - представление вывода, а не его улики: при смене правила отбора обновляются без генерации
-                fresh = excerpts(same["support_numbers"], {r["number"]: r for r in same["reviews"]},
-                                 review_languages(conn, same["reviews"]))
-                if fresh != same["excerpts"] and not args.dry_run:
-                    conn.execute("update core.fct_change_point_verdict set excerpts = %s where verdict_sk = %s",
-                                 (Jsonb(fresh), same["verdict_sk"]))
-                    conn.commit()
-                    counts["excerpts"] += 1
-                continue
-            counts["changed" if existing else "new"] += 1
-            templated = not ev["labels"]["significant"]
-            text = None if templated else as_text(game, ev)
-            if args.dry_run:
-                if text:
-                    e = estimate(prompt, text, price)
-                    est_total = None if e is None or est_total is None else est_total + e
-                print(f"  {point['day']}: {'изменились улики' if existing else 'новая'}, {'шаблон' if templated else 'модель'}")
-                continue
-
-            if templated:
-                problems, what, talk, attempts = [], template(ev), None, 1
-                spend = {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}
-                counts["template"] += 1
-            else:
-                problems, what, talk, attempts, spend = generate(prompt, text, ev, vocab, price)
-                counts["model"] += 1
-                counts["flagged"] += bool(problems)
-            save(conn, ev, h, point, cfg_sk, "template" if templated else "model", what, talk, problems, attempts,
-                 spend, run_id, today)
-            for key in ("input", "cached", "output", "reasoning"):
-                spend_total[key] += spend[key]
-            spend_total["cost"] = None if spend["cost"] is None or spend_total["cost"] is None else spend_total["cost"] + spend["cost"]
-            print(f"  {point['day']}: {'шаблон' if templated else 'модель'}{', замечания: ' + str(problems) if problems else ''}")
-
+    counts, spend = acc["counts"], acc["spend"]
     print(f"новых {counts['new']}, изменившихся {counts['changed']}, без изменений {counts['same']}"
           + (f" (переведено в итоговые {counts['finalized']})" if counts["finalized"] else "")
           + (f", обновлены отрывки {counts['excerpts']}" if counts["excerpts"] else ""))
     if args.dry_run:
-        print(f"оценка: {'цена неизвестна' if est_total is None else f'${est_total:.4f}'}")
+        print(f"оценка: {'цена неизвестна' if acc['estimate'] is None else f'${acc['estimate']:.4f}'}")
         return
-    cost = "цена неизвестна" if spend_total["cost"] is None else f"${spend_total['cost']:.4f}"
-    print(f"run_id {run_id} | {time.monotonic() - started:.0f} с | модель {counts['model']} (не прошли проверки {counts['flagged']}), "
-          f"шаблон {counts['template']} | {cost} | токены вход {spend_total['input']} (кэш {spend_total['cached']}), "
-          f"выход {spend_total['output']} (размышления {spend_total['reasoning']})")
+    cost = "цена неизвестна" if spend["cost"] is None else f"${spend['cost']:.4f}"
+    print(f"run_id {ctx['run_id']} | {time.monotonic() - started:.0f} с | модель {counts['model']} (не прошли проверки {counts['flagged']}), "
+          f"шаблон {counts['template']} | {cost} | токены вход {spend['input']} (кэш {spend['cached']}), "
+          f"выход {spend['output']} (размышления {spend['reasoning']})")
 
 
 if __name__ == "__main__":
