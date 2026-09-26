@@ -26,7 +26,7 @@ sql() { local where=$1; shift; "$where" exec -T postgres sh -c "psql -U \"\$POST
 echo "== проверка"
 [ "$SRC" != "$DST" ] || stop "запусти скрипт из папки второй копии, а не первой"
 [ -f "$SRC/.env" ] || stop "в $SRC нет .env"
-[ -f docker-compose.yml ] && [ -f docker-compose.exp.yml ] || stop "$DST - не папка проекта с нужной веткой"
+[ -f docker-compose.yml ] || stop "$DST - не папка проекта"
 [ ! -e .env ] || stop "в $DST уже есть .env - похоже, копия уже поднималась"
 ok "первая копия: $SRC (ветка $(git -C "$SRC" branch --show-current))"
 ok "вторая копия: $DST (ветка $(git branch --show-current))"
@@ -55,8 +55,7 @@ fi
 if [ -n "$DOMAIN" ]; then
   caddy=$(src_prod ps --status running -q caddy)
   [ -n "$caddy" ] || stop "в первой копии не запущен caddy"
-  network=$(docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}' "$caddy" | awk '{print $1}')
-  ok "caddy первой копии запущен, сеть $network"
+  ok "caddy первой копии запущен"
   ! grep -q "^$DOMAIN" "$SRC/Caddyfile" || stop "в $SRC/Caddyfile уже есть блок $DOMAIN"
 
   domain_ip=$(getent ahostsv4 "$DOMAIN" | awk 'NR == 1 {print $1}')
@@ -88,7 +87,6 @@ AIRFLOW_PORT=$AIRFLOW_PORT
 SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
 COOKIE_SECURE=$([ -n "$DOMAIN" ] && echo true || echo false)
 ENV
-[ -z "$DOMAIN" ] || printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.exp.yml\nMAIN_NETWORK=%s\n' "$network" >> .env
 ok "готов"
 
 echo "== база"
@@ -113,6 +111,7 @@ ok "дашборд отвечает: http://127.0.0.1:$WEB_PORT"
 
 if [ -n "$DOMAIN" ]; then
   echo "== caddy"
+  bash scripts/exp-link.sh
   # дописывается, а не перезаписывается: caddy видит файл через монтирование, и новый файл вместо старого он бы не увидел
   backup="$SRC/Caddyfile.bak-$(date +%Y%m%d-%H%M%S)"
   cp "$SRC/Caddyfile" "$backup"
