@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import math
 import re
 from datetime import timedelta
 
@@ -10,6 +11,11 @@ LATE_REVIEWS_DAYS = 3        # запас на поздние отзывы: ок
 FIELDS = ("what_happened", "what_players_say")
 EXCERPTS = 3
 EXCERPT_CHARS = 150
+
+
+def percent(share):
+    """Доля в целых процентах с округлением половины вверх: format(0.025, ".0%") даёт 2% - банковское округление расходится с привычным."""
+    return math.floor(share * 100 + 0.5)
 
 
 def evidence_hash(evidence):

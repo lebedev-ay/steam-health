@@ -21,7 +21,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from llm import client, codebook
-from llm.verdict_check import WINDOW, check, evidence_hash, excerpts, refs, status
+from llm.verdict_check import WINDOW, check, evidence_hash, excerpts, percent, refs, status
 
 # детектор и DSN общие с collector/, а он не пакет - подключается так же, как в tools/
 sys.path.insert(0, str(Path(__file__).parent.parent / "collector"))
@@ -47,8 +47,9 @@ VOTES = "доля отзывов с оценкой «не рекомендую»
 COMPLAINTS = "доля отзывов с жалобами в тексте"
 
 
-def r4(x):
-    return None if x is None else round(x, 4)
+def r6(x):
+    # 6 знаков, а не 4: округление до 0.025 превращало 0.02502 в 2% вместо 3%
+    return None if x is None else round(x, 6)
 
 
 # =============================================================================
@@ -73,7 +74,7 @@ def points(app_id):
                 day_of = min((c["day"] for c in cp_events if c["title"] == e["title"] and abs((c["day"] - day).days) <= 3),
                              key=lambda d: abs((d - day).days), default=None)
                 news.append({"date": day_of and day_of.isoformat(), "title": e["title"], "type": e["type"],
-                             "weight": r4(e.get("weight")), "major": major})
+                             "weight": r6(e.get("weight")), "major": major})
         out.append({"day": day, "shift_pp": round(score, 1), "news": news, "platform_event": near["platform_event"]})
     return out
 
@@ -129,7 +130,7 @@ def before_after(days, crit, keys, at):
         a, la, na = weighted_share(days, crit.get(k, {}), at, hi)
         if b is None or a is None:
             continue
-        rows.append({"key": k, "before": r4(b), "after": r4(a), "diff": r4(a - b), "crit_before": nb, "crit_after": na,
+        rows.append({"key": k, "before": r6(b), "after": r6(a), "diff": r6(a - b), "crit_before": nb, "crit_after": na,
                      "labeled_before": lb, "labeled_after": la})
     return sorted(rows, key=lambda r: -r["diff"])
 
@@ -141,7 +142,7 @@ def votes(conn, app_id, at):
     """, {"app": app_id, "at": at, "lo": at - timedelta(days=WINDOW), "hi": at + timedelta(days=WINDOW)}).fetchall()
     by = {r["after"]: r for r in rows}
     return {side: {"reviews": int(by[flag]["n"]) if flag in by else 0,
-                   "negative_share": r4(by[flag]["neg"] / by[flag]["n"]) if flag in by and by[flag]["n"] else None}
+                   "negative_share": r6(by[flag]["neg"] / by[flag]["n"]) if flag in by and by[flag]["n"] else None}
             for side, flag in (("before", False), ("after", True))}
 
 
@@ -166,7 +167,7 @@ def playtime(conn, app_id, cfg_sk, category, at):
             sel = [r for r in rows if r["after"] == flag and r["minutes"] is not None
                    and r["minutes"] >= lo and (hi is None or r["minutes"] < hi)]
             crit = sum(r["critical"] for r in sel)
-            group[side] = {"labeled": len(sel), "share": r4(crit / len(sel)) if sel else None}
+            group[side] = {"labeled": len(sel), "share": r6(crit / len(sel)) if sel else None}
         out.append(group)
     return out
 
@@ -214,7 +215,7 @@ def labels(v, categories):
     return {
         "direction": direction,
         "character": "не определён" if not significant else "сфокусированный" if focus >= FOCUSED else "размазанный",
-        "critique_up": up, "focus": r4(focus), "se": r4(se), "significant": significant,
+        "critique_up": up, "focus": r6(focus), "se": r6(se), "significant": significant,
         "main": main and main["key"],
         "volume": main and ("малый" if max(main["crit_before"], main["crit_after"]) < SMALL_VOLUME else "достаточный"),
     }
@@ -268,11 +269,11 @@ def evidence(conn, app_id, point, cfg, marts):
 # =============================================================================
 
 def pct(x):
-    return "нет данных" if x is None else f"{x:.0%}"
+    return "нет данных" if x is None else f"{percent(x)}%"
 
 
 def pp(x):
-    return f"{x * 100:+.0f} п.п."
+    return f"{'-' if x < 0 else '+'}{percent(abs(x))} п.п."
 
 
 def news_line(e):
@@ -345,7 +346,7 @@ def generate(prompt, text, ev, vocab, price):
     lab = {**ev["labels"], "main_diff": ev["main"]["diff"]}
     v = ev["votes"]
     votes_pair = (None if v["before"]["negative_share"] is None or v["after"]["negative_share"] is None
-                  else (round(v["before"]["negative_share"] * 100), round(v["after"]["negative_share"] * 100)))
+                  else (percent(v["before"]["negative_share"]), percent(v["after"]["negative_share"])))
     spend = {"input": 0, "cached": 0, "output": 0, "reasoning": 0, "cost": 0.0}
     for attempt in (1, 2):
         raw, finish, usage = client.complete(prompt, text)

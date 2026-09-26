@@ -2,7 +2,7 @@ import json
 import unittest
 from datetime import date
 
-from llm.verdict_check import check, evidence_hash, excerpt_text, excerpts, status
+from llm.verdict_check import check, evidence_hash, excerpt_text, excerpts, percent, status
 
 LABELS = {"news": "есть", "character": "сфокусированный", "volume": "достаточный", "main_diff": 0.12}
 VOTES = (11, 14)
@@ -36,6 +36,11 @@ class HashTest(unittest.TestCase):
     def test_labeling_config_changes_hash(self):
         self.assertNotEqual(evidence_hash({**self.EV, "labeling_config_sk": 4}),
                             evidence_hash({**self.EV, "labeling_config_sk": 5}))
+
+
+class PercentTest(unittest.TestCase):
+    def test_half_up(self):
+        self.assertEqual([percent(x) for x in (0.025, 0.02502, 0.0249, 0.115, 0.5)], [3, 3, 2, 12, 50])
 
 
 class StatusTest(unittest.TestCase):
