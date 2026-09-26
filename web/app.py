@@ -241,5 +241,22 @@ def verdicts():
     return jsonify([verdict_view(v) for v in rows])
 
 
+@app.route("/api/votes")
+def votes():
+    # доля «не рекомендую» в окнах вокруг перелома считается суммами по дням, как в уликах вывода; сглаженная доля из /api/data для этого не годится
+    try:
+        app_id = int(request.args.get("app_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "app_id должен быть числом"}), 400
+
+    rows = query("""
+        select day, review_count as total, review_count - positive_count as negative
+        from marts.review_daily
+        where app_id = %s
+        order by day
+    """, (app_id,))
+    return jsonify([{"day": r["day"].isoformat(), "total": r["total"], "negative": r["negative"]} for r in rows])
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
