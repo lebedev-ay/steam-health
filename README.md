@@ -54,22 +54,15 @@ docker compose --profile airflow up -d   # http://localhost:8080
 
 ### Вторая копия рядом
 
-Каждая папка - отдельный проект compose: имена контейнеров и томов берутся от имени папки, поэтому базы у копий разные. Общие только порты на хосте - их второй копии задают в её `.env`:
+Каждая папка - отдельный проект compose: контейнеры, тома и образы называются по имени папки, поэтому у копий свои базы. Общие только порты на хосте. Вторую копию, например с экспериментальной веткой, поднимает скрипт - с портами 5434/5001/8081 и копией базы первой:
 
 ```bash
 git clone <репозиторий> steam-health-exp && cd steam-health-exp
 git checkout <ветка>
-cp .env.example .env    # PG_PORT=5434, WEB_PORT=5001, AIRFLOW_PORT=8081
+bash scripts/second-copy.sh ../steam-health
 ```
 
-Данные - копией базы из первой папки, до первого полного запуска, чтобы миграции новой ветки применились к копии:
-
-```bash
-docker compose up -d postgres
-(cd ../steam-health && docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB"') \
-  | docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner'
-docker compose up -d --build
-```
+Первую копию скрипт только читает и останавливается, если что-то не сходится: не та папка, база второй копии не пустая, отзывов после переноса не столько же.
 
 Для разработки дашборд удобнее держать снаружи docker, чтобы он перезапускался сам при правке кода. Порядок команд - в [docs/model.md](docs/model.md).
 
