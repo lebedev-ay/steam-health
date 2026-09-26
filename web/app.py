@@ -190,5 +190,56 @@ def data():
                                        cp_events, platform_events),
         "change_points_note": cp_note,
     })
+
+
+# номера опор в тексте вывода нужны для проверки по уликам, читателю дашборда они ничего не говорят
+SUPPORT_REFS_RE = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
+
+
+def verdict_view(v):
+    """Карточка вывода для дашборда. Не прошедший проверку вывод - без текста: только даты и доли «не рекомендую»."""
+    card = {
+        "day": v["change_date"].isoformat(),
+        "before_from": v["before_from"].isoformat(),
+        "after_to": v["after_to"].isoformat(),
+        "preliminary": v["status"] == "preliminary",
+        "checked": v["checks_passed"],
+        "negative_before": v["negative_before"],
+        "negative_after": v["negative_after"],
+    }
+    if not v["checks_passed"]:
+        return card
+    card["what_happened"] = SUPPORT_REFS_RE.sub("", v["what_happened"]).strip()
+    if v["author"] == "model":
+        card["what_players_say"] = SUPPORT_REFS_RE.sub("", v["what_players_say"] or "").strip()
+        card["excerpts"] = [e["text"] for e in v["excerpts"]]
+    return card
+
+
+@app.route("/api/verdicts")
+def verdicts():
+    try:
+        app_id = int(request.args.get("app_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "app_id должен быть числом"}), 400
+
+    # доли округляются половиной вверх, как в тексте вывода: иначе 0.025 показывалось бы 2%, а в выводе стояло бы 3%
+    try:
+        rows = query("""
+            select change_date, before_from, after_to, status, author, checks_passed,
+                   what_happened, what_players_say, excerpts,
+                   floor((evidence -> 'votes' -> 'before' ->> 'negative_share')::numeric * 100 + 0.5)::int as negative_before,
+                   floor((evidence -> 'votes' -> 'after' ->> 'negative_share')::numeric * 100 + 0.5)::int as negative_after
+            from marts.change_point_verdict_current
+            where app_id = %s
+            order by change_date
+        """, (app_id,))
+    except psycopg.errors.UndefinedTable:
+        # витрина выводов появляется после dbt run; до него дашборд работает как раньше, просто без блока
+        rows = []
+
+    return jsonify([verdict_view(v) for v in rows])
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
